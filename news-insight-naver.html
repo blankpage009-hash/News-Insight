@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>News Insight</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" />
+
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ink: '#0A0F1C', ink2: '#111A2C', ink3: '#182339', line: '#22314D',
+          gold: '#D4A054', gold2: '#E8C384', wire: '#5B8DEF', paper: '#ECE8DC', muted: '#8891A6',
+        },
+        fontFamily: {
+          sans: ['"Pretendard Variable"', 'Pretendard', 'sans-serif'],
+          serif: ['"Pretendard Variable"', 'Pretendard', 'sans-serif'], // 폰트 통일
+          mono: ['"JetBrains Mono"', 'monospace'],
+        }
+      }
+    }
+  }
+</script>
+
+<style>
+  html { font-size: 15px; }
+  body { font-family: 'Pretendard Variable', Pretendard, sans-serif; }
+  ::selection { background: #D4A05455; }
+
+  /* 지수 티커 (속도 24s → 36s : 조금 더 느리게) */
+  .ticker-viewport { overflow: hidden; }
+  .ticker-track {
+    display: inline-flex;
+    white-space: nowrap;
+    will-change: transform;
+    animation: ticker-marquee 36s linear infinite;
+  }
+  .ticker-track:hover { animation-play-state: paused; }
+  @keyframes ticker-marquee {
+    from { transform: translateX(100vw); }
+    to   { transform: translateX(-100%); }
+  }
+
+  @keyframes pulse-soft { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+  .skeleton { animation: pulse-soft 1.6s ease-in-out infinite; }
+
+  @keyframes modal-in {
+    from { opacity: 0; transform: translateY(10px) scale(.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .modal-pop { animation: modal-in .18s ease-out; }
+
+  .news-row:hover .row-title { color: #E8C384; }
+
+  select { background-image: none; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #22314D; border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #2c3d5e; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ticker-track, .skeleton, .modal-pop { animation: none; }
+  }
+</style>
+</head>
+
+<body class="bg-ink text-paper min-h-screen">
+
+  <!-- 헤더 -->
+  <header class="border-b border-line bg-ink/90 backdrop-blur sticky top-0 z-40 px-6 py-4 flex justify-between items-center">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-gold to-gold2 flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5 text-ink" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8z"/></svg>
+      </div>
+      <div class="leading-tight">
+        <h1 class="font-sans font-bold tracking-wide text-paper text-2xl sm:text-3xl">NEWS INSIGHT</h1>
+        <p class="font-mono text-muted tracking-widest text-[0.65rem] sm:text-xs">REAL-TIME WIRE DESK</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="font-mono bg-ink2 border border-line px-3 py-1.5 rounded-full text-muted flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> LIVE
+      </span>
+      <div class="hidden sm:flex flex-col items-end leading-tight font-mono">
+        <span id="current-date" class="text-muted"></span>
+        <span id="current-time" class="font-semibold text-gold tabular-nums"></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 지수 티커 -->
+  <div class="ticker-viewport bg-ink2 border-b border-line py-2 select-none">
+    <div class="ticker-track" id="ticker-track">
+      <span id="ticker-content" class="flex items-center gap-12 pr-12 font-mono text-muted"></span>
+    </div>
+  </div>
+
+  <!-- 메인 -->
+  <main class="max-w-[1500px] mx-auto p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+
+    <!-- 좌측 사이드바 -->
+    <aside class="lg:col-span-1 lg:sticky lg:top-[132px]">
+      <div class="bg-ink2/70 border border-line rounded-2xl p-5 space-y-4">
+        <h2 class="font-semibold text-muted uppercase tracking-[0.2em] text-[1.05rem]">카테고리</h2>
+        <div class="flex flex-col gap-2" id="category-filters"></div>
+        <div class="pt-3 border-t border-line">
+          <p class="text-muted leading-relaxed text-[0.95rem]">
+            'Today's Briefing'은 현재 시각 기준 가장 이슈가 되는 뉴스를 요약과 함께 보여줍니다.
+            <br>'전체'는 속보 · 물류 · 경제 · 사회 · 글로벌 · 증시를 카테고리 박스로 묶어 보여줍니다.
+          </p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 우측 콘텐츠 -->
+    <section class="lg:col-span-3 space-y-6">
+
+      <!-- 검색 바 -->
+      <div class="bg-ink2/70 border border-line rounded-2xl p-4 flex flex-col md:flex-row gap-3 md:items-end">
+        <div class="flex-1 space-y-1.5">
+          <label class="text-muted uppercase tracking-wider font-mono">키워드 검색 (제목·본문 포함 기사만 검색)</label>
+          <div class="relative">
+            <input type="text" id="search-input" placeholder="예: 롯데글로벌로지스, 반도체 수출, 기준금리..."
+              class="w-full bg-ink border border-line rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:border-gold/70 transition">
+            <svg class="absolute left-3.5 top-3.5 text-muted w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+          </div>
+        </div>
+
+        <div class="flex gap-2 flex-wrap">
+          <div class="space-y-1.5">
+            <label class="text-muted uppercase tracking-wider font-mono">시작일</label>
+            <input type="date" id="date-from" class="bg-ink border border-line rounded-xl px-3 py-3 focus:outline-none focus:border-gold/70 transition">
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-muted uppercase tracking-wider font-mono">종료일</label>
+            <input type="date" id="date-to" class="bg-ink border border-line rounded-xl px-3 py-3 focus:outline-none focus:border-gold/70 transition">
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-muted uppercase tracking-wider font-mono">노출 개수</label>
+            <select id="count-select" onchange="runSearch()"
+              class="bg-ink border border-line rounded-xl px-3 py-3 focus:outline-none focus:border-gold/70 transition text-paper">
+              <option value="5" selected>5개</option>
+              <option value="10">10개</option>
+              <option value="15">15개</option>
+              <option value="20">20개</option>
+              <option value="30">30개</option>
+            </select>
+          </div>
+        </div>
+
+        <button id="search-btn" onclick="onSearchClick()"
+          class="flex items-center justify-center gap-2 bg-gold hover:bg-gold2 text-ink font-semibold px-6 py-3 rounded-xl transition whitespace-nowrap">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg> 검색
+        </button>
+        <button onclick="resetSearch()" title="기본값으로 초기화"
+          class="flex items-center justify-center gap-1.5 text-muted hover:text-gold border border-line rounded-xl px-4 py-3 transition whitespace-nowrap">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> 초기화
+        </button>
+      </div>
+
+      <!-- 상태 바 -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-1">
+        <p class="text-muted" id="status-line">주요 뉴스를 불러오는 중입니다...</p>
+        <p class="text-muted whitespace-nowrap">노출 뉴스: <span id="news-count" class="text-gold font-bold">0</span>건</p>
+      </div>
+
+      <!-- 안내 배너 -->
+      <div id="fallback-banner" class="hidden text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3 flex items-center gap-2">
+        <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        <span id="fallback-message"></span>
+      </div>
+
+      <!-- 결과 -->
+      <div id="news-list" class="space-y-5"></div>
+
+    </section>
+  </main>
+
+  <!-- 요약 팝업 모달 (전체 요약 표시 / 창 확대) -->
+  <div id="summary-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeSummaryOnBackdrop(event)">
+    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-start gap-4 p-6 pb-3 shrink-0">
+        <span id="modal-category" class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30"></span>
+        <button onclick="closeSummary()" class="text-muted hover:text-paper transition">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div class="px-6 overflow-y-auto grow space-y-4">
+        <h3 id="modal-title" class="font-sans text-[1.7rem] font-bold text-paper leading-snug break-keep"></h3>
+        <ul id="modal-summary" class="space-y-2.5 text-paper/90 leading-relaxed break-keep pb-2 whitespace-pre-line"></ul>
+        <p id="modal-loading" class="hidden text-muted font-mono text-sm pb-4">원문에서 전체 요약을 불러오는 중...</p>
+      </div>
+      <div class="flex flex-wrap justify-between items-center gap-3 p-6 pt-4 mt-2 border-t border-line shrink-0">
+        <div class="text-muted font-mono flex items-center gap-2">
+          <span id="modal-source"></span><span id="modal-time"></span>
+        </div>
+        <a id="modal-link" href="#" target="_blank" rel="noopener noreferrer"
+          class="flex items-center gap-1.5 text-wire hover:text-blue-300 px-4 py-2 rounded-lg transition border border-wire/30 bg-wire/10 font-semibold">
+          원문보기
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------------------------------------------------------------
+    // 설정
+    // ---------------------------------------------------------------
+    const topLevelCategories = ['briefing', 'all', 'breaking', 'logistics', 'economy', 'society', 'global', 'stock'];
+
+    const logisticsSubcategories = [
+      { key: 'logistics_lotte', label: '롯데글로벌로지스' },
+      { key: 'logistics_competitor', label: '경쟁사' },
+      { key: 'logistics_domestic', label: '국내 물류' },
+      { key: 'logistics_global', label: '글로벌 물류' },
+    ];
+
+    const categoryLabels = {
+      briefing: "Today's Briefing",
+      breaking: '속보', all: '전체', logistics: '물류',
+      logistics_lotte: '롯데글로벌로지스', logistics_competitor: '경쟁사',
+      logistics_domestic: '국내 물류', logistics_global: '글로벌 물류',
+      economy: '경제', society: '사회', global: '글로벌', stock: '증시'
+    };
+    const categoryIcons = {
+      briefing: 'sparkles', all: 'grid', breaking: 'siren', logistics: 'package',
+      logistics_lotte: 'package', logistics_competitor: 'package',
+      logistics_domestic: 'package', logistics_global: 'package',
+      economy: 'line-chart', society: 'users', global: 'globe', stock: 'candlestick'
+    };
+
+    const categoryQueryMap = {
+      breaking: '속보',
+      economy: '경제 금리',
+      society: '사회 사건사고',
+      global: '국제 글로벌',
+      stock: '증시 코스피'
+    };
+
+    let currentCategory = 'briefing';   // 기본 메인화면
+    let expandedLogistics = false;
+    let currentResults = [];
+    let isLoading = false;
+    let nextId = 0;
+
+    // 세련된 아이콘 세트 (Lucide 최신 스타일, stroke 1.75)
+    const ICON_PATHS = {
+      search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+      'loader-2': '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+      'alert-triangle': '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+      inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+      'file-text': '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+      'external-link': '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+      sparkles: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/>',
+      grid: '<rect width="7" height="7" x="3" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="14" rx="1.5"/><rect width="7" height="7" x="3" y="14" rx="1.5"/>',
+      siren: '<path d="M7 18v-6a5 5 0 1 1 10 0v6"/><path d="M5 21a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2z"/><path d="M21 12h1"/><path d="M18.5 4.5 18 5"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="m4.929 4.929.707.707"/>',
+      package: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+      'line-chart': '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>',
+      users: '<path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/>',
+      globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+      candlestick: '<path d="M9 5v4"/><rect width="4" height="6" x="7" y="9" rx="1"/><path d="M9 15v2"/><path d="M17 3v2"/><rect width="4" height="8" x="15" y="5" rx="1"/><path d="M17 13v3"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/>',
+      'chevron-down': '<path d="m6 9 6 6 6-6"/>',
+      'chevron-up': '<path d="m18 15-6-6-6 6"/>'
+    };
+    function icon(name, cls) {
+      return `<svg class="${cls || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] || ''}</svg>`;
+    }
+
+    const NAVER_PROXY_BASE = '';
+
+    function getCount() { return Number(document.getElementById('count-select').value) || 5; }
+
+    // ---------------------------------------------------------------
+    // 초기화
+    // ---------------------------------------------------------------
+    function init() {
+      renderCategoryButtons();
+      updateClock();
+      setInterval(updateClock, 1000);
+
+      refreshIndexTicker();
+      setInterval(refreshIndexTicker, 30000);
+
+      document.getElementById('search-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') onSearchClick();
+      });
+
+      runSearch();
+    }
+
+    // ---------------------------------------------------------------
+    // 카테고리 사이드바
+    // ---------------------------------------------------------------
+    function renderCategoryButtons() {
+      const wrap = document.getElementById('category-filters');
+      let html = '';
+
+      topLevelCategories.forEach((cat) => {
+        const isLogistics = cat === 'logistics';
+        const isActive = currentCategory === cat;
+        const isBriefing = cat === 'briefing';
+
+        html += `<div>`;
+        html += `
+          <button onclick="${isLogistics ? 'onLogisticsClick()' : `selectCategory('${cat}')`}" data-cat="${cat}"
+            class="cat-btn ${isBriefing ? 'text-[1.15rem]' : 'text-[1.25rem]'} flex items-center justify-between px-4 py-3 rounded-xl transition w-full ${isActive ? 'bg-gold text-ink font-semibold' : 'text-muted hover:bg-ink3'} ${isBriefing && !isActive ? 'border border-gold/40 text-gold2' : ''}">
+            <span>${categoryLabels[cat]}</span>
+            <span class="flex items-center gap-1.5">
+              ${icon(categoryIcons[cat], 'w-5 h-5')}
+              ${isLogistics ? icon(expandedLogistics ? 'chevron-up' : 'chevron-down', 'w-4 h-4 opacity-70') : ''}
+            </span>
+          </button>`;
+
+        if (isLogistics && expandedLogistics) {
+          html += `<div class="ml-3 mt-1 flex flex-col gap-1 border-l border-line pl-3">`;
+          logisticsSubcategories.forEach((sub) => {
+            const subActive = currentCategory === sub.key;
+            html += `
+              <button onclick="selectCategory('${sub.key}')" data-cat="${sub.key}"
+                class="cat-btn text-[1.1rem] text-left px-3 py-2.5 rounded-lg transition ${subActive ? 'bg-gold/90 text-ink font-semibold' : 'text-muted hover:bg-ink3'}">
+                ${sub.label}
+              </button>`;
+          });
+          html += `</div>`;
+        }
+        html += `</div>`;
+      });
+
+      wrap.innerHTML = html;
+    }
+
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('current-date').textContent =
+        now.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+      document.getElementById('current-time').textContent =
+        now.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' KST';
+    }
+
+    // ---------------------------------------------------------------
+    // 카테고리 / 검색 트리거
+    // ---------------------------------------------------------------
+    function onLogisticsClick() {
+      if (currentCategory === 'logistics' || currentCategory.startsWith('logistics_')) {
+        expandedLogistics = !expandedLogistics;
+        if (!expandedLogistics) { renderCategoryButtons(); return; }
+      } else {
+        expandedLogistics = true;
+      }
+      currentCategory = 'logistics';
+      renderCategoryButtons();
+      runSearch();
+    }
+
+    function selectCategory(cat) {
+      currentCategory = cat;
+      if (cat.startsWith('logistics_')) expandedLogistics = true;
+      else if (cat !== 'logistics') expandedLogistics = false;
+      renderCategoryButtons();
+      runSearch();
+    }
+
+    function onSearchClick() { runSearch(); }
+
+    function resetSearch() {
+      document.getElementById('search-input').value = '';
+      document.getElementById('date-from').value = '';
+      document.getElementById('date-to').value = '';
+      document.getElementById('count-select').value = '5';
+      currentCategory = 'briefing';
+      expandedLogistics = false;
+      renderCategoryButtons();
+      runSearch();
+    }
+
+    // ---------------------------------------------------------------
+    // 서버 API
+    // ---------------------------------------------------------------
+    async function apiGet(pathAndQuery) {
+      const response = await fetch(`${NAVER_PROXY_BASE}${pathAndQuery}`);
+      if (!response.ok) {
+        let message = 'API 요청 실패: ' + response.status;
+        try { const b = await response.json(); if (b.error) message = b.error; } catch {}
+        throw new Error(message);
+      }
+      return response.json();
+    }
+
+    async function fetchFlatNews({ q, dateFrom, dateTo, display }) {
+      const params = new URLSearchParams({ q, display: String(display || getCount()) });
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
+      const data = await apiGet(`/api/news?${params.toString()}`);
+      if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
+      return data.items;
+    }
+
+    async function fetchBriefing({ dateFrom, dateTo }) {
+      const params = new URLSearchParams({ limit: String(getCount()) });
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
+      const data = await apiGet(`/api/briefing?${params.toString()}`);
+      if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
+      return data.items;
+    }
+
+    async function fetchSectionsData(endpoint, { dateFrom, dateTo }) {
+      const params = new URLSearchParams({ perSection: String(getCount()) });
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
+      const data = await apiGet(`${endpoint}?${params.toString()}`);
+      if (!Array.isArray(data.sections)) throw new Error('예상치 못한 응답 형식입니다.');
+      return data.sections;
+    }
+
+    async function fetchLogisticsSectionData(key, { dateFrom, dateTo }) {
+      const params = new URLSearchParams({ display: String(getCount()) });
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
+      const data = await apiGet(`/api/logistics/section/${key}?${params.toString()}`);
+      if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
+      return data.items;
+    }
+
+    function decorateItems(items, category) {
+      return items.map((item) => ({
+        id: nextId++,
+        title: item.title || '(제목 없음)',
+        summary: Array.isArray(item.summary) && item.summary.length ? item.summary : ['요약 없음'],
+        source: item.source || '출처 미상',
+        url: item.url || '#',
+        datetime: item.datetime || '',
+        category
+      }));
+    }
+
+    // ---------------------------------------------------------------
+    // 검색 실행
+    // ---------------------------------------------------------------
+    async function runSearch() {
+      if (isLoading) return;
+      isLoading = true;
+      hideFallbackBanner();
+      setSearchButtonLoading(true);
+      renderLoadingSkeleton();
+
+      const keyword = document.getElementById('search-input').value.trim();
+      const dateFrom = document.getElementById('date-from').value;
+      const dateTo = document.getElementById('date-to').value;
+
+      document.getElementById('status-line').textContent = keyword
+        ? `"${keyword}" 관련 뉴스를 검색하는 중입니다...`
+        : '뉴스를 검색하는 중입니다...';
+
+      nextId = 0;
+      currentResults = [];
+
+      try {
+        if (keyword) {
+          const items = await fetchFlatNews({ q: keyword, dateFrom, dateTo });
+          const list = decorateItems(items, ['all', 'logistics', 'briefing'].includes(currentCategory) ? 'society' : currentCategory);
+          currentResults = list;
+          document.getElementById('status-line').textContent = `"${keyword}" 검색 결과입니다. (제목·본문 포함 기사만 표시)`;
+          renderNews(list);
+          if (!list.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 키워드나 기간을 조정해보세요.');
+
+        } else if (currentCategory === 'briefing') {
+          const items = await fetchBriefing({ dateFrom, dateTo });
+          const list = decorateItems(items, 'briefing');
+          currentResults = list;
+          document.getElementById('status-line').textContent =
+            `현재 시각 기준 가장 이슈가 되는 뉴스 ${list.length}건입니다.`;
+          renderBriefing(list);
+          if (!list.length) showFallbackBanner('브리핑에 표시할 기사를 찾지 못했습니다.');
+
+        } else if (currentCategory === 'all') {
+          const sections = await fetchSectionsData('/api/all/sections', { dateFrom, dateTo });
+          const decorated = sections.map((sec) => ({
+            key: sec.key, label: sec.label, items: decorateItems(sec.items, sec.key)
+          }));
+          decorated.forEach((sec) => currentResults.push(...sec.items));
+          document.getElementById('status-line').textContent = '전체 카테고리 최신 뉴스입니다. (카테고리별 정리)';
+          renderSections(decorated);
+          if (!currentResults.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 기간을 조정해보세요.');
+
+        } else if (currentCategory === 'logistics') {
+          const sections = await fetchSectionsData('/api/logistics/sections', { dateFrom, dateTo });
+          const decorated = sections.map((sec) => ({
+            key: sec.key, label: sec.label, items: decorateItems(sec.items, sec.key)
+          }));
+          decorated.forEach((sec) => currentResults.push(...sec.items));
+          document.getElementById('status-line').textContent = '물류 분야 최신 뉴스입니다. (세부 카테고리별 정리)';
+          renderSections(decorated);
+          if (!currentResults.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 기간을 조정해보세요.');
+
+        } else if (currentCategory.startsWith('logistics_')) {
+          const items = await fetchLogisticsSectionData(currentCategory, { dateFrom, dateTo });
+          const list = decorateItems(items, currentCategory);
+          currentResults = list;
+          document.getElementById('status-line').textContent = `${categoryLabels[currentCategory]} 분야 최신 뉴스입니다.`;
+          renderNews(list);
+          if (!list.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 기간을 조정해보세요.');
+
+        } else {
+          const q = categoryQueryMap[currentCategory] || '뉴스';
+          const items = await fetchFlatNews({ q, dateFrom, dateTo });
+          const list = decorateItems(items, currentCategory);
+          currentResults = list;
+          document.getElementById('status-line').textContent = `${categoryLabels[currentCategory]} 분야 최신 뉴스입니다.`;
+          renderNews(list);
+          if (!list.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 키워드나 기간을 조정해보세요.');
+        }
+
+        document.getElementById('news-count').textContent = currentResults.length;
+      } catch (err) {
+        console.error(err);
+        renderError(err.message || '뉴스를 불러오는 중 오류가 발생했습니다.');
+        document.getElementById('status-line').textContent = '검색 중 오류가 발생했습니다.';
+        document.getElementById('news-count').textContent = 0;
+      } finally {
+        isLoading = false;
+        setSearchButtonLoading(false);
+      }
+    }
+
+    function setSearchButtonLoading(loading) {
+      const btn = document.getElementById('search-btn');
+      btn.disabled = loading;
+      btn.innerHTML = loading
+        ? icon('loader-2', 'w-4 h-4 animate-spin') + ' 검색중'
+        : icon('search', 'w-4 h-4') + ' 검색';
+    }
+
+    // ---------------------------------------------------------------
+    // 렌더링
+    // ---------------------------------------------------------------
+    function renderLoadingSkeleton() {
+      document.getElementById('news-list').innerHTML = Array.from({ length: 4 }).map(() => `
+        <div class="skeleton bg-ink2/70 border border-line rounded-2xl p-5 h-28"></div>`).join('');
+    }
+
+    function renderError(message) {
+      document.getElementById('news-list').innerHTML = `
+        <div class="py-16 text-center text-muted bg-ink2/50 border border-line rounded-2xl">
+          ${icon('alert-triangle', 'w-10 h-10 mx-auto mb-3 text-amber-400/80')}
+          <p>${message}</p>
+          <button onclick="runSearch()" class="mt-4 text-gold hover:text-gold2 border border-gold/40 rounded-lg px-4 py-2 transition">다시 시도</button>
+        </div>`;
+      document.getElementById('news-count').textContent = 0;
+    }
+
+    function newsCardHtml(item, showBadge = true) {
+      return `
+        <article class="news-row bg-ink2/60 border border-line rounded-xl p-4 hover:border-gold/40 transition-all duration-300">
+          <div class="flex items-center gap-3 mb-2">
+            ${showBadge ? `<span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30">
+              ${categoryLabels[item.category] || '기타'}</span>` : ''}
+            <span class="text-muted font-mono">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <h3 class="row-title font-sans text-lg font-bold text-paper transition leading-snug break-keep flex-1 min-w-[50%]">${item.title}</h3>
+            <div class="flex items-center gap-2 ml-auto">
+              <button onclick="openSummary(${item.id})" class="flex items-center gap-1.5 bg-ink3 hover:bg-line text-paper px-3.5 py-2 rounded-lg transition border border-line">
+                ${icon('file-text', 'w-3.5 h-3.5')} 요약
+              </button>
+              <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 text-wire hover:text-blue-300 px-3.5 py-2 rounded-lg transition border border-wire/30 bg-wire/10">
+                원문보기 ${icon('external-link', 'w-3.5 h-3.5')}
+              </a>
+            </div>
+          </div>
+        </article>`;
+    }
+
+    // Today's Briefing : 순위 + 핵심 요약 인라인 노출
+    function renderBriefing(list) {
+      const wrap = document.getElementById('news-list');
+      if (!list.length) { wrap.innerHTML = emptyBoxHtml('브리핑에 표시할 뉴스가 없습니다.'); return; }
+
+      wrap.innerHTML = `
+        <section class="bg-ink2/40 border border-gold/30 rounded-2xl overflow-hidden">
+          <header class="flex items-center gap-2.5 px-5 py-3 bg-gradient-to-r from-gold/15 to-transparent border-b border-line">
+            ${icon('sparkles', 'w-5 h-5 text-gold')}
+            <h2 class="font-sans font-bold text-gold text-xl">Today's Briefing</h2>
+            <span class="text-muted font-mono ml-auto">${list.length}건 · ${new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false })} KST 기준</span>
+          </header>
+          <div class="p-4 space-y-3">
+            ${list.map((it, i) => `
+              <article class="news-row bg-ink2/60 border border-line rounded-xl p-4 hover:border-gold/40 transition">
+                <div class="flex gap-4">
+                  <div class="shrink-0 w-9 h-9 rounded-lg bg-gold/15 border border-gold/30 text-gold font-mono font-bold flex items-center justify-center">${i + 1}</div>
+                  <div class="flex-1 min-w-0 space-y-2">
+                    <span class="text-muted font-mono">${it.source}${it.datetime ? ' · ' + formatDate(it.datetime) : ''}</span>
+                    <h3 class="row-title font-sans text-lg font-bold text-paper leading-snug break-keep">${it.title}</h3>
+                    <ul class="space-y-1.5 text-paper/85 leading-relaxed break-keep">
+                      ${it.summary.slice(0, 3).map(s => `<li class="flex gap-2"><span class="text-gold shrink-0">ㆍ</span><span>${s}</span></li>`).join('')}
+                    </ul>
+                    <div class="flex items-center gap-2 pt-1">
+                      <button onclick="openSummary(${it.id})" class="flex items-center gap-1.5 bg-ink3 hover:bg-line text-paper px-3.5 py-2 rounded-lg transition border border-line">
+                        ${icon('file-text', 'w-3.5 h-3.5')} 전체 요약
+                      </button>
+                      <a href="${it.url}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 text-wire hover:text-blue-300 px-3.5 py-2 rounded-lg transition border border-wire/30 bg-wire/10">
+                        원문보기 ${icon('external-link', 'w-3.5 h-3.5')}
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </article>`).join('')}
+          </div>
+        </section>`;
+    }
+
+    function renderNews(list) {
+      const wrap = document.getElementById('news-list');
+      if (!list.length) {
+        wrap.innerHTML = emptyBoxHtml('검색 조건에 맞는 뉴스가 없습니다.');
+        return;
+      }
+      wrap.innerHTML = list.map((it) => newsCardHtml(it)).join('');
+    }
+
+    function emptyBoxHtml(msg) {
+      return `
+        <div class="py-16 text-center text-muted bg-ink2/50 border border-line rounded-2xl">
+          ${icon('inbox', 'w-10 h-10 mx-auto mb-3 opacity-60')}
+          <p>${msg}</p>
+        </div>`;
+    }
+
+    function renderSections(sections) {
+      const wrap = document.getElementById('news-list');
+      const total = sections.reduce((s, sec) => s + sec.items.length, 0);
+      if (total === 0) { wrap.innerHTML = emptyBoxHtml('검색 조건에 맞는 뉴스가 없습니다.'); return; }
+
+      wrap.innerHTML = sections.map((sec) => `
+        <section class="bg-ink2/40 border border-line rounded-2xl overflow-hidden">
+          <header class="flex items-center gap-2.5 px-5 py-3 bg-ink3/60 border-b border-line">
+            ${icon(categoryIcons[sec.key] || 'grid', 'w-5 h-5 text-gold')}
+            <h2 class="font-sans font-bold text-gold text-xl">${sec.label}</h2>
+            <span class="text-muted font-mono ml-auto">${sec.items.length}건</span>
+          </header>
+          <div class="p-4 space-y-3">
+            ${sec.items.length
+              ? sec.items.map((it) => newsCardHtml(it, false)).join('')
+              : `<div class="text-muted text-center py-8">해당 카테고리의 기사를 찾지 못했습니다.</div>`}
+          </div>
+        </section>`).join('');
+    }
+
+    function formatDate(iso) {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }) + ' ' +
+             d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+
+    // ---------------------------------------------------------------
+    // 지수 티커
+    // ---------------------------------------------------------------
+    function formatIndexEntry(item) {
+      const isUp = item.change > 0, isDown = item.change < 0;
+      const arrow = isUp ? '▲' : isDown ? '▼' : '－';
+      const colorClass = isUp ? 'text-rose-400' : isDown ? 'text-blue-400' : 'text-muted';
+      const priceStr = item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const changeStr = Math.abs(item.change).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const pctStr = Math.abs(item.changePercent).toFixed(2);
+      return `<span class="flex items-center gap-2">
+        <span class="text-gold font-semibold tracking-wider">${item.name}</span>
+        <span class="tabular-nums text-paper">${priceStr}</span>
+        <span class="${colorClass} tabular-nums">${arrow}${changeStr} (${arrow}${pctStr}%)</span></span>`;
+    }
+
+    function renderIndexTicker(items) {
+      document.getElementById('ticker-content').innerHTML = items.length
+        ? items.map(formatIndexEntry).join('')
+        : '<span>지수 정보를 불러오는 중입니다...</span>';
+    }
+
+    async function refreshIndexTicker() {
+      try {
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/indices`);
+        if (!res.ok) throw new Error('지수 API 오류: ' + res.status);
+        const data = await res.json();
+        if (!Array.isArray(data.items) || !data.items.length) throw new Error('지수 데이터 없음');
+        renderIndexTicker(data.items);
+      } catch (err) {
+        console.error(err);
+        document.getElementById('ticker-content').innerHTML = '<span>지수 정보를 불러올 수 없습니다.</span>';
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // 요약 모달 (전체 요약 / 원문 보강)
+    // ---------------------------------------------------------------
+    const enrichedCache = new Map(); // url -> sentences[]
+
+    function paintSummary(sentences) {
+      document.getElementById('modal-summary').innerHTML = sentences.map(s => `
+        <li class="flex gap-2"><span class="text-gold shrink-0">ㆍ</span><span>${s}</span></li>`).join('');
+    }
+
+    async function openSummary(id) {
+      const item = currentResults.find(n => n.id === id);
+      if (!item) return;
+      document.getElementById('modal-category').textContent = categoryLabels[item.category] || '기타';
+      document.getElementById('modal-title').textContent = item.title;
+      paintSummary(item.summary);
+      document.getElementById('modal-source').textContent = item.source;
+      document.getElementById('modal-time').textContent = item.datetime ? ' · ' + formatDate(item.datetime) : '';
+      document.getElementById('modal-link').href = item.url || '#';
+      document.getElementById('summary-modal').classList.remove('hidden');
+
+      // 네이버 API description은 원본이 잘려 오므로 원문에서 전체 요약을 보강
+      if (!item.url || item.url === '#') return;
+      if (enrichedCache.has(item.url)) { paintSummary(enrichedCache.get(item.url)); return; }
+
+      const loading = document.getElementById('modal-loading');
+      loading.classList.remove('hidden');
+      try {
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/article-summary?url=${encodeURIComponent(item.url)}`);
+        const data = await res.json();
+        if (Array.isArray(data.sentences) && data.sentences.length) {
+          enrichedCache.set(item.url, data.sentences);
+          if (!document.getElementById('summary-modal').classList.contains('hidden')) paintSummary(data.sentences);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        loading.classList.add('hidden');
+      }
+    }
+
+    function closeSummary() { document.getElementById('summary-modal').classList.add('hidden'); }
+    function closeSummaryOnBackdrop(e) { if (e.target.id === 'summary-modal') closeSummary(); }
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSummary(); });
+
+    function hideFallbackBanner() { document.getElementById('fallback-banner').classList.add('hidden'); }
+    function showFallbackBanner(msg) {
+      document.getElementById('fallback-message').textContent = msg;
+      document.getElementById('fallback-banner').classList.remove('hidden');
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
