@@ -86,6 +86,89 @@ function itemMatchesAnyTerm(item, terms) {
 }
 
 // -----------------------------------------------------------------
+// [추가] 카테고리 정확도 검증
+//  - 제목에 키워드가 있으면 = 그 기사의 '핵심 주제' → 통과
+//  - 제목에 없으면 원문 본문을 읽어 '앞부분(리드문)'에 키워드가 있는지 확인
+//    (기사 중간에 스쳐 지나가듯 언급만 된 기사는 탈락)
+// -----------------------------------------------------------------
+const LEAD_CHARS = 700;      // 리드문으로 볼 본문 앞부분 길이
+const VERIFY_LIMIT = 20;     // 원문을 읽어볼 최대 후보 수(속도 보호)
+const VERIFY_CONCURRENCY = 6;
+
+const articleTextCache = new Map(); // url -> { ts, text }
+const ARTICLE_TTL = 1000 * 60 * 30;
+
+async function mapLimit(list, limit, worker) {
+  const out = new Array(list.length);
+  let idx = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, list.length) }, async () => {
+      while (idx < list.length) {
+        const i = idx++;
+        out[i] = await worker(list[i]);
+      }
+    })
+  );
+  return out;
+}
+
+// 원문 페이지 본문 텍스트 추출 (실패 시 빈 문자열)
+async function fetchArticleText(url) {
+  if (!url || !/^https?:\/\//i.test(url)) return '';
+  const c = articleTextCache.get(url);
+  if (c && Date.now() - c.ts < ARTICLE_TTL) return c.text;
+
+  let text = '';
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4500);
+    const r = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
+        'Accept-Language': 'ko,en;q=0.8',
+      },
+    });
+    clearTimeout(timer);
+    if (r.ok) {
+      const html = await r.text();
+      const bodyBlock =
+        html.match(/<article[\s\S]*?<\/article>/i)?.[0] ||
+        html.match(/<div[^>]+(?:id|class)=["'][^"']*(?:article|news_?body|content|entry)[^"']*["'][\s\S]*?<\/div>/i)?.[0] ||
+        '';
+      text = stripHtml(bodyBlock).slice(0, 4000);
+      if (text.length < 150) text = pickMeta(html, 'og:description') || text;
+    }
+  } catch {
+    text = '';
+  }
+  articleTextCache.set(url, { ts: Date.now(), text });
+  return text;
+}
+
+// 기사 목록 중 '핵심 주제'가 키워드와 맞는 것만 남긴다
+async function filterByCore(items, terms) {
+  const passed = [];
+  const pending = [];
+
+  items.forEach((it) => {
+    if (terms.some((t) => textContainsTerm(it.title, t))) passed.push(it);
+    else pending.push(it);
+  });
+
+  const targets = pending.slice(0, VERIFY_LIMIT);
+  const verified = await mapLimit(targets, VERIFY_CONCURRENCY, async (it) => {
+    const body = await fetchArticleText(it.url);
+    if (!body) return null; // 원문 확인 불가 → 안전하게 제외
+    const lead = body.slice(0, LEAD_CHARS);
+    return terms.some((t) => textContainsTerm(lead, t)) ? it : null;
+  });
+
+  return passed.concat(verified.filter(Boolean));
+}
+
+// -----------------------------------------------------------------
 // [추가] 유료·회원가입 전용 기사 걸러내기
 //  1) 도메인/경로 기준 : 유료 구독 매체, 프리미엄 섹션
 //  2) 제목·요약 문구 기준 : "유료회원", "회원 전용" 등
@@ -175,7 +258,7 @@ async function naverSearchRaw(query, display = 30, sort = 'date') {
     .filter((it) => !isRestrictedItem(it));
 }
 
-async function searchByTerms(terms, { display = 15, sort = 'date', dateFrom, dateTo } = {}) {
+async function searchByTerms(terms, { display = 15, sort = 'date', dateFrom, dateTo, hours, verify = true } = {}) {
   const perTermDisplay = Math.max(10, Math.min(30, Number(display) || 15));
 
   const resultsPerTerm = await Promise.all(
@@ -209,7 +292,20 @@ async function searchByTerms(terms, { display = 15, sort = 'date', dateFrom, dat
     });
   }
 
+  // [추가] 기사 게재 시간 필터 (현재 시각 기준 N시간 이내)
+  const hourNum = Number(hours);
+  if (hourNum > 0) {
+    const minTs = Date.now() - hourNum * 3600 * 1000;
+    merged = merged.filter((it) => it.datetime && new Date(it.datetime).getTime() >= minTs);
+  }
+
   merged.sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0));
+
+  // [추가] 카테고리 정확도 검증 (원문 핵심 내용 확인)
+  if (verify) {
+    merged = await filterByCore(merged, terms);
+    merged.sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0));
+  }
   return merged;
 }
 
@@ -225,6 +321,25 @@ const LOGISTICS_SECTIONS = [
   },
   { key: 'logistics_domestic', label: '국내 물류', terms: ['국내 물류', '국내물류'] },
   { key: 'logistics_global', label: '글로벌 물류', terms: ['글로벌 물류', '해외 물류', '국제 물류'] },
+];
+
+// [추가] 증시 하위 카테고리
+const STOCK_SECTIONS = [
+  {
+    key: 'stock_domestic',
+    label: '국내 증시 시황',
+    terms: ['코스피', '코스닥', '국내 증시'],
+  },
+  {
+    key: 'stock_us',
+    label: '미국 증시 시황',
+    terms: ['뉴욕증시', '나스닥', '미국 증시', '다우지수'],
+  },
+  {
+    key: 'stock_issue',
+    label: '증시 이슈 섹터',
+    terms: ['테마주', '급등주', '수혜주', '증시 이슈'],
+  },
 ];
 
 const ALL_SECTIONS = [
@@ -253,7 +368,7 @@ function isBreakingItem(it) {
 
 async function fetchBreaking(limit = 10) {
   // 엄격 필터라 후보를 넉넉히 받아온 뒤 걸러낸다
-  const raw = await searchByTerms(['속보'], { display: 30, sort: 'date' });
+  const raw = await searchByTerms(['속보'], { display: 30, sort: 'date', verify: false });
   return raw.filter(isBreakingItem).slice(0, limit);
 }
 
@@ -272,12 +387,12 @@ app.get('/api/breaking', async (req, res) => {
 // /api/news
 // -----------------------------------------------------------------
 app.get('/api/news', async (req, res) => {
-  const { q, display = '20', sort = 'date', dateFrom, dateTo } = req.query;
+  const { q, display = '20', sort = 'date', dateFrom, dateTo, hours } = req.query;
   if (!q || !q.trim()) return res.status(400).json({ error: '검색어(q)가 필요합니다.' });
 
   try {
     const limit = Math.min(Number(display) || 20, 50);
-    const items = await searchByTerms([q.trim()], { display: limit, sort, dateFrom, dateTo });
+    const items = await searchByTerms([q.trim()], { display: limit, sort, dateFrom, dateTo, hours });
     res.json({ items: items.slice(0, limit) });
   } catch (err) {
     console.error(err);
@@ -319,7 +434,7 @@ function jaccard(a, b) {
 
 app.get('/api/briefing', async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 5, 30);
-  const { dateFrom, dateTo } = req.query;
+  const { dateFrom, dateTo, hours } = req.query;
 
   try {
     // 1) 카테고리별로 따로 수집 (속보 쏠림 방지)
@@ -327,7 +442,7 @@ app.get('/api/briefing', async (req, res) => {
       BRIEFING_SOURCES.map(async (src) => {
         const items = src.cat === 'breaking'
           ? await fetchBreaking(10)
-          : (await searchByTerms(src.terms, { display: 10, dateFrom, dateTo })).slice(0, 10);
+          : (await searchByTerms(src.terms, { display: 10, dateFrom, dateTo, hours })).slice(0, 10);
         return items.map((it) => ({ ...it, cat: src.cat }));
       })
     );
@@ -394,14 +509,14 @@ app.get('/api/briefing', async (req, res) => {
 // /api/all/sections : 전체 카테고리 그룹 조회
 // -----------------------------------------------------------------
 app.get('/api/all/sections', async (req, res) => {
-  const { dateFrom, dateTo, perSection = '5' } = req.query;
+  const { dateFrom, dateTo, perSection = '5', hours } = req.query;
   const limit = Math.min(Number(perSection) || 5, 30);
   try {
     const sections = await Promise.all(
       ALL_SECTIONS.map(async (sec) => {
         const items = sec.breaking
           ? await fetchBreaking(limit)
-          : (await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo })).slice(0, limit);
+          : (await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo, hours })).slice(0, limit);
         return { key: sec.key, label: sec.label, items };
       })
     );
@@ -413,42 +528,47 @@ app.get('/api/all/sections', async (req, res) => {
 });
 
 // -----------------------------------------------------------------
-// /api/logistics/sections
+// 하위 카테고리 공통 라우트 등록
+//  /api/{base}/sections        : 하위 카테고리 전체 묶음
+//  /api/{base}/section/:key    : 하위 카테고리 1개
+//  -> 물류(logistics), 증시(stock) 두 곳에서 함께 사용
 // -----------------------------------------------------------------
-app.get('/api/logistics/sections', async (req, res) => {
-  const { dateFrom, dateTo, perSection = '5' } = req.query;
-  const limit = Math.min(Number(perSection) || 5, 30);
-  try {
-    const sections = await Promise.all(
-      LOGISTICS_SECTIONS.map(async (sec) => {
-        const items = await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo });
-        return { key: sec.key, label: sec.label, items: items.slice(0, limit) };
-      })
-    );
-    res.json({ sections });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
-  }
-});
+function registerSectionRoutes(base, SECTIONS) {
+  app.get(`/api/${base}/sections`, async (req, res) => {
+    const { dateFrom, dateTo, perSection = '5', hours } = req.query;
+    const limit = Math.min(Number(perSection) || 5, 30);
+    try {
+      const sections = await Promise.all(
+        SECTIONS.map(async (sec) => {
+          const items = await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo, hours });
+          return { key: sec.key, label: sec.label, items: items.slice(0, limit) };
+        })
+      );
+      res.json({ sections });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+    }
+  });
 
-// -----------------------------------------------------------------
-// /api/logistics/section/:key
-// -----------------------------------------------------------------
-app.get('/api/logistics/section/:key', async (req, res) => {
-  const sec = LOGISTICS_SECTIONS.find((s) => s.key === req.params.key);
-  if (!sec) return res.status(404).json({ error: '존재하지 않는 카테고리입니다.' });
+  app.get(`/api/${base}/section/:key`, async (req, res) => {
+    const sec = SECTIONS.find((s) => s.key === req.params.key);
+    if (!sec) return res.status(404).json({ error: '존재하지 않는 카테고리입니다.' });
 
-  const { dateFrom, dateTo, display = '20' } = req.query;
-  try {
-    const limit = Math.min(Number(display) || 20, 50);
-    const items = await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo });
-    res.json({ items: items.slice(0, limit), label: sec.label });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
-  }
-});
+    const { dateFrom, dateTo, display = '20', hours } = req.query;
+    try {
+      const limit = Math.min(Number(display) || 20, 50);
+      const items = await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo, hours });
+      res.json({ items: items.slice(0, limit), label: sec.label });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+    }
+  });
+}
+
+registerSectionRoutes('logistics', LOGISTICS_SECTIONS);
+registerSectionRoutes('stock', STOCK_SECTIONS);
 
 // -----------------------------------------------------------------
 // /api/article-summary?url=...&max=3 : 원문에서 핵심 문장만 추출
