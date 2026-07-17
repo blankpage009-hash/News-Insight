@@ -361,18 +361,46 @@ const SUMMARY_TTL = 1000 * 60 * 30;
 // 기사 본문에 섞여 들어오는 잡음(저작권/기자정보/SNS 안내 등)
 const NOISE_PAT = /(무단\s?전재|재배포|저작권자|ⓒ|©|기자\s*=|구독|앱 다운로드|카카오톡|페이스북|네이버에서|사진=|영상=|제보|▶)/;
 
-// 본문에서 핵심 문장 max개만 추림
+// "...", "…" 처럼 잘린 흔적
+const ELLIPSIS_PAT = /(\.{2,}|…)\s*$/;
+
+// 문장이 끝까지 완성됐는지 판단
+function isCompleteSentence(t) {
+  if (ELLIPSIS_PAT.test(t)) return false;          // 잘린 문장 제외
+  return /[.!?]["'’”)\]]?$/.test(t);              // 마침표/물음표/느낌표로 끝나야 통과
+}
+
+// 본문에서 핵심 문장 max개만 추림 (완성된 문장만)
 function coreSentences(text, max = 2) {
   const out = [];
   for (const s of splitSummary(text)) {
     const t = s.trim();
     if (t.length < 20 || t.length > 250) continue; // 너무 짧거나 긴 문장 제외
     if (NOISE_PAT.test(t)) continue;
+    if (!isCompleteSentence(t)) continue;          // ★ 핵심: 잘린 문장 스킵
     if (out.includes(t)) continue;
     out.push(t);
     if (out.length >= max) break;
   }
   return out;
+}
+
+// 본문 영역을 찾아 텍스트로 뽑아냄
+function extractBodyText(html) {
+  const starters = [
+    /<div[^>]+id=["'](?:dic_area|newsct_article|articleBodyContents|articeBody|article_body|newsEndContents|articleBody)["'][^>]*>/i,
+    /<div[^>]+(?:id|class)=["'][^"']*(?:article_body|news_body|art_text|article-body|entry-content|post-content|article_view)[^"']*["'][^>]*>/i,
+    /<article[^>]*>/i,
+  ];
+  for (const re of starters) {
+    const m = html.match(re);
+    if (m && m.index != null) {
+      // 여는 태그 위치부터 넉넉히 잘라서 태그만 제거 (중첩 div 문제 회피)
+      const text = stripHtml(html.slice(m.index, m.index + 12000));
+      if (text.length > 200) return text.slice(0, 4000);
+    }
+  }
+  return '';
 }
 
 function pickMeta(html, prop) {
@@ -408,12 +436,7 @@ app.get('/api/article-summary', async (req, res) => {
     const html = await r.text();
 
     // 본문 후보 영역 우선
-    const bodyBlock =
-      html.match(/<article[\s\S]*?<\/article>/i)?.[0] ||
-      html.match(/<div[^>]+(?:id|class)=["'][^"']*(?:article|news_?body|content|entry)[^"']*["'][\s\S]*?<\/div>/i)?.[0] ||
-      '';
-
-    const bodyText = stripHtml(bodyBlock).slice(0, 3000);
+    const bodyText = extractBodyText(html);
     const meta = pickMeta(html, 'og:description') || pickMeta(html, 'description');
 
     const best = bodyText.length > meta.length ? bodyText : meta;
