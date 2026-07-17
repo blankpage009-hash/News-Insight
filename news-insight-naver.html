@@ -33,7 +33,7 @@
   body { font-family: 'Pretendard Variable', Pretendard, sans-serif; }
   ::selection { background: #D4A05455; }
 
-  /* 지수 티커 (속도 24s → 36s : 조금 더 느리게) */
+  /* 지수 티커 */
   .ticker-viewport { overflow: hidden; }
   .ticker-track {
     display: inline-flex;
@@ -114,6 +114,7 @@
           <p class="text-muted leading-relaxed text-[0.95rem]">
             'Today's Briefing'은 현재 시각 기준 가장 이슈가 되는 뉴스를 요약과 함께 보여줍니다.
             <br>'전체'는 속보 · 물류 · 경제 · 사회 · 글로벌 · 증시를 카테고리 박스로 묶어 보여줍니다.
+            <br>카테고리 제목을 누르면 접기/펼치기, 제목 옆 셀렉트로 박스별 노출 건수를 바꿀 수 있습니다.
           </p>
         </div>
       </div>
@@ -125,7 +126,7 @@
       <!-- 검색 바 -->
       <div class="bg-ink2/70 border border-line rounded-2xl p-4 flex flex-col md:flex-row gap-3 md:items-end">
         <div class="flex-1 space-y-1.5">
-          <label class="text-muted uppercase tracking-wider font-mono">키워드 검색 (제목·본문 포함 기사만 검색)</label>
+          <label class="text-muted uppercase tracking-wider font-mono text-[1.09rem]">키워드 검색</label>
           <div class="relative">
             <input type="text" id="search-input" placeholder="예: 롯데글로벌로지스, 반도체 수출, 기준금리..."
               class="w-full bg-ink border border-line rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:border-gold/70 transition">
@@ -183,7 +184,7 @@
     </section>
   </main>
 
-  <!-- 요약 팝업 모달 (전체 요약 표시 / 창 확대) -->
+  <!-- 요약 팝업 모달 -->
   <div id="summary-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeSummaryOnBackdrop(event)">
     <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
       <div class="flex justify-between items-start gap-4 p-6 pb-3 shrink-0">
@@ -195,7 +196,7 @@
       <div class="px-6 overflow-y-auto grow space-y-4">
         <h3 id="modal-title" class="font-sans text-[1.7rem] font-bold text-paper leading-snug break-keep"></h3>
         <ul id="modal-summary" class="space-y-2.5 text-paper/90 leading-relaxed break-keep pb-2 whitespace-pre-line"></ul>
-        <p id="modal-loading" class="hidden text-muted font-mono text-sm pb-4">원문에서 전체 요약을 불러오는 중...</p>
+        <p id="modal-loading" class="hidden text-muted font-mono text-sm pb-4">원문에서 핵심 요약을 불러오는 중...</p>
       </div>
       <div class="flex flex-wrap justify-between items-center gap-3 p-6 pt-4 mt-2 border-t border-line shrink-0">
         <div class="text-muted font-mono flex items-center gap-2">
@@ -248,10 +249,11 @@
     let currentCategory = 'briefing';   // 기본 메인화면
     let expandedLogistics = false;
     let currentResults = [];
+    let sectionState = [];   // 카테고리 박스 상태(펼침/개수) 저장
     let isLoading = false;
     let nextId = 0;
 
-    // 세련된 아이콘 세트 (Lucide 최신 스타일, stroke 1.75)
+    // 아이콘 세트 (Lucide 스타일, stroke 1.75)
     const ICON_PATHS = {
       search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
       'loader-2': '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
@@ -412,8 +414,9 @@
       return data.items;
     }
 
+    // 섹션은 항상 30건 받아옴 → 박스별 개수 필터를 재검색 없이 즉시 반영
     async function fetchSectionsData(endpoint, { dateFrom, dateTo }) {
-      const params = new URLSearchParams({ perSection: String(getCount()) });
+      const params = new URLSearchParams({ perSection: '30' });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
       const data = await apiGet(`${endpoint}?${params.toString()}`);
@@ -438,6 +441,7 @@
         source: item.source || '출처 미상',
         url: item.url || '#',
         datetime: item.datetime || '',
+        cat: item.cat || null,
         category
       }));
     }
@@ -462,13 +466,14 @@
 
       nextId = 0;
       currentResults = [];
+      sectionState = [];
 
       try {
         if (keyword) {
           const items = await fetchFlatNews({ q: keyword, dateFrom, dateTo });
           const list = decorateItems(items, ['all', 'logistics', 'briefing'].includes(currentCategory) ? 'society' : currentCategory);
           currentResults = list;
-          document.getElementById('status-line').textContent = `"${keyword}" 검색 결과입니다. (제목·본문 포함 기사만 표시)`;
+          document.getElementById('status-line').textContent = `"${keyword}" 검색 결과입니다.`;
           renderNews(list);
           if (!list.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 키워드나 기간을 조정해보세요.');
 
@@ -481,24 +486,21 @@
           renderBriefing(list);
           if (!list.length) showFallbackBanner('브리핑에 표시할 기사를 찾지 못했습니다.');
 
-        } else if (currentCategory === 'all') {
-          const sections = await fetchSectionsData('/api/all/sections', { dateFrom, dateTo });
-          const decorated = sections.map((sec) => ({
-            key: sec.key, label: sec.label, items: decorateItems(sec.items, sec.key)
+        } else if (currentCategory === 'all' || currentCategory === 'logistics') {
+          const endpoint = currentCategory === 'all' ? '/api/all/sections' : '/api/logistics/sections';
+          const sections = await fetchSectionsData(endpoint, { dateFrom, dateTo });
+          sectionState = sections.map((sec) => ({
+            key: sec.key,
+            label: sec.label,
+            items: decorateItems(sec.items, sec.key),
+            count: getCount(),
+            collapsed: false,
           }));
-          decorated.forEach((sec) => currentResults.push(...sec.items));
-          document.getElementById('status-line').textContent = '전체 카테고리 최신 뉴스입니다. (카테고리별 정리)';
-          renderSections(decorated);
-          if (!currentResults.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 기간을 조정해보세요.');
-
-        } else if (currentCategory === 'logistics') {
-          const sections = await fetchSectionsData('/api/logistics/sections', { dateFrom, dateTo });
-          const decorated = sections.map((sec) => ({
-            key: sec.key, label: sec.label, items: decorateItems(sec.items, sec.key)
-          }));
-          decorated.forEach((sec) => currentResults.push(...sec.items));
-          document.getElementById('status-line').textContent = '물류 분야 최신 뉴스입니다. (세부 카테고리별 정리)';
-          renderSections(decorated);
+          currentResults = sectionState.flatMap((s) => s.items);
+          document.getElementById('status-line').textContent = currentCategory === 'all'
+            ? '전체 카테고리 최신 뉴스입니다. (제목을 누르면 접기/펼치기)'
+            : '물류 분야 최신 뉴스입니다. (제목을 누르면 접기/펼치기)';
+          renderSectionsFromState();
           if (!currentResults.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 기간을 조정해보세요.');
 
         } else if (currentCategory.startsWith('logistics_')) {
@@ -519,7 +521,7 @@
           if (!list.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 키워드나 기간을 조정해보세요.');
         }
 
-        document.getElementById('news-count').textContent = currentResults.length;
+        document.getElementById('news-count').textContent = visibleCount();
       } catch (err) {
         console.error(err);
         renderError(err.message || '뉴스를 불러오는 중 오류가 발생했습니다.');
@@ -557,6 +559,12 @@
       document.getElementById('news-count').textContent = 0;
     }
 
+    // 요약 글머리표(ㆍ) 2개
+    function summaryListHtml(sentences) {
+      return (sentences || []).slice(0, 2).map(s =>
+        `<li class="flex gap-2"><span class="text-gold shrink-0">ㆍ</span><span>${s}</span></li>`).join('');
+    }
+
     function newsCardHtml(item, showBadge = true) {
       return `
         <article class="news-row bg-ink2/60 border border-line rounded-xl p-4 hover:border-gold/40 transition-all duration-300">
@@ -565,21 +573,28 @@
               ${categoryLabels[item.category] || '기타'}</span>` : ''}
             <span class="text-muted font-mono">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
           </div>
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <h3 class="row-title font-sans text-lg font-bold text-paper transition leading-snug break-keep flex-1 min-w-[50%]">${item.title}</h3>
-            <div class="flex items-center gap-2 ml-auto">
-              <button onclick="openSummary(${item.id})" class="flex items-center gap-1.5 bg-ink3 hover:bg-line text-paper px-3.5 py-2 rounded-lg transition border border-line">
-                ${icon('file-text', 'w-3.5 h-3.5')} 요약
-              </button>
-              <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 text-wire hover:text-blue-300 px-3.5 py-2 rounded-lg transition border border-wire/30 bg-wire/10">
-                원문보기 ${icon('external-link', 'w-3.5 h-3.5')}
-              </a>
-            </div>
+          <h3 class="row-title font-sans text-lg font-bold text-paper transition leading-snug break-keep mb-2">${item.title}</h3>
+          <ul id="sum-${item.id}" class="space-y-1.5 text-paper/85 leading-relaxed break-keep mb-3">${summaryListHtml(item.summary)}</ul>
+          <div class="flex items-center gap-2">
+            <button onclick="openSummary(${item.id})" class="flex items-center gap-1.5 bg-ink3 hover:bg-line text-paper px-3.5 py-2 rounded-lg transition border border-line">
+              ${icon('file-text', 'w-3.5 h-3.5')} 요약
+            </button>
+            <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 text-wire hover:text-blue-300 px-3.5 py-2 rounded-lg transition border border-wire/30 bg-wire/10">
+              원문보기 ${icon('external-link', 'w-3.5 h-3.5')}
+            </a>
           </div>
         </article>`;
     }
 
-    // Today's Briefing : 순위 + 핵심 요약 인라인 노출
+    function emptyBoxHtml(msg) {
+      return `
+        <div class="py-16 text-center text-muted bg-ink2/50 border border-line rounded-2xl">
+          ${icon('inbox', 'w-10 h-10 mx-auto mb-3 opacity-60')}
+          <p>${msg}</p>
+        </div>`;
+    }
+
+    // Today's Briefing : 순위 + 카테고리 배지 + 핵심 2줄 요약
     function renderBriefing(list) {
       const wrap = document.getElementById('news-list');
       if (!list.length) { wrap.innerHTML = emptyBoxHtml('브리핑에 표시할 뉴스가 없습니다.'); return; }
@@ -597,14 +612,15 @@
                 <div class="flex gap-4">
                   <div class="shrink-0 w-9 h-9 rounded-lg bg-gold/15 border border-gold/30 text-gold font-mono font-bold flex items-center justify-center">${i + 1}</div>
                   <div class="flex-1 min-w-0 space-y-2">
-                    <span class="text-muted font-mono">${it.source}${it.datetime ? ' · ' + formatDate(it.datetime) : ''}</span>
+                    <div class="flex items-center gap-2 flex-wrap">
+                      ${it.cat ? `<span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30">${categoryLabels[it.cat] || '기타'}</span>` : ''}
+                      <span class="text-muted font-mono">${it.source}${it.datetime ? ' · ' + formatDate(it.datetime) : ''}</span>
+                    </div>
                     <h3 class="row-title font-sans text-lg font-bold text-paper leading-snug break-keep">${it.title}</h3>
-                    <ul class="space-y-1.5 text-paper/85 leading-relaxed break-keep">
-                      ${it.summary.slice(0, 3).map(s => `<li class="flex gap-2"><span class="text-gold shrink-0">ㆍ</span><span>${s}</span></li>`).join('')}
-                    </ul>
+                    <ul id="sum-${it.id}" class="space-y-1.5 text-paper/85 leading-relaxed break-keep">${summaryListHtml(it.summary)}</ul>
                     <div class="flex items-center gap-2 pt-1">
                       <button onclick="openSummary(${it.id})" class="flex items-center gap-1.5 bg-ink3 hover:bg-line text-paper px-3.5 py-2 rounded-lg transition border border-line">
-                        ${icon('file-text', 'w-3.5 h-3.5')} 전체 요약
+                        ${icon('file-text', 'w-3.5 h-3.5')} 요약
                       </button>
                       <a href="${it.url}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 text-wire hover:text-blue-300 px-3.5 py-2 rounded-lg transition border border-wire/30 bg-wire/10">
                         원문보기 ${icon('external-link', 'w-3.5 h-3.5')}
@@ -615,43 +631,100 @@
               </article>`).join('')}
           </div>
         </section>`;
+
+      enrichSummaries(list);
     }
 
     function renderNews(list) {
       const wrap = document.getElementById('news-list');
-      if (!list.length) {
-        wrap.innerHTML = emptyBoxHtml('검색 조건에 맞는 뉴스가 없습니다.');
-        return;
-      }
+      if (!list.length) { wrap.innerHTML = emptyBoxHtml('검색 조건에 맞는 뉴스가 없습니다.'); return; }
       wrap.innerHTML = list.map((it) => newsCardHtml(it)).join('');
+      enrichSummaries(list);
     }
 
-    function emptyBoxHtml(msg) {
-      return `
-        <div class="py-16 text-center text-muted bg-ink2/50 border border-line rounded-2xl">
-          ${icon('inbox', 'w-10 h-10 mx-auto mb-3 opacity-60')}
-          <p>${msg}</p>
-        </div>`;
+    // ---- 카테고리 박스: 접기/펼치기 + 개수 필터 ----
+    function toggleSection(key) {
+      const s = sectionState.find(x => x.key === key);
+      if (!s) return;
+      s.collapsed = !s.collapsed;
+      renderSectionsFromState();
     }
 
-    function renderSections(sections) {
+    function changeSectionCount(key, v) {
+      const s = sectionState.find(x => x.key === key);
+      if (!s) return;
+      s.count = Number(v) || 5;
+      s.collapsed = false;
+      renderSectionsFromState();
+    }
+
+    function visibleCount() {
+      if (sectionState.length) return sectionState.reduce((s, x) => s + Math.min(x.count, x.items.length), 0);
+      return currentResults.length;
+    }
+
+    function renderSectionsFromState() {
       const wrap = document.getElementById('news-list');
-      const total = sections.reduce((s, sec) => s + sec.items.length, 0);
+      const total = sectionState.reduce((s, sec) => s + sec.items.length, 0);
       if (total === 0) { wrap.innerHTML = emptyBoxHtml('검색 조건에 맞는 뉴스가 없습니다.'); return; }
 
-      wrap.innerHTML = sections.map((sec) => `
+      wrap.innerHTML = sectionState.map((sec) => {
+        const shown = sec.items.slice(0, sec.count);
+        return `
         <section class="bg-ink2/40 border border-line rounded-2xl overflow-hidden">
-          <header class="flex items-center gap-2.5 px-5 py-3 bg-ink3/60 border-b border-line">
-            ${icon(categoryIcons[sec.key] || 'grid', 'w-5 h-5 text-gold')}
-            <h2 class="font-sans font-bold text-gold text-xl">${sec.label}</h2>
-            <span class="text-muted font-mono ml-auto">${sec.items.length}건</span>
+          <header class="flex items-center gap-3 px-5 py-3 bg-ink3/60 border-b border-line">
+            <button onclick="toggleSection('${sec.key}')" class="flex items-center gap-2.5 flex-1 min-w-0 text-left hover:opacity-80 transition">
+              ${icon(categoryIcons[sec.key] || 'grid', 'w-5 h-5 text-gold shrink-0')}
+              <h2 class="font-sans font-bold text-gold text-xl truncate">${sec.label}</h2>
+              ${icon(sec.collapsed ? 'chevron-down' : 'chevron-up', 'w-4 h-4 text-muted shrink-0')}
+            </button>
+            <span class="text-muted font-mono whitespace-nowrap">${shown.length}건</span>
+            <select onchange="changeSectionCount('${sec.key}', this.value)"
+              class="bg-ink border border-line rounded-lg px-2 py-1 text-paper font-mono focus:outline-none focus:border-gold/70">
+              ${[3, 5, 10, 15, 20, 30].map(n => `<option value="${n}" ${sec.count === n ? 'selected' : ''}>${n}개</option>`).join('')}
+            </select>
           </header>
-          <div class="p-4 space-y-3">
-            ${sec.items.length
-              ? sec.items.map((it) => newsCardHtml(it, false)).join('')
+          <div class="${sec.collapsed ? 'hidden' : ''} p-4 space-y-3">
+            ${shown.length
+              ? shown.map((it) => newsCardHtml(it, false)).join('')
               : `<div class="text-muted text-center py-8">해당 카테고리의 기사를 찾지 못했습니다.</div>`}
           </div>
-        </section>`).join('');
+        </section>`;
+      }).join('');
+
+      document.getElementById('news-count').textContent = visibleCount();
+      enrichSummaries(sectionState.filter(s => !s.collapsed).flatMap(s => s.items.slice(0, s.count)));
+    }
+
+    // ---- 원문에서 핵심 2줄 요약 가져와 교체 ----
+    const coreSummaryCache = new Map();
+
+    function applySummary(it, sentences) {
+      it.summary = sentences.slice(0, 2);
+      it.enriched = true;
+      const el = document.getElementById(`sum-${it.id}`);
+      if (el) el.innerHTML = summaryListHtml(it.summary);
+    }
+
+    async function enrichSummaries(items) {
+      const targets = (items || []).filter(it => it.url && it.url !== '#' && !it.enriched);
+      if (!targets.length) return;
+      let idx = 0;
+      async function worker() {
+        while (idx < targets.length) {
+          const it = targets[idx++];
+          if (coreSummaryCache.has(it.url)) { applySummary(it, coreSummaryCache.get(it.url)); continue; }
+          try {
+            const res = await fetch(`${NAVER_PROXY_BASE}/api/article-summary?url=${encodeURIComponent(it.url)}&max=2`);
+            const data = await res.json();
+            if (Array.isArray(data.sentences) && data.sentences.length) {
+              coreSummaryCache.set(it.url, data.sentences);
+              applySummary(it, data.sentences);
+            } else { it.enriched = true; }
+          } catch { it.enriched = true; }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(4, targets.length) }, worker));
     }
 
     function formatDate(iso) {
@@ -697,19 +770,16 @@
     }
 
     // ---------------------------------------------------------------
-    // 요약 모달 (전체 요약 / 원문 보강)
+    // 요약 모달
     // ---------------------------------------------------------------
-    const enrichedCache = new Map(); // url -> sentences[]
-
     function paintSummary(sentences) {
-      document.getElementById('modal-summary').innerHTML = sentences.map(s => `
-        <li class="flex gap-2"><span class="text-gold shrink-0">ㆍ</span><span>${s}</span></li>`).join('');
+      document.getElementById('modal-summary').innerHTML = summaryListHtml(sentences);
     }
 
     async function openSummary(id) {
       const item = currentResults.find(n => n.id === id);
       if (!item) return;
-      document.getElementById('modal-category').textContent = categoryLabels[item.category] || '기타';
+      document.getElementById('modal-category').textContent = categoryLabels[item.cat || item.category] || '기타';
       document.getElementById('modal-title').textContent = item.title;
       paintSummary(item.summary);
       document.getElementById('modal-source').textContent = item.source;
@@ -717,24 +787,21 @@
       document.getElementById('modal-link').href = item.url || '#';
       document.getElementById('summary-modal').classList.remove('hidden');
 
-      // 네이버 API description은 원본이 잘려 오므로 원문에서 전체 요약을 보강
       if (!item.url || item.url === '#') return;
-      if (enrichedCache.has(item.url)) { paintSummary(enrichedCache.get(item.url)); return; }
+      if (coreSummaryCache.has(item.url)) { paintSummary(coreSummaryCache.get(item.url)); return; }
 
       const loading = document.getElementById('modal-loading');
       loading.classList.remove('hidden');
       try {
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/article-summary?url=${encodeURIComponent(item.url)}`);
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/article-summary?url=${encodeURIComponent(item.url)}&max=2`);
         const data = await res.json();
         if (Array.isArray(data.sentences) && data.sentences.length) {
-          enrichedCache.set(item.url, data.sentences);
+          coreSummaryCache.set(item.url, data.sentences);
+          applySummary(item, data.sentences);
           if (!document.getElementById('summary-modal').classList.contains('hidden')) paintSummary(data.sentences);
         }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        loading.classList.add('hidden');
-      }
+      } catch (e) { console.error(e); }
+      finally { loading.classList.add('hidden'); }
     }
 
     function closeSummary() { document.getElementById('summary-modal').classList.add('hidden'); }

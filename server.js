@@ -2,9 +2,9 @@
 // 네이버 검색 API(뉴스) 프록시 서버 - Naver API HUB 사용
 //
 // [이번 업데이트]
-//  1) /api/briefing : 현재 가장 이슈가 되는 뉴스 N건(기본 5건) 추림 (이슈 스코어링)
-//  2) /api/all/sections, /api/logistics/sections : perSection 파라미터로 노출 개수 조절
-//  3) /api/article-summary : 원문 페이지 메타/본문을 읽어 잘린 요약을 보강
+//  1) /api/briefing : 카테고리 균형(속보 쏠림 방지) 라운드로빈 선발
+//  2) /api/article-summary : 원문 본문에서 잡음 제거 후 핵심 문장 N개(기본 2개)만 반환
+//  3) /api/all/sections, /api/logistics/sections : perSection 파라미터로 노출 개수 조절
 //
 // 실행: npm install → node server.js → http://localhost:3000
 
@@ -195,12 +195,19 @@ app.get('/api/news', async (req, res) => {
 });
 
 // -----------------------------------------------------------------
-// /api/briefing : 현재 가장 이슈가 되는 뉴스 N건
-//  - 여러 축(속보/경제/증시/물류/사회/국제)에서 최신 기사를 모은 뒤
-//  - '보도량(같은 토픽을 여러 매체가 다룸)' + '최신성'으로 이슈 스코어 산출
+// /api/briefing : 카테고리 균형을 맞춘 오늘의 이슈 뉴스
+//  - 속보 한 곳에 쏠리지 않도록 카테고리별로 따로 수집 후 라운드로빈 선발
 // -----------------------------------------------------------------
-const BRIEFING_TERMS = ['속보', '단독', '경제', '증시', '물류', '사건사고', '국제'];
-const STOPWORDS = new Set(['그리고', '하지만', '이번', '위해', '통해', '대한', '관련', '기자', '뉴스', '속보', '단독']);
+const BRIEFING_SOURCES = [
+  { cat: 'breaking', terms: ['속보'] },
+  { cat: 'economy', terms: ['경제 금리', '환율'] },
+  { cat: 'stock', terms: ['증시 코스피'] },
+  { cat: 'logistics', terms: ['물류'] },
+  { cat: 'society', terms: ['사건사고'] },
+  { cat: 'global', terms: ['국제'] },
+];
+
+const STOPWORDS = new Set(['그리고', '하지만', '이번', '위해', '통해', '대한', '관련', '기자', '뉴스', '속보', '단독', '종합']);
 
 function titleTokens(title) {
   return (title || '')
@@ -210,42 +217,74 @@ function titleTokens(title) {
     .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
 }
 
+// 두 기사 제목이 얼마나 겹치는지 (0~1)
+function jaccard(a, b) {
+  const A = new Set(a), B = new Set(b);
+  if (!A.size || !B.size) return 0;
+  let inter = 0;
+  A.forEach((t) => { if (B.has(t)) inter++; });
+  return inter / (A.size + B.size - inter);
+}
+
 app.get('/api/briefing', async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 5, 30);
   const { dateFrom, dateTo } = req.query;
 
   try {
-    const pool = await searchByTerms(BRIEFING_TERMS, { display: 15, dateFrom, dateTo });
+    // 1) 카테고리별로 따로 수집 (속보 쏠림 방지)
+    const perCat = await Promise.all(
+      BRIEFING_SOURCES.map(async (src) => {
+        const items = await searchByTerms(src.terms, { display: 10, dateFrom, dateTo });
+        return items.slice(0, 10).map((it) => ({ ...it, cat: src.cat }));
+      })
+    );
+
+    const seen = new Set();
+    const pool = perCat.flat().filter((it) => {
+      if (!it.url || seen.has(it.url)) return false;
+      seen.add(it.url);
+      return true;
+    });
     if (!pool.length) return res.json({ items: [] });
 
-    // 토큰 빈도 = 화제성
+    // 2) 점수 = 화제성(여러 기사에 반복 등장하는 단어) + 최신성
     const freq = new Map();
     pool.forEach((it) => {
       new Set(titleTokens(it.title)).forEach((t) => freq.set(t, (freq.get(t) || 0) + 1));
     });
 
     const now = Date.now();
-    const scored = pool.map((it) => {
+    pool.forEach((it) => {
       const tokens = [...new Set(titleTokens(it.title))];
       const buzz = tokens.reduce((s, t) => s + Math.max(0, (freq.get(t) || 1) - 1), 0);
       const ageHr = it.datetime ? (now - new Date(it.datetime).getTime()) / 3600000 : 48;
-      const recency = Math.max(0, 24 - ageHr) / 24; // 최근 24시간 가중
-      return { it, score: buzz + recency * 6, key: tokens.slice(0, 2).join('|') };
+      it._tokens = tokens;
+      it._score = buzz + (Math.max(0, 24 - ageHr) / 24) * 6;
     });
 
-    scored.sort((a, b) => b.score - a.score);
+    // 3) 카테고리별 점수순 정렬
+    const buckets = new Map();
+    BRIEFING_SOURCES.forEach((s) => buckets.set(s.cat, []));
+    pool.forEach((it) => buckets.get(it.cat).push(it));
+    buckets.forEach((arr) => arr.sort((a, b) => b._score - a._score));
 
-    // 유사 토픽 중복 제거
+    // 4) 라운드로빈 선발 (카테고리 골고루) + 비슷한 기사 제외
     const picked = [];
-    const usedKeys = new Set();
-    for (const s of scored) {
-      if (s.key && usedKeys.has(s.key)) continue;
-      usedKeys.add(s.key);
-      picked.push(s.it);
-      if (picked.length >= limit) break;
+    const cats = [...buckets.keys()];
+    for (let round = 0; round < 10 && picked.length < limit; round++) {
+      for (const c of cats) {
+        if (picked.length >= limit) break;
+        const arr = buckets.get(c);
+        while (arr.length) {
+          const cand = arr.shift();
+          if (picked.some((p) => jaccard(p._tokens, cand._tokens) >= 0.4)) continue;
+          picked.push(cand);
+          break;
+        }
+      }
     }
 
-    res.json({ items: picked });
+    res.json({ items: picked.map(({ _tokens, _score, ...it }) => it) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '브리핑을 구성하지 못했습니다.' });
@@ -311,12 +350,30 @@ app.get('/api/logistics/section/:key', async (req, res) => {
 });
 
 // -----------------------------------------------------------------
-// /api/article-summary?url=... : 원문에서 더 긴 요약 확보
+// /api/article-summary?url=...&max=2 : 원문에서 핵심 문장만 추출
 //  네이버 검색 API의 description은 원본이 "..."로 잘려 오므로,
-//  원문 페이지의 og:description / 본문 앞부분을 읽어 보강한다.
+//  원문 페이지 본문을 읽어 잡음(저작권/기자정보/SNS 안내)을 걸러내고
+//  핵심 문장 max개만 반환한다.
 // -----------------------------------------------------------------
-const summaryCache = new Map(); // url -> { ts, sentences }
+const summaryCache = new Map(); // `${url}::${max}` -> { ts, sentences }
 const SUMMARY_TTL = 1000 * 60 * 30;
+
+// 기사 본문에 섞여 들어오는 잡음(저작권/기자정보/SNS 안내 등)
+const NOISE_PAT = /(무단\s?전재|재배포|저작권자|ⓒ|©|기자\s*=|구독|앱 다운로드|카카오톡|페이스북|네이버에서|사진=|영상=|제보|▶)/;
+
+// 본문에서 핵심 문장 max개만 추림
+function coreSentences(text, max = 2) {
+  const out = [];
+  for (const s of splitSummary(text)) {
+    const t = s.trim();
+    if (t.length < 20 || t.length > 250) continue; // 너무 짧거나 긴 문장 제외
+    if (NOISE_PAT.test(t)) continue;
+    if (out.includes(t)) continue;
+    out.push(t);
+    if (out.length >= max) break;
+  }
+  return out;
+}
 
 function pickMeta(html, prop) {
   const re = new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]*>`, 'i');
@@ -327,9 +384,11 @@ function pickMeta(html, prop) {
 
 app.get('/api/article-summary', async (req, res) => {
   const url = req.query.url;
+  const max = Math.min(Math.max(Number(req.query.max) || 2, 1), 10);
   if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'url이 필요합니다.' });
 
-  const cached = summaryCache.get(url);
+  const cacheKey = `${url}::${max}`;
+  const cached = summaryCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < SUMMARY_TTL) return res.json({ sentences: cached.sentences });
 
   try {
@@ -358,10 +417,11 @@ app.get('/api/article-summary', async (req, res) => {
     const meta = pickMeta(html, 'og:description') || pickMeta(html, 'description');
 
     const best = bodyText.length > meta.length ? bodyText : meta;
-    if (!best) throw new Error('본문 추출 실패');
+    let sentences = coreSentences(best, max);
+    if (!sentences.length) sentences = coreSentences(meta, max);
+    if (!sentences.length) throw new Error('본문 추출 실패');
 
-    const sentences = splitSummary(best).slice(0, 30);
-    summaryCache.set(url, { ts: Date.now(), sentences });
+    summaryCache.set(cacheKey, { ts: Date.now(), sentences });
     res.json({ sentences });
   } catch (err) {
     res.status(200).json({ sentences: [], error: err.message });
