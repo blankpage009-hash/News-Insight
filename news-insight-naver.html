@@ -33,18 +33,19 @@
   body { font-family: 'Pretendard Variable', Pretendard, sans-serif; }
   ::selection { background: #D4A05455; }
 
-  /* 지수 티커 */
+  /* 지수 티커 : 5개 지수가 끊김 없이 반복 순환 */
   .ticker-viewport { overflow: hidden; }
   .ticker-track {
-    display: inline-flex;
+    display: flex;
+    width: max-content;
     white-space: nowrap;
     will-change: transform;
-    animation: ticker-marquee 36s linear infinite;
+    animation: ticker-marquee 40s linear infinite;
   }
   .ticker-track:hover { animation-play-state: paused; }
   @keyframes ticker-marquee {
-    from { transform: translateX(100vw); }
-    to   { transform: translateX(-100%); }
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }   /* 사본 1개 분량만 이동 → 무한 루프 */
   }
 
   @keyframes pulse-soft { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
@@ -73,8 +74,9 @@
 
 <body class="bg-ink text-paper min-h-screen">
 
-  <!-- 헤더 -->
-  <header class="border-b border-line bg-ink/90 backdrop-blur sticky top-0 z-40 px-6 py-4 flex justify-between items-center">
+  <!-- 헤더 + 지수 티커 (스크롤해도 상단 고정) -->
+  <div class="sticky top-0 z-40">
+  <header class="border-b border-line bg-ink/90 backdrop-blur px-6 py-4 flex justify-between items-center">
     <div class="flex items-center gap-3">
       <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-gold to-gold2 flex items-center justify-center shrink-0">
         <svg class="w-5 h-5 text-ink" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8z"/></svg>
@@ -99,7 +101,9 @@
   <div class="ticker-viewport bg-ink2 border-b border-line py-2 select-none">
     <div class="ticker-track" id="ticker-track">
       <span id="ticker-content" class="flex items-center gap-12 pr-12 font-mono text-muted"></span>
+      <span id="ticker-content-2" class="flex items-center gap-12 pr-12 font-mono text-muted" aria-hidden="true"></span>
     </div>
+  </div>
   </div>
 
   <!-- 메인 -->
@@ -107,64 +111,66 @@
 
     <!-- 좌측 사이드바 -->
     <aside class="lg:col-span-1 lg:sticky lg:top-[132px]">
-      <div class="bg-ink2/70 border border-line rounded-2xl p-5 space-y-4">
-        <h2 class="font-semibold text-muted uppercase tracking-[0.2em] text-[1.05rem]">카테고리</h2>
-        <div class="flex flex-col gap-2" id="category-filters"></div>
-        <div class="pt-3 border-t border-line">
-          <p class="text-muted leading-relaxed text-[0.95rem]">
-            'Today's Briefing'은 현재 시각 기준 가장 이슈가 되는 뉴스를 요약과 함께 보여줍니다.
-            <br>'전체'는 속보 · 물류 · 경제 · 사회 · 글로벌 · 증시를 카테고리 박스로 묶어 보여줍니다.
-            <br>카테고리 제목을 누르면 접기/펼치기, 제목 옆 셀렉트로 박스별 노출 건수를 바꿀 수 있습니다.
-          </p>
+      <div class="bg-ink2/70 border border-line rounded-2xl p-5 space-y-3">
+
+        <!-- 제목(영문) + 노출 개수 -->
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="font-semibold text-muted uppercase tracking-[0.2em] text-[1.18rem]">CATEGORY</h2>
+          <select id="count-select" onchange="runSearch()" title="노출 개수"
+            class="bg-ink border border-line rounded-lg px-2 py-1.5 text-paper font-mono focus:outline-none focus:border-gold/70">
+            <option value="5" selected>5개</option>
+            <option value="10">10개</option>
+            <option value="15">15개</option>
+            <option value="20">20개</option>
+            <option value="30">30개</option>
+          </select>
         </div>
+
+        <div class="flex flex-col gap-2" id="category-filters"></div>
+
+        <!-- 카테고리 목록과 키워드 검색 구분선 -->
+        <div class="border-t border-line my-2"></div>
+
+        <!-- 키워드 검색 (카테고리 메뉴의 한 항목 · 토글) -->
+        <div>
+          <button id="search-toggle-btn" onclick="toggleSearchPanel()"
+            class="cat-btn text-[1.25rem] flex items-center justify-between px-4 py-3 rounded-xl transition w-full text-muted hover:bg-ink3">
+            <span>키워드 검색</span>
+            <span class="flex items-center gap-1.5" id="search-toggle-icons"></span>
+          </button>
+
+          <div id="search-panel" class="hidden ml-3 mt-2 border-l border-line pl-3 space-y-3">
+            <div class="relative">
+              <input type="text" id="search-input" placeholder="예: 롯데글로벌로지스, 반도체 수출..."
+                class="w-full bg-ink border border-line rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-gold/70 transition">
+              <svg class="absolute left-3 top-3 text-muted w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+            </div>
+            <div class="space-y-1">
+              <label class="text-muted uppercase tracking-wider font-mono">시작일</label>
+              <input type="date" id="date-from" class="w-full bg-ink border border-line rounded-xl px-3 py-2.5 focus:outline-none focus:border-gold/70 transition">
+            </div>
+            <div class="space-y-1">
+              <label class="text-muted uppercase tracking-wider font-mono">종료일</label>
+              <input type="date" id="date-to" class="w-full bg-ink border border-line rounded-xl px-3 py-2.5 focus:outline-none focus:border-gold/70 transition">
+            </div>
+            <div class="flex gap-2">
+              <button id="search-btn" onclick="onSearchClick()"
+                class="flex-1 flex items-center justify-center gap-2 bg-gold hover:bg-gold2 text-ink font-semibold px-4 py-2.5 rounded-xl transition whitespace-nowrap">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg> 검색
+              </button>
+              <button onclick="resetSearch()" title="기본값으로 초기화"
+                class="flex items-center justify-center gap-1.5 text-muted hover:text-gold border border-line rounded-xl px-3 py-2.5 transition whitespace-nowrap">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> 초기화
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </aside>
 
     <!-- 우측 콘텐츠 -->
     <section class="lg:col-span-3 space-y-6">
-
-      <!-- 검색 바 -->
-      <div class="bg-ink2/70 border border-line rounded-2xl p-4 flex flex-col md:flex-row gap-3 md:items-end">
-        <div class="flex-1 space-y-1.5">
-          <label class="text-muted uppercase tracking-wider font-mono text-[1.09rem]">키워드 검색</label>
-          <div class="relative">
-            <input type="text" id="search-input" placeholder="예: 롯데글로벌로지스, 반도체 수출, 기준금리..."
-              class="w-full bg-ink border border-line rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:border-gold/70 transition">
-            <svg class="absolute left-3.5 top-3.5 text-muted w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-          </div>
-        </div>
-
-        <div class="flex gap-2 flex-wrap">
-          <div class="space-y-1.5">
-            <label class="text-muted uppercase tracking-wider font-mono">시작일</label>
-            <input type="date" id="date-from" class="bg-ink border border-line rounded-xl px-3 py-3 focus:outline-none focus:border-gold/70 transition">
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-muted uppercase tracking-wider font-mono">종료일</label>
-            <input type="date" id="date-to" class="bg-ink border border-line rounded-xl px-3 py-3 focus:outline-none focus:border-gold/70 transition">
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-muted uppercase tracking-wider font-mono">노출 개수</label>
-            <select id="count-select" onchange="runSearch()"
-              class="bg-ink border border-line rounded-xl px-3 py-3 focus:outline-none focus:border-gold/70 transition text-paper">
-              <option value="5" selected>5개</option>
-              <option value="10">10개</option>
-              <option value="15">15개</option>
-              <option value="20">20개</option>
-              <option value="30">30개</option>
-            </select>
-          </div>
-        </div>
-
-        <button id="search-btn" onclick="onSearchClick()"
-          class="flex items-center justify-center gap-2 bg-gold hover:bg-gold2 text-ink font-semibold px-6 py-3 rounded-xl transition whitespace-nowrap">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg> 검색
-        </button>
-        <button onclick="resetSearch()" title="기본값으로 초기화"
-          class="flex items-center justify-center gap-1.5 text-muted hover:text-gold border border-line rounded-xl px-4 py-3 transition whitespace-nowrap">
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> 초기화
-        </button>
-      </div>
 
       <!-- 상태 바 -->
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-1">
@@ -194,9 +200,9 @@
         </button>
       </div>
       <div class="px-6 overflow-y-auto grow space-y-4">
-        <h3 id="modal-title" class="font-sans text-[1.7rem] font-bold text-paper leading-snug break-keep"></h3>
+        <h3 id="modal-title" class="font-sans text-[2.03rem] font-bold text-paper leading-snug break-keep"></h3>
         <ul id="modal-summary" class="space-y-2.5 text-paper/90 leading-relaxed break-keep pb-2 whitespace-pre-line"></ul>
-        <p id="modal-loading" class="hidden text-muted font-mono text-sm pb-4">원문에서 핵심 요약을 불러오는 중...</p>
+        <p id="modal-loading" class="hidden text-muted font-mono text-sm pb-4">원문 본문을 읽고 핵심 3문장을 정리하는 중...</p>
       </div>
       <div class="flex flex-wrap justify-between items-center gap-3 p-6 pt-4 mt-2 border-t border-line shrink-0">
         <div class="text-muted font-mono flex items-center gap-2">
@@ -229,7 +235,7 @@
       breaking: '속보', all: '전체', logistics: '물류',
       logistics_lotte: '롯데글로벌로지스', logistics_competitor: '경쟁사',
       logistics_domestic: '국내 물류', logistics_global: '글로벌 물류',
-      economy: '경제', society: '사회', global: '글로벌', stock: '증시'
+      economy: '경제', society: '정치/사회', global: '글로벌', stock: '증시'
     };
     const categoryIcons = {
       briefing: 'sparkles', all: 'grid', breaking: 'siren', logistics: 'package',
@@ -241,13 +247,14 @@
     const categoryQueryMap = {
       breaking: '속보',
       economy: '경제 금리',
-      society: '사회 사건사고',
+      society: '정치 사회',
       global: '국제 글로벌',
       stock: '증시 코스피'
     };
 
     let currentCategory = 'briefing';   // 기본 메인화면
     let expandedLogistics = false;
+    let expandedSearch = false;         // 키워드 검색 토글 상태
     let currentResults = [];
     let sectionState = [];   // 카테고리 박스 상태(펼침/개수) 저장
     let isLoading = false;
@@ -285,6 +292,7 @@
     // ---------------------------------------------------------------
     function init() {
       renderCategoryButtons();
+      renderSearchToggle();
       updateClock();
       setInterval(updateClock, 1000);
 
@@ -296,6 +304,26 @@
       });
 
       runSearch();
+    }
+
+    // ---------------------------------------------------------------
+    // 키워드 검색 토글 (카테고리 메뉴 항목)
+    // ---------------------------------------------------------------
+    function renderSearchToggle() {
+      document.getElementById('search-toggle-icons').innerHTML =
+        icon('search', 'w-5 h-5') + icon(expandedSearch ? 'chevron-up' : 'chevron-down', 'w-4 h-4 opacity-70');
+      const panel = document.getElementById('search-panel');
+      panel.classList.toggle('hidden', !expandedSearch);
+      const btn = document.getElementById('search-toggle-btn');
+      btn.classList.toggle('text-gold2', expandedSearch);
+      btn.classList.toggle('bg-ink3', expandedSearch);
+      btn.classList.toggle('text-muted', !expandedSearch);
+    }
+
+    function toggleSearchPanel() {
+      expandedSearch = !expandedSearch;
+      renderSearchToggle();
+      if (expandedSearch) document.getElementById('search-input').focus();
     }
 
     // ---------------------------------------------------------------
@@ -379,6 +407,8 @@
       document.getElementById('count-select').value = '5';
       currentCategory = 'briefing';
       expandedLogistics = false;
+      expandedSearch = false;
+      renderSearchToggle();
       renderCategoryButtons();
       runSearch();
     }
@@ -442,7 +472,25 @@
         url: item.url || '#',
         datetime: item.datetime || '',
         cat: item.cat || null,
+        // 이 기사가 걸린 카테고리 목록 (서버가 cats를 주면 그대로, 없으면 단일값)
+        cats: (Array.isArray(item.cats) && item.cats.length)
+          ? [...item.cats]
+          : [item.cat || category],
         category
+      }));
+    }
+
+    // 같은 URL 기사가 여러 섹션에 등장하면 카테고리를 모두 합쳐준다
+    function mergeCatsAcrossSections(sections) {
+      const map = new Map(); // url -> Set(카테고리 key)
+      sections.forEach((sec) => sec.items.forEach((it) => {
+        if (!it.url || it.url === '#') return;
+        if (!map.has(it.url)) map.set(it.url, new Set());
+        map.get(it.url).add(sec.key);
+      }));
+      sections.forEach((sec) => sec.items.forEach((it) => {
+        const set = map.get(it.url);
+        if (set && set.size) it.cats = [...set];
       }));
     }
 
@@ -496,6 +544,7 @@
             count: getCount(),
             collapsed: false,
           }));
+          mergeCatsAcrossSections(sectionState);
           currentResults = sectionState.flatMap((s) => s.items);
           document.getElementById('status-line').textContent = currentCategory === 'all'
             ? '전체 카테고리 최신 뉴스입니다. (제목을 누르면 접기/펼치기)'
@@ -510,6 +559,14 @@
           document.getElementById('status-line').textContent = `${categoryLabels[currentCategory]} 분야 최신 뉴스입니다.`;
           renderNews(list);
           if (!list.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 기간을 조정해보세요.');
+
+        } else if (currentCategory === 'breaking') {
+          const data = await apiGet(`/api/breaking?display=${getCount()}`);
+          const list = decorateItems(data.items || [], 'breaking');
+          currentResults = list;
+          document.getElementById('status-line').textContent = '최근 1시간 이내 속보입니다.';
+          renderNews(list);
+          if (!list.length) showFallbackBanner('최근 1시간 이내 속보가 없습니다.');
 
         } else {
           const q = categoryQueryMap[currentCategory] || '뉴스';
@@ -559,22 +616,34 @@
       document.getElementById('news-count').textContent = 0;
     }
 
-    // 요약 글머리표(ㆍ) 2개
+    // 요약 글머리표(ㆍ) 3개
     function summaryListHtml(sentences) {
-      return (sentences || []).slice(0, 2).map(s =>
+      return (sentences || []).slice(0, 3).map(s =>
         `<li class="flex gap-2"><span class="text-gold shrink-0">ㆍ</span><span>${s}</span></li>`).join('');
+    }
+
+    // 카테고리 배지 HTML (여러 개면 여러 개 모두 출력)
+    function catsOf(item) {
+      const list = (Array.isArray(item.cats) && item.cats.length)
+        ? item.cats
+        : [item.cat || item.category];
+      return [...new Set(list.filter(Boolean))];
+    }
+
+    function badgesHtml(item) {
+      return catsOf(item).map((c) =>
+        `<span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30">${categoryLabels[c] || '기타'}</span>`
+      ).join('');
     }
 
     function newsCardHtml(item, showBadge = true) {
       return `
         <article class="news-row bg-ink2/60 border border-line rounded-xl p-4 hover:border-gold/40 transition-all duration-300">
-          <div class="flex items-center gap-3 mb-2">
-            ${showBadge ? `<span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30">
-              ${categoryLabels[item.category] || '기타'}</span>` : ''}
+          <div class="flex items-center gap-2 flex-wrap mb-2">
+            ${showBadge ? badgesHtml(item) : ''}
             <span class="text-muted font-mono">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
           </div>
-          <h3 class="row-title font-sans text-lg font-bold text-paper transition leading-snug break-keep mb-2">${item.title}</h3>
-          <ul id="sum-${item.id}" class="space-y-1.5 text-paper/85 leading-relaxed break-keep mb-3">${summaryListHtml(item.summary)}</ul>
+          <h3 class="row-title font-sans text-[1.46rem] font-bold text-paper transition leading-snug break-keep mb-3">${item.title}</h3>
           <div class="flex items-center gap-2">
             <button onclick="openSummary(${item.id})" class="flex items-center gap-1.5 bg-ink3 hover:bg-line text-paper px-3.5 py-2 rounded-lg transition border border-line">
               ${icon('file-text', 'w-3.5 h-3.5')} 요약
@@ -613,11 +682,10 @@
                   <div class="shrink-0 w-9 h-9 rounded-lg bg-gold/15 border border-gold/30 text-gold font-mono font-bold flex items-center justify-center">${i + 1}</div>
                   <div class="flex-1 min-w-0 space-y-2">
                     <div class="flex items-center gap-2 flex-wrap">
-                      ${it.cat ? `<span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30">${categoryLabels[it.cat] || '기타'}</span>` : ''}
+                      ${badgesHtml(it)}
                       <span class="text-muted font-mono">${it.source}${it.datetime ? ' · ' + formatDate(it.datetime) : ''}</span>
                     </div>
-                    <h3 class="row-title font-sans text-lg font-bold text-paper leading-snug break-keep">${it.title}</h3>
-                    <ul id="sum-${it.id}" class="space-y-1.5 text-paper/85 leading-relaxed break-keep">${summaryListHtml(it.summary)}</ul>
+                    <h3 class="row-title font-sans text-[1.46rem] font-bold text-paper leading-snug break-keep">${it.title}</h3>
                     <div class="flex items-center gap-2 pt-1">
                       <button onclick="openSummary(${it.id})" class="flex items-center gap-1.5 bg-ink3 hover:bg-line text-paper px-3.5 py-2 rounded-lg transition border border-line">
                         ${icon('file-text', 'w-3.5 h-3.5')} 요약
@@ -632,14 +700,12 @@
           </div>
         </section>`;
 
-      enrichSummaries(list);
     }
 
     function renderNews(list) {
       const wrap = document.getElementById('news-list');
       if (!list.length) { wrap.innerHTML = emptyBoxHtml('검색 조건에 맞는 뉴스가 없습니다.'); return; }
       wrap.innerHTML = list.map((it) => newsCardHtml(it)).join('');
-      enrichSummaries(list);
     }
 
     // ---- 카테고리 박스: 접기/펼치기 + 개수 필터 ----
@@ -686,45 +752,21 @@
           </header>
           <div class="${sec.collapsed ? 'hidden' : ''} p-4 space-y-3">
             ${shown.length
-              ? shown.map((it) => newsCardHtml(it, false)).join('')
+              ? shown.map((it) => newsCardHtml(it, catsOf(it).length > 1)).join('')
               : `<div class="text-muted text-center py-8">해당 카테고리의 기사를 찾지 못했습니다.</div>`}
           </div>
         </section>`;
       }).join('');
 
       document.getElementById('news-count').textContent = visibleCount();
-      enrichSummaries(sectionState.filter(s => !s.collapsed).flatMap(s => s.items.slice(0, s.count)));
     }
 
-    // ---- 원문에서 핵심 2줄 요약 가져와 교체 ----
+    // ---- 원문에서 핵심 3줄 요약 (요약 버튼 클릭 시에만 호출) ----
     const coreSummaryCache = new Map();
 
     function applySummary(it, sentences) {
-      it.summary = sentences.slice(0, 2);
+      it.summary = sentences.slice(0, 3);
       it.enriched = true;
-      const el = document.getElementById(`sum-${it.id}`);
-      if (el) el.innerHTML = summaryListHtml(it.summary);
-    }
-
-    async function enrichSummaries(items) {
-      const targets = (items || []).filter(it => it.url && it.url !== '#' && !it.enriched);
-      if (!targets.length) return;
-      let idx = 0;
-      async function worker() {
-        while (idx < targets.length) {
-          const it = targets[idx++];
-          if (coreSummaryCache.has(it.url)) { applySummary(it, coreSummaryCache.get(it.url)); continue; }
-          try {
-            const res = await fetch(`${NAVER_PROXY_BASE}/api/article-summary?url=${encodeURIComponent(it.url)}&max=2`);
-            const data = await res.json();
-            if (Array.isArray(data.sentences) && data.sentences.length) {
-              coreSummaryCache.set(it.url, data.sentences);
-              applySummary(it, data.sentences);
-            } else { it.enriched = true; }
-          } catch { it.enriched = true; }
-        }
-      }
-      await Promise.all(Array.from({ length: Math.min(4, targets.length) }, worker));
     }
 
     function formatDate(iso) {
@@ -750,10 +792,19 @@
         <span class="${colorClass} tabular-nums">${arrow}${changeStr} (${arrow}${pctStr}%)</span></span>`;
     }
 
+    // KOSPI → KOSDAQ → NASDAQ → S&P 500 → DOW JONES 순서 고정
+    const INDEX_ORDER = ['KOSPI', 'KOSDAQ', 'NASDAQ', 'S&P 500', 'DOW JONES'];
+
     function renderIndexTicker(items) {
-      document.getElementById('ticker-content').innerHTML = items.length
-        ? items.map(formatIndexEntry).join('')
+      const sorted = [...items].sort(
+        (a, b) => INDEX_ORDER.indexOf(a.name) - INDEX_ORDER.indexOf(b.name)
+      );
+      const html = sorted.length
+        ? sorted.map(formatIndexEntry).join('')
         : '<span>지수 정보를 불러오는 중입니다...</span>';
+      // 같은 내용을 두 벌 채워야 끊김 없이 계속 순환한다
+      document.getElementById('ticker-content').innerHTML = html;
+      document.getElementById('ticker-content-2').innerHTML = html;
     }
 
     async function refreshIndexTicker() {
@@ -765,7 +816,9 @@
         renderIndexTicker(data.items);
       } catch (err) {
         console.error(err);
-        document.getElementById('ticker-content').innerHTML = '<span>지수 정보를 불러올 수 없습니다.</span>';
+        const msg = '<span>지수 정보를 불러올 수 없습니다.</span>';
+        document.getElementById('ticker-content').innerHTML = msg;
+        document.getElementById('ticker-content-2').innerHTML = msg;
       }
     }
 
@@ -779,29 +832,36 @@
     async function openSummary(id) {
       const item = currentResults.find(n => n.id === id);
       if (!item) return;
-      document.getElementById('modal-category').textContent = categoryLabels[item.cat || item.category] || '기타';
+      document.getElementById('modal-category').textContent =
+        catsOf(item).map((c) => categoryLabels[c] || '기타').join(', ');
       document.getElementById('modal-title').textContent = item.title;
-      paintSummary(item.summary);
       document.getElementById('modal-source').textContent = item.source;
       document.getElementById('modal-time').textContent = item.datetime ? ' · ' + formatDate(item.datetime) : '';
       document.getElementById('modal-link').href = item.url || '#';
       document.getElementById('summary-modal').classList.remove('hidden');
 
-      if (!item.url || item.url === '#') return;
+      // 요약은 반드시 '원문 본문'에서 추출한 핵심 3문장만 보여준다
+      paintSummary([]);
+      const loading = document.getElementById('modal-loading');
+
+      if (!item.url || item.url === '#') { paintSummary(['요약할 원문 주소가 없습니다.']); return; }
       if (coreSummaryCache.has(item.url)) { paintSummary(coreSummaryCache.get(item.url)); return; }
 
-      const loading = document.getElementById('modal-loading');
       loading.classList.remove('hidden');
       try {
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/article-summary?url=${encodeURIComponent(item.url)}&max=2`);
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/article-summary?url=${encodeURIComponent(item.url)}&max=3`);
         const data = await res.json();
         if (Array.isArray(data.sentences) && data.sentences.length) {
           coreSummaryCache.set(item.url, data.sentences);
           applySummary(item, data.sentences);
           if (!document.getElementById('summary-modal').classList.contains('hidden')) paintSummary(data.sentences);
+        } else {
+          paintSummary(['원문에서 본문을 추출하지 못했습니다. 원문보기를 이용해 주세요.']);
         }
-      } catch (e) { console.error(e); }
-      finally { loading.classList.add('hidden'); }
+      } catch (e) {
+        console.error(e);
+        paintSummary(['요약을 불러오지 못했습니다. 원문보기를 이용해 주세요.']);
+      } finally { loading.classList.add('hidden'); }
     }
 
     function closeSummary() { document.getElementById('summary-modal').classList.add('hidden'); }

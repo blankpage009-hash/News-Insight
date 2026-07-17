@@ -85,6 +85,62 @@ function itemMatchesAnyTerm(item, terms) {
   return terms.some((term) => textContainsTerm(combined, term));
 }
 
+// -----------------------------------------------------------------
+// [추가] 유료·회원가입 전용 기사 걸러내기
+//  1) 도메인/경로 기준 : 유료 구독 매체, 프리미엄 섹션
+//  2) 제목·요약 문구 기준 : "유료회원", "회원 전용" 등
+// -----------------------------------------------------------------
+const PAYWALL_HOSTS = [
+  // 국내 유료/구독 전용
+  'premium.chosun.com',
+  'plus.hankyung.com',
+  'premium.mk.co.kr',
+  'outstanding.kr',
+  'themiilk.com',
+  'bookjournalism.com',
+  'thebell.co.kr',
+  'ceoscoredaily.com',
+  // 해외 유료 구독 매체
+  'wsj.com',
+  'ft.com',
+  'bloomberg.com',
+  'nytimes.com',
+  'washingtonpost.com',
+  'economist.com',
+  'barrons.com',
+  'nikkei.com',
+  'thetimes.co.uk',
+  'telegraph.co.uk',
+  'businessinsider.com',
+  'seekingalpha.com',
+  'newyorker.com',
+  'theatlantic.com',
+  'foreignaffairs.com',
+  'hbr.org',
+  'medium.com',
+];
+
+// URL 경로에 이런 조각이 있으면 유료/회원 전용일 확률이 높음
+const PAYWALL_PATH_PAT = /\/(plus|premium|members?|subscribe|subscription|paywall)(\/|$|\?)/i;
+
+// 제목·요약에 이런 문구가 있으면 제외
+const PAYWALL_TEXT_PAT =
+  /(유료\s?기사|유료\s?회원|유료\s?콘텐츠|회원\s?전용|구독자\s?전용|프리미엄\s?기사|로그인\s?후\s?열람|더중앙플러스|더 중앙 플러스|한경\s?플러스|subscribers?\s+only|paywall)/i;
+
+function isRestrictedItem(item) {
+  const url = item.url || '';
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, '').toLowerCase();
+    if (PAYWALL_HOSTS.some((h) => host === h || host.endsWith('.' + h))) return true;
+    if (PAYWALL_PATH_PAT.test(u.pathname)) return true;
+  } catch {
+    /* URL 파싱 실패 시 텍스트 검사만 진행 */
+  }
+  const text = `${item.title || ''} ${(item.summary || []).join(' ')}`;
+  return PAYWALL_TEXT_PAT.test(text);
+}
+
 async function naverSearchRaw(query, display = 30, sort = 'date') {
   const params = new URLSearchParams({
     query,
@@ -107,13 +163,16 @@ async function naverSearchRaw(query, display = 30, sort = 'date') {
   }
 
   const data = await res.json();
-  return (data.items || []).map((item) => ({
-    title: stripHtml(item.title),
-    summary: splitSummary(stripHtml(item.description)),
-    source: guessSource(item.originallink, item.link),
-    url: item.originallink || item.link,
-    datetime: toIsoDate(item.pubDate),
-  }));
+  return (data.items || [])
+    .map((item) => ({
+      title: stripHtml(item.title),
+      summary: splitSummary(stripHtml(item.description)),
+      source: guessSource(item.originallink, item.link),
+      url: item.originallink || item.link,
+      datetime: toIsoDate(item.pubDate),
+    }))
+    // 유료·회원가입 전용 기사 제외
+    .filter((it) => !isRestrictedItem(it));
 }
 
 async function searchByTerms(terms, { display = 15, sort = 'date', dateFrom, dateTo } = {}) {
@@ -169,13 +228,45 @@ const LOGISTICS_SECTIONS = [
 ];
 
 const ALL_SECTIONS = [
-  { key: 'breaking', label: '속보', terms: ['속보'] },
+  { key: 'breaking', label: '속보', terms: ['속보'], breaking: true },
   { key: 'logistics', label: '물류', terms: ['물류', '롯데글로벌로지스'] },
   { key: 'economy', label: '경제', terms: ['경제 금리'] },
-  { key: 'society', label: '사회', terms: ['사건사고'] },
+  { key: 'society', label: '정치/사회', terms: ['정치', '국회', '사건사고'] },
   { key: 'global', label: '글로벌', terms: ['국제'] },
   { key: 'stock', label: '증시', terms: ['증시 코스피'] },
 ];
+
+// -----------------------------------------------------------------
+// 속보 전용 수집
+//  - 조건1: 기사 제목에 '속보' 표기가 있는 기사만
+//  - 조건2: 현재 시각 기준 1시간 이내 기사만
+// -----------------------------------------------------------------
+const BREAKING_WINDOW_MS = 60 * 60 * 1000; // 1시간
+
+function isBreakingItem(it) {
+  // [속보], <속보>, (속보), 속보= 등 다양한 표기 허용
+  if (!/속보/.test(it.title || '')) return false;
+  if (!it.datetime) return false;
+  const age = Date.now() - new Date(it.datetime).getTime();
+  return age >= 0 && age <= BREAKING_WINDOW_MS;
+}
+
+async function fetchBreaking(limit = 10) {
+  // 엄격 필터라 후보를 넉넉히 받아온 뒤 걸러낸다
+  const raw = await searchByTerms(['속보'], { display: 30, sort: 'date' });
+  return raw.filter(isBreakingItem).slice(0, limit);
+}
+
+// /api/breaking : 프런트 '속보' 카테고리 전용
+app.get('/api/breaking', async (req, res) => {
+  const limit = Math.min(Number(req.query.display) || 20, 50);
+  try {
+    res.json({ items: await fetchBreaking(limit) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '속보를 불러오지 못했습니다.' });
+  }
+});
 
 // -----------------------------------------------------------------
 // /api/news
@@ -203,7 +294,7 @@ const BRIEFING_SOURCES = [
   { cat: 'economy', terms: ['경제 금리', '환율'] },
   { cat: 'stock', terms: ['증시 코스피'] },
   { cat: 'logistics', terms: ['물류'] },
-  { cat: 'society', terms: ['사건사고'] },
+  { cat: 'society', terms: ['정치', '사건사고'] },
   { cat: 'global', terms: ['국제'] },
 ];
 
@@ -234,17 +325,25 @@ app.get('/api/briefing', async (req, res) => {
     // 1) 카테고리별로 따로 수집 (속보 쏠림 방지)
     const perCat = await Promise.all(
       BRIEFING_SOURCES.map(async (src) => {
-        const items = await searchByTerms(src.terms, { display: 10, dateFrom, dateTo });
-        return items.slice(0, 10).map((it) => ({ ...it, cat: src.cat }));
+        const items = src.cat === 'breaking'
+          ? await fetchBreaking(10)
+          : (await searchByTerms(src.terms, { display: 10, dateFrom, dateTo })).slice(0, 10);
+        return items.map((it) => ({ ...it, cat: src.cat }));
       })
     );
 
-    const seen = new Set();
-    const pool = perCat.flat().filter((it) => {
-      if (!it.url || seen.has(it.url)) return false;
-      seen.add(it.url);
-      return true;
+    // 같은 URL은 하나로 합치되, 걸린 카테고리는 모두 cats 배열에 모은다
+    const byUrl = new Map();
+    perCat.flat().forEach((it) => {
+      if (!it.url) return;
+      const prev = byUrl.get(it.url);
+      if (prev) {
+        if (!prev.cats.includes(it.cat)) prev.cats.push(it.cat);
+      } else {
+        byUrl.set(it.url, { ...it, cats: [it.cat] });
+      }
     });
+    const pool = [...byUrl.values()];
     if (!pool.length) return res.json({ items: [] });
 
     // 2) 점수 = 화제성(여러 기사에 반복 등장하는 단어) + 최신성
@@ -300,8 +399,10 @@ app.get('/api/all/sections', async (req, res) => {
   try {
     const sections = await Promise.all(
       ALL_SECTIONS.map(async (sec) => {
-        const items = await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo });
-        return { key: sec.key, label: sec.label, items: items.slice(0, limit) };
+        const items = sec.breaking
+          ? await fetchBreaking(limit)
+          : (await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo })).slice(0, limit);
+        return { key: sec.key, label: sec.label, items };
       })
     );
     res.json({ sections });
@@ -350,7 +451,7 @@ app.get('/api/logistics/section/:key', async (req, res) => {
 });
 
 // -----------------------------------------------------------------
-// /api/article-summary?url=...&max=2 : 원문에서 핵심 문장만 추출
+// /api/article-summary?url=...&max=3 : 원문에서 핵심 문장만 추출
 //  네이버 검색 API의 description은 원본이 "..."로 잘려 오므로,
 //  원문 페이지 본문을 읽어 잡음(저작권/기자정보/SNS 안내)을 걸러내고
 //  핵심 문장 max개만 반환한다.
@@ -361,46 +462,18 @@ const SUMMARY_TTL = 1000 * 60 * 30;
 // 기사 본문에 섞여 들어오는 잡음(저작권/기자정보/SNS 안내 등)
 const NOISE_PAT = /(무단\s?전재|재배포|저작권자|ⓒ|©|기자\s*=|구독|앱 다운로드|카카오톡|페이스북|네이버에서|사진=|영상=|제보|▶)/;
 
-// "...", "…" 처럼 잘린 흔적
-const ELLIPSIS_PAT = /(\.{2,}|…)\s*$/;
-
-// 문장이 끝까지 완성됐는지 판단
-function isCompleteSentence(t) {
-  if (ELLIPSIS_PAT.test(t)) return false;          // 잘린 문장 제외
-  return /[.!?]["'’”)\]]?$/.test(t);              // 마침표/물음표/느낌표로 끝나야 통과
-}
-
-// 본문에서 핵심 문장 max개만 추림 (완성된 문장만)
-function coreSentences(text, max = 2) {
+// 본문에서 핵심 문장 max개만 추림
+function coreSentences(text, max = 3) {
   const out = [];
   for (const s of splitSummary(text)) {
     const t = s.trim();
     if (t.length < 20 || t.length > 250) continue; // 너무 짧거나 긴 문장 제외
     if (NOISE_PAT.test(t)) continue;
-    if (!isCompleteSentence(t)) continue;          // ★ 핵심: 잘린 문장 스킵
     if (out.includes(t)) continue;
     out.push(t);
     if (out.length >= max) break;
   }
   return out;
-}
-
-// 본문 영역을 찾아 텍스트로 뽑아냄
-function extractBodyText(html) {
-  const starters = [
-    /<div[^>]+id=["'](?:dic_area|newsct_article|articleBodyContents|articeBody|article_body|newsEndContents|articleBody)["'][^>]*>/i,
-    /<div[^>]+(?:id|class)=["'][^"']*(?:article_body|news_body|art_text|article-body|entry-content|post-content|article_view)[^"']*["'][^>]*>/i,
-    /<article[^>]*>/i,
-  ];
-  for (const re of starters) {
-    const m = html.match(re);
-    if (m && m.index != null) {
-      // 여는 태그 위치부터 넉넉히 잘라서 태그만 제거 (중첩 div 문제 회피)
-      const text = stripHtml(html.slice(m.index, m.index + 12000));
-      if (text.length > 200) return text.slice(0, 4000);
-    }
-  }
-  return '';
 }
 
 function pickMeta(html, prop) {
@@ -412,7 +485,7 @@ function pickMeta(html, prop) {
 
 app.get('/api/article-summary', async (req, res) => {
   const url = req.query.url;
-  const max = Math.min(Math.max(Number(req.query.max) || 2, 1), 10);
+  const max = Math.min(Math.max(Number(req.query.max) || 3, 1), 10);
   if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'url이 필요합니다.' });
 
   const cacheKey = `${url}::${max}`;
@@ -435,8 +508,19 @@ app.get('/api/article-summary', async (req, res) => {
 
     const html = await r.text();
 
+    // 원문 페이지 자체가 유료/회원 전용이면 요약하지 않는다
+    if (/(유료\s?회원|회원\s?전용|구독자\s?전용|로그인\s?후\s?이용|subscribers?\s+only|paywall)/i.test(
+        stripHtml(html).slice(0, 4000))) {
+      return res.status(200).json({ sentences: [], error: 'paywall' });
+    }
+
     // 본문 후보 영역 우선
-    const bodyText = extractBodyText(html);
+    const bodyBlock =
+      html.match(/<article[\s\S]*?<\/article>/i)?.[0] ||
+      html.match(/<div[^>]+(?:id|class)=["'][^"']*(?:article|news_?body|content|entry)[^"']*["'][\s\S]*?<\/div>/i)?.[0] ||
+      '';
+
+    const bodyText = stripHtml(bodyBlock).slice(0, 6000);
     const meta = pickMeta(html, 'og:description') || pickMeta(html, 'description');
 
     const best = bodyText.length > meta.length ? bodyText : meta;
