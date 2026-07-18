@@ -435,9 +435,13 @@ async function filterByCore(items, terms) {
 // -----------------------------------------------------------------
 const DOMAIN_VERIFY_LIMIT = 12; // 원문 확인 최대 건수(속도 보호)
 
-async function refineByDomain(items, terms, domKey) {
+async function refineByDomain(items, terms, domKey, excludeOverride) {
   const dom = DOMAINS[domKey];
   if (!dom) return items;
+
+  // excludeOverride 가 null/undefined 이면 도메인 기본 제외어를 쓴다.
+  // 배열(빈 배열 포함)이면 그 값을 그대로 쓴다. → 세팅에서 제외어를 비우면 제외 없음
+  const excl = (excludeOverride == null) ? dom.exclude : excludeOverride;
 
   const pass = [];
   const pending = [];
@@ -445,8 +449,8 @@ async function refineByDomain(items, terms, domKey) {
   for (const it of items) {
     const head = `${it.title || ''} ${(it.summary || []).join(' ')}`;
 
-    if (hitCount(it.title, dom.exclude) > 0) continue;   // 제목 제외어 → 탈락
-    if (hitCount(head, dom.exclude) >= 2) continue;      // 요약에도 제외어 다수 → 탈락
+    if (hitCount(it.title, excl) > 0) continue;   // 제목 제외어 → 탈락
+    if (hitCount(head, excl) >= 2) continue;      // 요약에도 제외어 다수 → 탈락
 
     const subjectInTitle = terms.some((t) => textContainsTerm(it.title, t));
     const ctx = hitCount(head, dom.context);
@@ -461,7 +465,7 @@ async function refineByDomain(items, terms, domKey) {
   const rescued = await mapLimit(targets, VERIFY_CONCURRENCY, async (it) => {
     const lead = (await fetchArticleText(it.url)).slice(0, LEAD_CHARS);
     if (!lead) return null;                              // 확인 불가 → 정확도 우선(탈락)
-    if (hitCount(lead, dom.exclude) >= 2) return null;
+    if (hitCount(lead, excl) >= 2) return null;
     return hitCount(lead, dom.context) >= 2 ? it : null;
   });
 
@@ -571,6 +575,7 @@ async function searchByTerms(terms, opts = {}) {
     expand = false,   // [F] 동의어 확장 사용 여부
     fetchCount,       // [D] 네이버에 몇 건 요청할지 (미지정 시 자동)
     domain,           // [I] 도메인(맥락) 검증 키 : 'logistics' | 'stock' | ...
+    exclude = null,   // [설정] 사용자가 세팅에서 정한 '제외 키워드' (null이면 도메인 기본값)
   } = opts;
 
   // [D] 넉넉히 받아온 뒤 서버에서 추린다 (요청 비용은 동일)
@@ -627,10 +632,59 @@ async function searchByTerms(terms, opts = {}) {
   // 카테고리 정확도 검증 (원문 핵심 내용 확인) - 키워드 검색에서는 사용하지 않음 [A]
   if (verify) {
     merged = await filterByCore(merged, terms);
-    if (domain) merged = await refineByDomain(merged, terms, domain); // [I] 맥락 검증
+    if (domain) merged = await refineByDomain(merged, terms, domain, exclude); // [I] 맥락 검증
     if (sort !== 'sim') merged.sort(byDate);
   }
+
+  // [설정] 사용자 지정 제외어 최종 적용
+  //   도메인이 없거나(verify와 무관) 위 단계를 거치지 않은 경우에도 반드시 걸러낸다.
+  merged = applyExcludeList(merged, exclude);
+
   return merged;
+}
+
+// [설정] 제외 키워드가 제목/요약에 있으면 그 기사를 목록에서 뺀다.
+//   exclude 가 null 이거나 빈 배열이면 아무것도 걸러내지 않는다.
+function applyExcludeList(items, exclude) {
+  if (!Array.isArray(exclude) || !exclude.length) return items;
+  return items.filter((it) => {
+    const head = `${it.title || ''} ${(it.summary || []).join(' ')}`;
+    return hitCount(it.title, exclude) === 0 && hitCount(head, exclude) < 2;
+  });
+}
+
+// -----------------------------------------------------------------
+// [설정] 프런트(화면)에서 보낸 '기사 가져오기 키워드' 적용
+//   요청에 kw=<JSON> 형태로 온다.
+//   kw = { "섹션키": { "include": ["단어",...], "exclude": ["단어",...] }, ... }
+//   - include 가 있으면 그 섹션의 검색어(terms)로 사용한다.
+//   - exclude 가 있으면 그 섹션의 제외어로 사용한다. (없으면 도메인 기본 제외어)
+// -----------------------------------------------------------------
+function parseKw(raw) {
+  if (!raw) return {};
+  try {
+    const o = JSON.parse(raw);
+    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
+  } catch {
+    return {};
+  }
+}
+
+// 문자열 배열만 남기고 앞뒤 공백/빈값 정리
+function cleanList(arr) {
+  return Array.isArray(arr) ? arr.map((s) => String(s).trim()).filter(Boolean) : [];
+}
+
+// 섹션 정의(sec.key, sec.terms) + kw 설정 → 실제 사용할 { terms, exclude }
+//   exclude 가 null 이면 도메인 기본 제외어를 쓴다는 뜻
+function resolveSectionKw(kwMap, sec) {
+  const o = (kwMap && kwMap[sec.key]) || {};
+  const include = cleanList(o.include);
+  const hasExclude = Array.isArray(o.exclude);
+  return {
+    terms: include.length ? include : sec.terms,
+    exclude: hasExclude ? cleanList(o.exclude) : null,
+  };
 }
 
 // -----------------------------------------------------------------
@@ -687,17 +741,23 @@ function isBreakingItem(it) {
   return age >= 0 && age <= BREAKING_WINDOW_MS;
 }
 
-async function fetchBreaking(limit = 10) {
+async function fetchBreaking(limit = 10, terms = ['속보'], exclude = null) {
+  // 세팅의 '포함 키워드'를 검색 씨앗으로 쓰되, '제목에 속보 + 최근 1시간' 규칙은 유지한다.
+  const seeds = (Array.isArray(terms) && terms.length) ? terms : ['속보'];
   // 엄격 필터라 후보를 넉넉히 받아온 뒤 걸러낸다
-  const raw = await searchByTerms(['속보'], { display: 30, sort: 'date', verify: false });
-  return raw.filter(isBreakingItem).slice(0, limit);
+  const raw = await searchByTerms(seeds, { display: 30, sort: 'date', verify: false });
+  let out = raw.filter(isBreakingItem);
+  out = applyExcludeList(out, exclude);   // 세팅의 '제외 키워드' 적용
+  return out.slice(0, limit);
 }
 
 // /api/breaking : 프런트 '속보' 카테고리 전용
 app.get('/api/breaking', async (req, res) => {
   const limit = Math.min(Number(req.query.display) || 20, 50);
+  const kwMap = parseKw(req.query.kw);
+  const { terms, exclude } = resolveSectionKw(kwMap, { key: 'breaking', terms: ['속보'] });
   try {
-    res.json({ items: await fetchBreaking(limit) });
+    res.json({ items: await fetchBreaking(limit, terms, exclude) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '속보를 불러오지 못했습니다.' });
@@ -797,15 +857,18 @@ function jaccard(a, b) {
 
 app.get('/api/briefing', async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 5, 30);
-  const { dateFrom, dateTo, hours } = req.query;
+  const { dateFrom, dateTo, hours, kw } = req.query;
+  const kwMap = parseKw(kw);
 
   try {
     // 1) 카테고리별로 따로 수집 (속보 쏠림 방지)
+    //    각 카테고리는 세팅의 '포함/제외 키워드'를 그대로 반영한다.
     const perCat = await Promise.all(
       BRIEFING_SOURCES.map(async (src) => {
+        const { terms, exclude } = resolveSectionKw(kwMap, { key: src.cat, terms: src.terms });
         const items = src.cat === 'breaking'
-          ? await fetchBreaking(10)
-          : (await searchByTerms(src.terms, { display: 10, dateFrom, dateTo, hours, domain: src.domain })).slice(0, 10);
+          ? await fetchBreaking(10, terms, exclude)
+          : (await searchByTerms(terms, { display: 10, dateFrom, dateTo, hours, domain: src.domain, exclude })).slice(0, 10);
         return items.map((it) => ({ ...it, cat: src.cat }));
       })
     );
@@ -872,14 +935,16 @@ app.get('/api/briefing', async (req, res) => {
 // /api/all/sections : 전체 카테고리 그룹 조회
 // -----------------------------------------------------------------
 app.get('/api/all/sections', async (req, res) => {
-  const { dateFrom, dateTo, perSection = '5', hours } = req.query;
+  const { dateFrom, dateTo, perSection = '5', hours, kw } = req.query;
+  const kwMap = parseKw(kw);
   const limit = Math.min(Number(perSection) || 5, 30);
   try {
     const sections = await Promise.all(
       ALL_SECTIONS.map(async (sec) => {
+        const { terms, exclude } = resolveSectionKw(kwMap, sec);
         const items = sec.breaking
-          ? await fetchBreaking(limit)
-          : (await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain })).slice(0, limit);
+          ? await fetchBreaking(limit, terms, exclude)
+          : (await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain, exclude })).slice(0, limit);
         return { key: sec.key, label: sec.label, items };
       })
     );
@@ -898,12 +963,14 @@ app.get('/api/all/sections', async (req, res) => {
 // -----------------------------------------------------------------
 function registerSectionRoutes(base, SECTIONS) {
   app.get(`/api/${base}/sections`, async (req, res) => {
-    const { dateFrom, dateTo, perSection = '5', hours } = req.query;
+    const { dateFrom, dateTo, perSection = '5', hours, kw } = req.query;
+    const kwMap = parseKw(kw);
     const limit = Math.min(Number(perSection) || 5, 30);
     try {
       const sections = await Promise.all(
         SECTIONS.map(async (sec) => {
-          const items = await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain });
+          const { terms, exclude } = resolveSectionKw(kwMap, sec);
+          const items = await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain, exclude });
           return { key: sec.key, label: sec.label, items: items.slice(0, limit) };
         })
       );
@@ -918,10 +985,12 @@ function registerSectionRoutes(base, SECTIONS) {
     const sec = SECTIONS.find((s) => s.key === req.params.key);
     if (!sec) return res.status(404).json({ error: '존재하지 않는 카테고리입니다.' });
 
-    const { dateFrom, dateTo, display = '20', hours } = req.query;
+    const { dateFrom, dateTo, display = '20', hours, kw } = req.query;
+    const kwMap = parseKw(kw);
+    const { terms, exclude } = resolveSectionKw(kwMap, sec);
     try {
       const limit = Math.min(Number(display) || 20, 50);
-      const items = await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain });
+      const items = await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain, exclude });
       res.json({ items: items.slice(0, limit), label: sec.label });
     } catch (err) {
       console.error(err);
@@ -932,6 +1001,30 @@ function registerSectionRoutes(base, SECTIONS) {
 
 registerSectionRoutes('logistics', LOGISTICS_SECTIONS);
 registerSectionRoutes('stock', STOCK_SECTIONS);
+
+// -----------------------------------------------------------------
+// /api/topic/:key : 단일 상위 섹션 (경제 / 정치·사회 / 글로벌 / 속보 등)
+//   '전체(all)' 화면과 완전히 같은 키워드·도메인·세팅을 사용한다.
+//   → 어느 화면에서 보든 같은 세팅이 적용되어 결과가 일관된다.
+// -----------------------------------------------------------------
+app.get('/api/topic/:key', async (req, res) => {
+  const sec = ALL_SECTIONS.find((s) => s.key === req.params.key);
+  if (!sec) return res.status(404).json({ error: '존재하지 않는 섹션입니다.' });
+
+  const { dateFrom, dateTo, display = '20', hours, kw } = req.query;
+  const kwMap = parseKw(kw);
+  const { terms, exclude } = resolveSectionKw(kwMap, sec);
+  try {
+    const limit = Math.min(Number(display) || 20, 50);
+    const items = sec.breaking
+      ? await fetchBreaking(limit, terms, exclude)
+      : (await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain, exclude })).slice(0, limit);
+    res.json({ items, label: sec.label });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+  }
+});
 
 // -----------------------------------------------------------------
 // /api/article-summary?url=...&max=3 : 원문에서 핵심 문장만 추출

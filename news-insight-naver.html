@@ -128,37 +128,53 @@
       <div class="bg-ink2/70 border border-line rounded-2xl p-5 space-y-3">
 
         <!-- 제목(영문) : 기존 1.18rem → 3pt(=4px) 크게 -->
-        <h2 class="font-semibold text-muted uppercase tracking-[0.2em] text-[1.45rem]">CATEGORY</h2>
+        <h2 class="font-semibold text-muted uppercase tracking-[0.2em] text-[1.45rem]">SECTION</h2>
 
-        <!-- [추가] CATEGORY 제목 아래 구분선 -->
+        <!-- [추가] SECTION 제목 아래 구분선 -->
         <div class="border-t border-line"></div>
 
-        <!-- 노출 건수 / 기사 게재 시간 필터 -->
-        <div class="space-y-2 pb-1">
-          <div class="flex items-center justify-between gap-2">
-            <label for="count-select" class="text-muted whitespace-nowrap">노출건수</label>
-            <select id="count-select" onchange="runSearch()" title="노출 개수"
-              class="bg-ink border border-line rounded-lg px-2 py-1.5 text-paper font-mono focus:outline-none focus:border-gold/70">
-              <option value="5" selected>5개</option>
-              <option value="10">10개</option>
-              <option value="15">15개</option>
-              <option value="20">20개</option>
-              <option value="30">30개</option>
-            </select>
-          </div>
-          <div class="flex items-center justify-between gap-2">
-            <label for="hours-select" class="text-muted whitespace-nowrap">게재시간</label>
-            <select id="hours-select" onchange="runSearch()" title="기사 게재 시간 (현재 시각 기준)"
-              class="bg-ink border border-line rounded-lg px-2 py-1.5 text-paper font-mono focus:outline-none focus:border-gold/70">
-              <option value="1">1시간전</option>
-              <option value="3">3시간전</option>
-              <option value="12">12시간전</option>
-              <option value="24" selected>1일전</option>
-              <option value="168">1주일전</option>
-              <option value="720">1달전</option>
-              <option value="8760">1년전</option>
-              <option value="all">모두</option>
-            </select>
+        <!-- Filter (접이식 · 디폴트 숨김) : 노출 건수 / 게재 기간 / 정렬 -->
+        <div>
+          <button id="filter-toggle-btn" onclick="toggleFilterPanel()"
+            class="cat-btn text-[1.25rem] flex items-center justify-between px-4 py-3 rounded-xl transition w-full text-muted hover:bg-ink3">
+            <span>Filter</span>
+            <span class="flex items-center gap-1.5" id="filter-toggle-icons"></span>
+          </button>
+
+          <div id="filter-panel" class="hidden ml-3 mt-2 border-l border-line pl-3 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <label for="count-select" class="text-muted whitespace-nowrap">노출 건수</label>
+              <select id="count-select" onchange="onLeftFilterChange()" title="노출 개수"
+                class="bg-ink border border-line rounded-lg px-2 py-1.5 text-paper font-mono focus:outline-none focus:border-gold/70">
+                <option value="5" selected>5개</option>
+                <option value="10">10개</option>
+                <option value="15">15개</option>
+                <option value="20">20개</option>
+                <option value="30">30개</option>
+              </select>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <label for="hours-select" class="text-muted whitespace-nowrap">게재 기간</label>
+              <select id="hours-select" onchange="onLeftFilterChange()" title="기사 게재 기간 (현재 시각 기준)"
+                class="bg-ink border border-line rounded-lg px-2 py-1.5 text-paper font-mono focus:outline-none focus:border-gold/70">
+                <option value="1">1시간전</option>
+                <option value="3">3시간전</option>
+                <option value="12">12시간전</option>
+                <option value="24" selected>1일전</option>
+                <option value="168">1주일전</option>
+                <option value="720">1달전</option>
+                <option value="8760">1년전</option>
+                <option value="all">모두</option>
+              </select>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <label for="sort-select" class="text-muted whitespace-nowrap">정렬</label>
+              <select id="sort-select" onchange="onLeftFilterChange()" title="정렬 기준"
+                class="bg-ink border border-line rounded-lg px-2 py-1.5 text-paper font-mono focus:outline-none focus:border-gold/70">
+                <option value="sim" selected>정확도순</option>
+                <option value="date">최신순</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -190,10 +206,10 @@
               <span class="text-gold2 font-semibold">콤마(,) = OR</span> · 롯데, 한진 → 하나만 있어도
             </p>
 
-            <!-- 노출건수 / 게재기간 / 정렬 -->
+            <!-- 노출 건수 / 게재 기간 / 정렬 -->
             <div class="space-y-2">
               <div class="flex items-center justify-between gap-2">
-                <label for="search-count-select" class="text-muted whitespace-nowrap">노출건수</label>
+                <label for="search-count-select" class="text-muted whitespace-nowrap">노출 건수</label>
                 <select id="search-count-select" onchange="onSearchClick()" title="노출 개수"
                   class="bg-ink border border-line rounded-lg px-2 py-1.5 text-paper font-mono focus:outline-none focus:border-gold/70">
                   <option value="5">5개</option>
@@ -204,7 +220,7 @@
                 </select>
               </div>
               <div class="flex items-center justify-between gap-2">
-                <label for="search-hours-select" class="text-muted whitespace-nowrap">게재기간</label>
+                <label for="search-hours-select" class="text-muted whitespace-nowrap">게재 기간</label>
                 <select id="search-hours-select" onchange="onSearchClick()" title="기사 게재 시간 (현재 시각 기준)"
                   class="bg-ink border border-line rounded-lg px-2 py-1.5 text-paper font-mono focus:outline-none focus:border-gold/70">
                   <option value="1">1시간전</option>
@@ -239,6 +255,41 @@
           </div>
         </div>
 
+        <!-- [추가] 카테고리/검색 메뉴와 Setting 을 나누는 구분선 -->
+        <div class="border-t border-line my-2"></div>
+
+        <!-- [추가] Setting (접이식 · 디폴트 숨김) : 각 섹션별 기사 가져오기 키워드 설정 -->
+        <div>
+          <button id="setting-toggle-btn" onclick="toggleSettingPanel()"
+            class="cat-btn text-[1.25rem] flex items-center justify-between px-4 py-3 rounded-xl transition w-full text-muted hover:bg-ink3">
+            <span>Setting</span>
+            <span class="flex items-center gap-1.5" id="setting-toggle-icons"></span>
+          </button>
+
+          <div id="setting-panel" class="hidden ml-3 mt-2 border-l border-line pl-3 space-y-3">
+            <p class="text-gold2 font-semibold text-[1.05rem]">기사 가져오기 키워드</p>
+            <p class="text-muted leading-relaxed text-[0.8rem] bg-ink/60 border border-line rounded-lg px-3 py-2">
+              섹션별로 <span class="text-gold2 font-semibold">포함</span>·<span class="text-gold2 font-semibold">제외</span> 키워드를 정하면
+              항상 이 값을 기준으로 기사를 가져옵니다.<br>
+              여러 개는 <span class="text-gold2 font-semibold">콤마(,)</span>로 구분하세요.
+            </p>
+
+            <!-- 섹션별 포함/제외 키워드 입력칸 (JS가 그려 넣음) -->
+            <div id="keyword-settings" class="space-y-2"></div>
+
+            <div class="flex gap-2 pt-1">
+              <button id="setting-save-btn" onclick="saveKeywordSettings()"
+                class="flex-1 flex items-center justify-center gap-2 bg-gold hover:bg-gold2 text-ink font-semibold px-4 py-2.5 rounded-xl transition whitespace-nowrap">
+                저장 후 새로고침
+              </button>
+              <button onclick="resetKeywordSettings()" title="기본값으로 되돌리기"
+                class="flex items-center justify-center gap-1.5 text-muted hover:text-gold border border-line rounded-xl px-3 py-2.5 transition whitespace-nowrap">
+                기본값
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </aside>
 
@@ -258,13 +309,44 @@
       </div>
 
       <!-- 카테고리 제목 고정 바 -->
-      <div id="cat-header" class="hidden sticky z-30 pt-2 pb-3 bg-ink" style="top: var(--stick-top, 121px)">
-        <div class="flex items-center gap-3 px-5 py-3.5 bg-panel border border-gold/40 rounded-xl shadow-lg shadow-black/40">
+      <div id="cat-header" class="hidden sticky z-30 pt-2 pb-3 bg-ink" style="top: calc(var(--stick-top, 121px) - 1px)">
+        <div class="flex items-center gap-x-3 gap-y-2 flex-wrap px-5 py-3.5 bg-panel border border-gold/40 rounded-xl shadow-lg shadow-black/40">
           <span id="cat-header-icon" class="text-gold2 shrink-0"></span>
           <h2 id="cat-header-title" class="font-sans font-bold text-gold2 text-xl truncate"></h2>
-          <span id="cat-header-count" class="text-paper/70 font-mono ml-auto whitespace-nowrap"></span>
+          <span id="cat-header-count" class="text-paper/70 font-mono whitespace-nowrap"></span>
+
+          <!-- 제목 바 오른쪽 필터 (노출 건수 / 게재 기간 / 정렬) -->
+          <div class="flex items-center gap-1.5 ml-auto flex-wrap">
+            <select id="header-count-select" onchange="onHeaderFilterChange()" title="노출 건수"
+              class="bg-ink/70 border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
+              <option value="5">5개</option>
+              <option value="10">10개</option>
+              <option value="15">15개</option>
+              <option value="20">20개</option>
+              <option value="30">30개</option>
+            </select>
+            <select id="header-hours-select" onchange="onHeaderFilterChange()" title="게재 기간"
+              class="bg-ink/70 border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
+              <option value="1">1시간전</option>
+              <option value="3">3시간전</option>
+              <option value="12">12시간전</option>
+              <option value="24">1일전</option>
+              <option value="168">1주일전</option>
+              <option value="720">1달전</option>
+              <option value="8760">1년전</option>
+              <option value="all">모두</option>
+            </select>
+            <select id="header-sort-select" onchange="onHeaderFilterChange()" title="정렬"
+              class="bg-ink/70 border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
+              <option value="sim">정확도순</option>
+              <option value="date">최신순</option>
+            </select>
+          </div>
         </div>
       </div>
+
+      <!-- [추가] 모바일 전용 하위 섹션 필터 칩 (좌측 사이드바가 위로 밀려도 여기서 바로 선택) -->
+      <div id="mobile-subnav" class="gap-2 overflow-x-auto pb-1 -mx-1 px-1" style="display:none"></div>
 
       <!-- 결과 -->
       <div id="news-list" class="space-y-5"></div>
@@ -362,10 +444,23 @@
       global: '국제 글로벌'
     };
 
+    // [추가] 하위 섹션 → 상위(대표) 섹션 매핑
+    //  예) logistics_competitor → logistics(물류),  stock_us → stock(증시)
+    function parentCategoryOf(cat) {
+      if (!cat) return null;
+      if (cat.startsWith('logistics_')) return 'logistics';
+      if (cat.startsWith('stock_')) return 'stock';
+      return null;
+    }
+    // 이 카테고리가 '하위 섹션'인지 여부
+    function isSubCategory(cat) { return parentCategoryOf(cat) !== null; }
+
     let currentCategory = 'briefing';   // 기본 메인화면
     let expandedLogistics = false;
     let expandedStock = false;
     let expandedSearch = false;         // 키워드 검색 토글 상태
+    let expandedFilter = false;         // Filter(노출 건수/게재 기간/정렬) 토글 상태 · 디폴트 숨김
+    let expandedSetting = false;        // Setting(기사 가져오기 키워드) 토글 상태 · 디폴트 숨김
     let currentResults = [];
     let sectionState = [];   // 카테고리 박스 상태(펼침/개수) 저장
     let isLoading = false;
@@ -388,13 +483,103 @@
       globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
       candlestick: '<path d="M9 5v4"/><rect width="4" height="6" x="7" y="9" rx="1"/><path d="M9 15v2"/><path d="M17 3v2"/><rect width="4" height="8" x="15" y="5" rx="1"/><path d="M17 13v3"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/>',
       'chevron-down': '<path d="m6 9 6 6 6-6"/>',
-      'chevron-up': '<path d="m18 15-6-6-6 6"/>'
+      'chevron-up': '<path d="m18 15-6-6-6 6"/>',
+      sliders: '<line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/>',
+      settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
     };
     function icon(name, cls) {
       return `<svg class="${cls || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] || ''}</svg>`;
     }
 
     const NAVER_PROXY_BASE = '';
+
+    // ---------------------------------------------------------------
+    // [추가] 기사 가져오기 키워드 설정 (Setting)
+    //   - 각 섹션(하위 섹션 포함)의 '포함/제외 키워드'를 사용자가 직접 정한다.
+    //   - 이 값은 브라우저에 저장되고, 기사 요청 시 서버로 함께 보내 항상 반영된다.
+    //   - 디폴트 값은 현재 코드(server.js)에 들어 있던 각 섹션 키워드와 동일하다.
+    // ---------------------------------------------------------------
+    // 도메인 공통 제외어 (server.js 의 DOMAINS[*].exclude 와 동일)
+    const LOGI_EXCLUDE = ['관광','여행','트래블','패키지여행','항공권','호텔','리조트','면세','골프','레저','유람선','크루즈','뮤지컬','공연'];
+    const STOCK_EXCLUDE = ['부고','인사이동','채용공고'];
+
+    const DEFAULT_KEYWORDS = {
+      // 상위 섹션 (전체 화면에서 사용)
+      breaking:             { include: ['속보'], exclude: [] },
+      logistics:            { include: ['물류', '롯데글로벌로지스'], exclude: [...LOGI_EXCLUDE] },
+      economy:              { include: ['경제 금리'], exclude: [] },
+      society:              { include: ['정치', '국회', '사건사고'], exclude: [] },
+      global:               { include: ['국제'], exclude: [] },
+      stock:                { include: ['증시 코스피'], exclude: [...STOCK_EXCLUDE] },
+      // 물류 하위 섹션
+      logistics_lotte:      { include: ['롯데글로벌로지스', '롯데택배'], exclude: [...LOGI_EXCLUDE] },
+      logistics_competitor: { include: ['CJ대한통운','한진택배','한진 물류','한진 택배','LX판토스','삼성SDS 물류','현대글로비스'], exclude: [...LOGI_EXCLUDE] },
+      logistics_domestic:   { include: ['국내 물류','국내물류'], exclude: [...LOGI_EXCLUDE] },
+      logistics_global:     { include: ['글로벌 물류','해외 물류','국제 물류'], exclude: [...LOGI_EXCLUDE] },
+      // 증시 하위 섹션
+      stock_domestic:       { include: ['코스피','코스닥','국내 증시'], exclude: [...STOCK_EXCLUDE] },
+      stock_us:             { include: ['뉴욕증시','나스닥','미국 증시','다우지수'], exclude: [...STOCK_EXCLUDE] },
+      stock_issue:          { include: ['테마주','급등주','수혜주','증시 이슈'], exclude: [...STOCK_EXCLUDE] },
+    };
+
+    // 설정 화면에 보여줄 순서와 들여쓰기 (depth 1 = 하위 섹션)
+    const KEYWORD_SETTING_ORDER = [
+      { key: 'breaking', depth: 0 },
+      { key: 'logistics', depth: 0 },
+      { key: 'logistics_lotte', depth: 1 },
+      { key: 'logistics_competitor', depth: 1 },
+      { key: 'logistics_domestic', depth: 1 },
+      { key: 'logistics_global', depth: 1 },
+      { key: 'economy', depth: 0 },
+      { key: 'society', depth: 0 },
+      { key: 'global', depth: 0 },
+      { key: 'stock', depth: 0 },
+      { key: 'stock_domestic', depth: 1 },
+      { key: 'stock_us', depth: 1 },
+      { key: 'stock_issue', depth: 1 },
+    ];
+
+    const KEYWORDS_STORAGE_KEY = 'newsInsightKeywords_v1';
+    let userKeywords = {};   // 현재 사용 중인 키워드 설정
+
+    // 깊은 복사 (기본값을 건드리지 않기 위해)
+    function cloneKeywords(src) {
+      const out = {};
+      Object.keys(src).forEach((k) => {
+        out[k] = { include: [...(src[k].include || [])], exclude: [...(src[k].exclude || [])] };
+      });
+      return out;
+    }
+
+    // 저장된 설정을 불러오되, 기본값 위에 덮어써 누락 없이 채운다.
+    function loadKeywords() {
+      let saved = {};
+      try { saved = JSON.parse(localStorage.getItem(KEYWORDS_STORAGE_KEY) || '{}') || {}; } catch { saved = {}; }
+      const merged = cloneKeywords(DEFAULT_KEYWORDS);
+      Object.keys(merged).forEach((k) => {
+        if (saved[k]) {
+          if (Array.isArray(saved[k].include)) merged[k].include = saved[k].include;
+          if (Array.isArray(saved[k].exclude)) merged[k].exclude = saved[k].exclude;
+        }
+      });
+      userKeywords = merged;
+      return merged;
+    }
+
+    function persistKeywords() {
+      try { localStorage.setItem(KEYWORDS_STORAGE_KEY, JSON.stringify(userKeywords)); } catch {}
+    }
+
+    // 서버 요청에 붙일 kw 파라미터에 현재 설정을 담는다.
+    function setKwParam(params) {
+      params.set('kw', JSON.stringify(userKeywords));
+      return params;
+    }
+
+    // "롯데, 한진" → ['롯데','한진']
+    function parseKwText(t) {
+      return String(t || '').split(',').map((s) => s.trim()).filter(Boolean);
+    }
 
     // 키워드가 입력돼 있으면 '키워드 검색' 패널의 설정을, 아니면 상단 카테고리 설정을 쓴다
     function isKeywordMode() { return document.getElementById('search-input').value.trim() !== ''; }
@@ -407,7 +592,20 @@
       const id = isKeywordMode() ? 'search-hours-select' : 'hours-select';
       return document.getElementById(id).value || '24';
     }
-    function getSort() { return document.getElementById('search-sort-select').value || 'sim'; }
+    function getSort() {
+      const id = isKeywordMode() ? 'search-sort-select' : 'sort-select';
+      return document.getElementById(id).value || 'sim';
+    }
+
+    // 현재 정렬값에 맞춰 목록 정렬 (최신순=date만 클라이언트 정렬, 정확도순=서버 순서 유지)
+    function sortItemsByCurrent(list) {
+      if (getSort() !== 'date') return list;
+      return [...list].sort((a, b) => {
+        const ta = new Date(a.datetime || 0).getTime() || 0;
+        const tb = new Date(b.datetime || 0).getTime() || 0;
+        return tb - ta;
+      });
+    }
     const HOURS_LABEL = { 1: '1시간', 3: '3시간', 12: '12시간', 24: '1일', 168: '1주일', 720: '1달', 8760: '1년', all: '전체 기간' };
     function hoursLabel() { return HOURS_LABEL[getHours()] || getHours() + '시간'; }
 
@@ -415,10 +613,24 @@
     // 초기화
     // ---------------------------------------------------------------
     function init() {
+      loadKeywords();               // [추가] 저장된 '기사 가져오기 키워드' 불러오기
       renderCategoryButtons();
       renderSearchToggle();
+      renderFilterToggle();
+      renderSettingToggle();        // [추가]
+      renderKeywordSettings();      // [추가]
       updateStickTop();
       window.addEventListener('resize', updateStickTop);
+      window.addEventListener('resize', renderMobileSubnav);   // [추가] 회전/리사이즈 시 모바일 칩 갱신
+
+      // [추가] 제목 바 틀고정 '유격' 방지 :
+      //   웹폰트 로딩·레이아웃이 확정된 뒤 상단바 높이를 다시 재서 고정 위치를 정확히 맞춘다.
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(updateStickTop);
+      setTimeout(updateStickTop, 300);
+      if (window.ResizeObserver) {
+        new ResizeObserver(updateStickTop).observe(document.getElementById('top-bar'));
+      }
+
       updateClock();
       setInterval(updateClock, 1000);
 
@@ -450,6 +662,123 @@
       expandedSearch = !expandedSearch;
       renderSearchToggle();
       if (expandedSearch) document.getElementById('search-input').focus();
+    }
+
+    // ---------------------------------------------------------------
+    // Filter 토글 (노출 건수 / 게재 기간 / 정렬) · 디폴트 숨김
+    // ---------------------------------------------------------------
+    function renderFilterToggle() {
+      document.getElementById('filter-toggle-icons').innerHTML =
+        icon('sliders', 'w-5 h-5') + icon(expandedFilter ? 'chevron-up' : 'chevron-down', 'w-4 h-4 opacity-70');
+      document.getElementById('filter-panel').classList.toggle('hidden', !expandedFilter);
+      const btn = document.getElementById('filter-toggle-btn');
+      btn.classList.toggle('text-gold2', expandedFilter);
+      btn.classList.toggle('bg-ink3', expandedFilter);
+      btn.classList.toggle('text-muted', !expandedFilter);
+    }
+
+    function toggleFilterPanel() {
+      expandedFilter = !expandedFilter;
+      renderFilterToggle();
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] Setting 토글 (기사 가져오기 키워드) · 디폴트 숨김
+    // ---------------------------------------------------------------
+    function renderSettingToggle() {
+      document.getElementById('setting-toggle-icons').innerHTML =
+        icon('settings', 'w-5 h-5') + icon(expandedSetting ? 'chevron-up' : 'chevron-down', 'w-4 h-4 opacity-70');
+      document.getElementById('setting-panel').classList.toggle('hidden', !expandedSetting);
+      const btn = document.getElementById('setting-toggle-btn');
+      btn.classList.toggle('text-gold2', expandedSetting);
+      btn.classList.toggle('bg-ink3', expandedSetting);
+      btn.classList.toggle('text-muted', !expandedSetting);
+    }
+
+    function toggleSettingPanel() {
+      expandedSetting = !expandedSetting;
+      renderSettingToggle();
+    }
+
+    // 섹션별 포함/제외 키워드 입력칸을 그린다.
+    function renderKeywordSettings() {
+      const wrap = document.getElementById('keyword-settings');
+      if (!wrap) return;
+      const taClass = 'w-full bg-ink border border-line rounded-lg px-2.5 py-1.5 text-paper text-[0.85rem] focus:outline-none focus:border-gold/70 resize-y';
+
+      wrap.innerHTML = KEYWORD_SETTING_ORDER.map(({ key, depth }) => {
+        const kwv = userKeywords[key] || { include: [], exclude: [] };
+        const inc = esc((kwv.include || []).join(', '));
+        const exc = esc((kwv.exclude || []).join(', '));
+        const indent = depth ? 'ml-2 border-l border-line pl-2' : '';
+        const arrow = depth ? '<span class="text-muted">└</span> ' : '';
+        return `
+          <div class="${indent}">
+            <div class="bg-ink/40 border border-line rounded-lg p-2.5 space-y-1.5">
+              <p class="text-paper/90 font-semibold text-[0.95rem]">${arrow}${categoryLabels[key] || key}</p>
+              <div>
+                <label class="text-muted text-[0.72rem] block mb-1">포함 키워드</label>
+                <textarea data-kw-key="${key}" data-kw-type="include" rows="2" class="${taClass}" placeholder="예: 물류, 택배">${inc}</textarea>
+              </div>
+              <div>
+                <label class="text-muted text-[0.72rem] block mb-1">제외 키워드</label>
+                <textarea data-kw-key="${key}" data-kw-type="exclude" rows="2" class="${taClass}" placeholder="예: 여행, 관광">${exc}</textarea>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // 입력한 키워드를 저장하고, 곧바로 현재 화면을 새 기준으로 다시 불러온다.
+    function saveKeywordSettings() {
+      document.querySelectorAll('#keyword-settings textarea[data-kw-key]').forEach((ta) => {
+        const key = ta.getAttribute('data-kw-key');
+        const type = ta.getAttribute('data-kw-type');
+        if (!userKeywords[key]) userKeywords[key] = { include: [], exclude: [] };
+        userKeywords[key][type] = parseKwText(ta.value);
+      });
+      persistKeywords();
+      runSearch();   // 새 키워드 기준으로 즉시 다시 가져오기
+
+      const btn = document.getElementById('setting-save-btn');
+      if (btn) {
+        const orig = btn.textContent;
+        btn.textContent = '저장됨 ✓';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      }
+    }
+
+    // 모든 키워드를 기본값으로 되돌린다.
+    function resetKeywordSettings() {
+      userKeywords = cloneKeywords(DEFAULT_KEYWORDS);
+      persistKeywords();
+      renderKeywordSettings();
+      runSearch();
+    }
+
+    // 좌측 Filter를 바꾸면 검색을 다시 실행 (제목 바 필터는 updateCatHeader에서 자동 동기화)
+    function onLeftFilterChange() { runSearch(); }
+
+    // 제목 바 필터를 바꾸면 → 현재 모드(키워드/카테고리)에 맞는 원본 필터 값을 갱신 후 재검색
+    function onHeaderFilterChange() {
+      const kw = isKeywordMode();
+      document.getElementById(kw ? 'search-count-select' : 'count-select').value =
+        document.getElementById('header-count-select').value;
+      document.getElementById(kw ? 'search-hours-select' : 'hours-select').value =
+        document.getElementById('header-hours-select').value;
+      document.getElementById(kw ? 'search-sort-select' : 'sort-select').value =
+        document.getElementById('header-sort-select').value;
+      runSearch();
+    }
+
+    // 제목 바 드롭다운을 현재 유효한 필터 값으로 맞춘다 (updateCatHeader에서 호출)
+    function syncHeaderFilters() {
+      const c = document.getElementById('header-count-select');
+      const h = document.getElementById('header-hours-select');
+      const s = document.getElementById('header-sort-select');
+      if (c) c.value = String(getCount());
+      if (h) h.value = String(getHours());
+      if (s) s.value = getSort();
     }
 
     // ---------------------------------------------------------------
@@ -503,8 +832,12 @@
     }
 
     // 상단바(헤더+티커) 높이를 재서 고정 위치 기준값으로 저장
+    //  offsetHeight 는 정수라 소수점이 버려져 미세한 유격이 생길 수 있어
+    //  getBoundingClientRect().height 로 실제 렌더 높이를 반올림해 쓴다.
     function updateStickTop() {
-      const h = document.getElementById('top-bar').offsetHeight;
+      const bar = document.getElementById('top-bar');
+      if (!bar) return;
+      const h = Math.round(bar.getBoundingClientRect().height);
       document.documentElement.style.setProperty('--stick-top', h + 'px');
     }
 
@@ -554,6 +887,7 @@
       document.getElementById('search-input').value = '';
       document.getElementById('count-select').value = '5';
       document.getElementById('hours-select').value = '24';
+      document.getElementById('sort-select').value = 'sim';
       document.getElementById('search-count-select').value = '10';
       document.getElementById('search-hours-select').value = '720';
       document.getElementById('search-sort-select').value = 'sim';
@@ -561,7 +895,9 @@
       expandedLogistics = false;
       expandedStock = false;
       expandedSearch = false;
+      expandedFilter = false;
       renderSearchToggle();
+      renderFilterToggle();
       renderCategoryButtons();
       runSearch();
     }
@@ -595,6 +931,7 @@
       const params = new URLSearchParams({ limit: String(getCount()), hours: String(getHours()) });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
+      setKwParam(params);   // [추가] 키워드 설정 반영
       const data = await apiGet(`/api/briefing?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
@@ -605,6 +942,7 @@
       const params = new URLSearchParams({ perSection: '30', hours: String(getHours()) });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
+      setKwParam(params);   // [추가] 키워드 설정 반영
       const data = await apiGet(`${endpoint}?${params.toString()}`);
       if (!Array.isArray(data.sections)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.sections;
@@ -614,7 +952,19 @@
       const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()) });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
+      setKwParam(params);   // [추가] 키워드 설정 반영
       const data = await apiGet(`/api/${base}/section/${key}?${params.toString()}`);
+      if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
+      return data.items;
+    }
+
+    // [추가] 단일 상위 섹션(경제/정치·사회/글로벌 등) : '전체' 화면과 같은 키워드 설정 사용
+    async function fetchTopic(key, { dateFrom, dateTo }) {
+      const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()) });
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
+      setKwParam(params);
+      const data = await apiGet(`/api/topic/${key}?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
     }
@@ -661,7 +1011,9 @@
       }));
     }
 
-    // 같은 URL 기사가 여러 섹션에 등장하면 카테고리를 모두 합쳐준다
+    // 같은 URL 기사가 여러 섹션에 등장하면 카테고리를 모두 합쳐준다.
+    //  - 여러 섹션에 겹친 기사는 걸린 섹션을 모두 태그로 갖는다. (요청 5)
+    //  - 한 섹션에만 있는 기사도 반드시 자기 섹션 키를 태그로 갖도록 보장한다. (요청 4)
     function mergeCatsAcrossSections(sections) {
       const map = new Map(); // url -> Set(카테고리 key)
       sections.forEach((sec) => sec.items.forEach((it) => {
@@ -670,8 +1022,9 @@
         map.get(it.url).add(sec.key);
       }));
       sections.forEach((sec) => sec.items.forEach((it) => {
-        const set = map.get(it.url);
-        if (set && set.size) it.cats = [...set];
+        const set = (it.url && it.url !== '#') ? map.get(it.url) : null;
+        // URL이 겹쳐 여러 섹션에 걸렸으면 그 목록을, 아니면 자기 섹션 키를 태그로 쓴다.
+        it.cats = (set && set.size) ? [...set] : [sec.key];
       }));
     }
 
@@ -682,15 +1035,65 @@
       const el = document.getElementById('cat-header');
       const keyword = document.getElementById('search-input').value.trim();
 
-      // Today's Briefing 은 자체 제목이 있으므로 고정 바를 쓰지 않는다
-      if (!keyword && currentCategory === 'briefing') { el.classList.add('hidden'); return; }
+      // [추가] 모바일 하위 섹션 칩은 브리핑 여부와 관계없이 항상 상태에 맞게 갱신
+      renderMobileSubnav();
 
-      const label = keyword ? `"${keyword}" 검색 결과` : (categoryLabels[currentCategory] || '뉴스');
+      // [수정] 하위 섹션을 고른 경우엔 '상위>하위' 형태로 보여준다 (예: 물류>경쟁사)
+      let label;
+      if (keyword) {
+        label = `"${keyword}" 검색 결과`;
+      } else if (isSubCategory(currentCategory)) {
+        const parent = parentCategoryOf(currentCategory);
+        label = `${categoryLabels[parent]}>${categoryLabels[currentCategory]}`;
+      } else {
+        label = categoryLabels[currentCategory] || '뉴스';
+      }
       const iconName = keyword ? 'search' : (categoryIcons[currentCategory] || 'grid');
       document.getElementById('cat-header-icon').innerHTML = icon(iconName, 'w-5 h-5');
       document.getElementById('cat-header-title').textContent = label;
       document.getElementById('cat-header-count').textContent = visibleCount() + '건';
+      syncHeaderFilters();
       el.classList.remove('hidden');
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] 모바일 전용 하위 섹션 필터 칩
+    //  - 데스크톱(≥1024px)은 좌측 사이드바가 늘 보이므로 칩을 숨긴다.
+    //  - 물류/증시(상위) 또는 그 하위 섹션을 보고 있을 때만 칩을 노출한다.
+    //  - 칩을 누르면 곧바로 해당 하위 섹션 기사만 표출된다.
+    // ---------------------------------------------------------------
+    function renderMobileSubnav() {
+      const el = document.getElementById('mobile-subnav');
+      if (!el) return;
+
+      // 데스크톱에서는 사용하지 않음
+      if (window.innerWidth >= 1024) { el.style.display = 'none'; return; }
+
+      const keyword = document.getElementById('search-input').value.trim();
+      // 지금 보고 있는 화면이 어느 상위 섹션에 속하는지 판단
+      let parent = null;
+      if (!keyword) {
+        if (currentCategory === 'logistics' || currentCategory === 'stock') parent = currentCategory;
+        else parent = parentCategoryOf(currentCategory); // 하위 섹션이면 상위로 환산
+      }
+
+      // 물류/증시 계열이 아니면 칩 숨김
+      if (!parent) { el.style.display = 'none'; el.innerHTML = ''; return; }
+
+      const subs = parent === 'logistics' ? logisticsSubcategories : stockSubcategories;
+      const chip = (cat, label) => {
+        const active = currentCategory === cat;
+        return `<button onclick="selectCategory('${cat}')"
+          class="shrink-0 px-3.5 py-2 rounded-full border text-[1rem] whitespace-nowrap transition
+            ${active ? 'bg-gold text-ink border-gold font-semibold' : 'bg-ink2 text-muted border-line hover:bg-ink3'}">
+          ${label}</button>`;
+      };
+
+      // 맨 앞: 상위 전체 보기 → 그다음: 각 하위 섹션
+      el.innerHTML =
+        chip(parent, categoryLabels[parent] + ' 전체') +
+        subs.map((s) => chip(s.key, s.label)).join('');
+      el.style.display = 'flex';
     }
 
     // ---------------------------------------------------------------
@@ -719,7 +1122,7 @@
       try {
         if (keyword) {
           const data = await fetchFlatNews({ q: keyword, sort: getSort() });
-          const list = decorateItems(data.items, ['all', 'logistics', 'stock', 'briefing'].includes(currentCategory) ? 'society' : currentCategory);
+          const list = sortItemsByCurrent(decorateItems(data.items, ['all', 'logistics', 'stock', 'briefing'].includes(currentCategory) ? 'society' : currentCategory));
           currentResults = list;
 
           const modeText = data.mode === 'or' ? 'OR(하나라도 포함)' : 'AND(모두 포함)';
@@ -736,7 +1139,7 @@
 
         } else if (currentCategory === 'briefing') {
           const items = await fetchBriefing({ dateFrom, dateTo });
-          const list = decorateItems(items, 'briefing');
+          const list = sortItemsByCurrent(decorateItems(items, 'briefing'));
           currentResults = list;
           document.getElementById('status-line').textContent =
             `현재 시각 기준 가장 이슈가 되는 뉴스 ${list.length}건입니다.`;
@@ -749,7 +1152,7 @@
           sectionState = sections.map((sec) => ({
             key: sec.key,
             label: sec.label,
-            items: decorateItems(sec.items, sec.key),
+            items: sortItemsByCurrent(decorateItems(sec.items, sec.key)),
             count: getCount(),
             collapsed: false,
           }));
@@ -763,28 +1166,30 @@
         } else if (currentCategory.startsWith('logistics_') || currentCategory.startsWith('stock_')) {
           const base = currentCategory.split('_')[0];
           const items = await fetchSubSectionData(base, currentCategory, { dateFrom, dateTo });
-          const list = decorateItems(items, currentCategory);
+          const list = sortItemsByCurrent(decorateItems(items, currentCategory));
           currentResults = list;
           document.getElementById('status-line').textContent = `${categoryLabels[currentCategory]} 분야 뉴스입니다. (최근 ${hoursLabel()} 이내)`;
           renderNews(list);
-          if (!list.length) showFallbackBanner(`최근 ${hoursLabel()} 이내 기사를 찾지 못했습니다. 게재시간을 늘려보세요.`);
+          if (!list.length) showFallbackBanner(`최근 ${hoursLabel()} 이내 기사를 찾지 못했습니다. 게재 기간을 늘려보세요.`);
 
         } else if (currentCategory === 'breaking') {
-          const data = await apiGet(`/api/breaking?display=${getCount()}`);
-          const list = decorateItems(data.items || [], 'breaking');
+          const bp = new URLSearchParams({ display: String(getCount()) });
+          setKwParam(bp);   // [추가] 키워드 설정 반영
+          const data = await apiGet(`/api/breaking?${bp.toString()}`);
+          const list = sortItemsByCurrent(decorateItems(data.items || [], 'breaking'));
           currentResults = list;
           document.getElementById('status-line').textContent = '최근 1시간 이내 속보입니다.';
           renderNews(list);
           if (!list.length) showFallbackBanner('최근 1시간 이내 속보가 없습니다.');
 
         } else {
-          const q = categoryQueryMap[currentCategory] || '뉴스';
-          const data = await fetchFlatNews({ q, sort: 'date' });
-          const list = decorateItems(data.items, currentCategory);
+          // 경제 / 정치·사회 / 글로벌 : '전체' 화면과 동일한 키워드 설정으로 수집
+          const items = await fetchTopic(currentCategory, { dateFrom, dateTo });
+          const list = sortItemsByCurrent(decorateItems(items, currentCategory));
           currentResults = list;
           document.getElementById('status-line').textContent = `${categoryLabels[currentCategory]} 분야 뉴스입니다. (최근 ${hoursLabel()} 이내)`;
           renderNews(list);
-          if (!list.length) showFallbackBanner(`최근 ${hoursLabel()} 이내 기사를 찾지 못했습니다. 게재시간을 늘려보세요.`);
+          if (!list.length) showFallbackBanner(`최근 ${hoursLabel()} 이내 기사를 찾지 못했습니다. 게재 기간을 늘려보세요.`);
         }
 
         document.getElementById('news-count').textContent = visibleCount();
@@ -832,7 +1237,7 @@
         `<li class="flex gap-2"><span class="text-gold shrink-0">ㆍ</span><span>${s}</span></li>`).join('');
     }
 
-    // 카테고리 배지 HTML (여러 개면 여러 개 모두 출력)
+    // 이 기사가 걸린 카테고리 목록 (원본 그대로 · 하위 섹션 포함)
     function catsOf(item) {
       const list = (Array.isArray(item.cats) && item.cats.length)
         ? item.cats
@@ -840,8 +1245,19 @@
       return [...new Set(list.filter(Boolean))];
     }
 
+    // [태그 규칙] 하위 섹션은 최상위 섹션으로 변환하고 중복을 제거한다.
+    //  예) stock_domestic → stock(증시),  logistics_lotte → logistics(물류)
+    //  최상위가 없는 일반 섹션(경제/사회/글로벌 등)은 그대로 둔다.
+    //  → 이 목록이 기사 제목 위에 표시할 '태그'가 된다. (요청 3·5)
+    function tagCatsOf(item) {
+      const mapped = catsOf(item).map((c) => parentCategoryOf(c) || c);
+      return [...new Set(mapped.filter(Boolean))];
+    }
+
+    // [태그 표시] 모든 태그를 동일하게: 파란색 · 아이콘 없음 · 텍스트만 (요청 1·2)
+    //  섹션이 겹치는 기사는 태그를 모두 표시한다. (요청 5)
     function badgesHtml(item) {
-      return catsOf(item).map((c) =>
+      return tagCatsOf(item).map((c) =>
         `<span class="font-bold uppercase tracking-widest text-[0.7rem] px-1.5 py-0.5 bg-wire/15 text-wire rounded border border-wire/30">${categoryLabels[c] || '기타'}</span>`
       ).join('');
     }
@@ -865,11 +1281,16 @@
         </div>`;
     }
 
-    function newsCardHtml(item, showBadge = true) {
+    function newsCardHtml(item) {
+      // 모든 화면에서 동일한 규칙으로 태그를 표시한다.
+      //  - 파란색 · 아이콘 없음 · 텍스트만
+      //  - 하위 섹션은 최상위(물류/증시)로 변환
+      //  - 겹치는 섹션은 모두 표시 (누락 없음)
+      const badges = badgesHtml(item);
       return `
         <article class="news-row bg-ink2/60 border border-line rounded-xl p-4 hover:border-gold/40 transition-all duration-300">
           <div class="flex items-center gap-2 flex-wrap mb-2">
-            ${showBadge ? badgesHtml(item) : ''}
+            ${badges}
             <span class="text-muted font-mono text-[0.72rem]">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
           </div>
           <div class="flex flex-col sm:flex-row sm:items-start gap-3">
@@ -971,7 +1392,7 @@
           </header>
           <div class="${sec.collapsed ? 'hidden' : ''} p-4 space-y-3">
             ${shown.length
-              ? shown.map((it) => newsCardHtml(it, catsOf(it).length > 1)).join('')
+              ? shown.map((it) => newsCardHtml(it)).join('')
               : `<div class="text-muted text-center py-8">해당 카테고리의 기사를 찾지 못했습니다.</div>`}
           </div>
         </section>`;
