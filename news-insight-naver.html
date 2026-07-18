@@ -62,6 +62,19 @@
 
   select { background-image: none; }
 
+  /* 좌측 카테고리바 : 화면에 고정 + 사이드바 안에서만 따로 스크롤 */
+  @media (min-width: 1024px) {
+    .side-scroll {
+      position: sticky;
+      top: calc(var(--stick-top, 121px) + 12px);
+      max-height: calc(100vh - var(--stick-top, 121px) - 24px);
+      overflow-y: auto;
+      overscroll-behavior: contain;   /* 사이드바 끝에 닿아도 본문이 따라 움직이지 않음 */
+      scrollbar-gutter: stable;
+      padding-right: 4px;
+    }
+  }
+
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #22314D; border-radius: 999px; }
@@ -111,11 +124,14 @@
   <main class="max-w-[1500px] mx-auto p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
 
     <!-- 좌측 사이드바 -->
-    <aside class="lg:col-span-1 lg:sticky" style="top: calc(var(--stick-top, 121px) + 12px)">
+    <aside class="lg:col-span-1 side-scroll">
       <div class="bg-ink2/70 border border-line rounded-2xl p-5 space-y-3">
 
-        <!-- 제목(영문) -->
-        <h2 class="font-semibold text-muted uppercase tracking-[0.2em] text-[1.18rem]">CATEGORY</h2>
+        <!-- 제목(영문) : 기존 1.18rem → 3pt(=4px) 크게 -->
+        <h2 class="font-semibold text-muted uppercase tracking-[0.2em] text-[1.45rem]">CATEGORY</h2>
+
+        <!-- [추가] CATEGORY 제목 아래 구분선 -->
+        <div class="border-t border-line"></div>
 
         <!-- 노출 건수 / 기사 게재 시간 필터 -->
         <div class="space-y-2 pb-1">
@@ -145,6 +161,9 @@
             </select>
           </div>
         </div>
+
+        <!-- [추가] 필터와 Today's Briefing 사이 구분선 -->
+        <div class="border-t border-line"></div>
 
         <div class="flex flex-col gap-2" id="category-filters"></div>
 
@@ -600,6 +619,30 @@
       return data.items;
     }
 
+    // ---------------------------------------------------------------
+    // [수정] 기사 링크 결정 : 모든 버튼(요약/주요 내용/원문보기)이 같은 주소를 쓰게 한다
+    //  - 네이버가 주는 originallink(언론사 주소)는 언론사가 등록해 둔 값이라
+    //    가끔 기사 대신 홈/목록/다른 기사로 연결된다.
+    //  - 그래서 '기사 주소처럼 생겼는지' 검사해서 아니면 네이버 뉴스 링크(link)를 쓴다.
+    //    네이버 링크는 그 기사 자체를 가리키므로 절대 엉뚱한 기사로 가지 않는다.
+    // ---------------------------------------------------------------
+    function looksLikeArticleUrl(u) {
+      try {
+        const { pathname, search } = new URL(u);
+        if (!pathname || pathname === '/') return false;                       // 홈페이지
+        if (/^\/(news|article|articles|list|section|sections)\/?$/i.test(pathname)) return false; // 목록 페이지
+        return /\d{4,}/.test(pathname + search);                               // 기사 고유번호(4자리 이상 숫자)
+      } catch { return false; }
+    }
+
+    function articleLink(item) {
+      const naver = /^https?:\/\/(n|m)\.news\.naver\.com\//i.test(item.naverUrl || '') ? item.naverUrl : '';
+      const orig = item.url && item.url !== '#' ? item.url : '';
+      if (!orig) return naver || '#';
+      if (!naver) return orig;
+      return looksLikeArticleUrl(orig) ? orig : naver;
+    }
+
     function decorateItems(items, category) {
       return items.map((item) => ({
         id: nextId++,
@@ -607,6 +650,7 @@
         summary: Array.isArray(item.summary) && item.summary.length ? item.summary : ['요약 없음'],
         source: item.source || '출처 미상',
         url: item.url || '#',
+        naverUrl: item.naverUrl || '',   // [수정] 서버가 준 네이버 뉴스 링크를 버리지 않고 보관
         datetime: item.datetime || '',
         cat: item.cat || null,
         // 이 기사가 걸린 카테고리 목록 (서버가 cats를 주면 그대로, 없으면 단일값)
@@ -798,8 +842,27 @@
 
     function badgesHtml(item) {
       return catsOf(item).map((c) =>
-        `<span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30">${categoryLabels[c] || '기타'}</span>`
+        `<span class="font-bold uppercase tracking-widest text-[0.7rem] px-1.5 py-0.5 bg-wire/15 text-wire rounded border border-wire/30">${categoryLabels[c] || '기타'}</span>`
       ).join('');
+    }
+
+    // 요약 / 주요 내용 / 원문보기 버튼 묶음 (기사 제목 오른쪽에 배치)
+    function actionsHtml(item) {
+      return `
+        <div class="shrink-0 flex items-center gap-1.5 sm:justify-end">
+          <button onclick="openSummary(${item.id})" title="요약"
+            class="flex items-center gap-1 bg-ink3 hover:bg-line text-paper text-[0.8rem] px-2 py-1 rounded-md transition border border-line whitespace-nowrap">
+            ${icon('file-text', 'w-3 h-3')} 요약
+          </button>
+          <button onclick="openBrief(${item.id})" title="주요 내용"
+            class="flex items-center gap-1 bg-gold/15 hover:bg-gold/25 text-gold2 text-[0.8rem] px-2 py-1 rounded-md transition border border-gold/30 whitespace-nowrap">
+            ${icon('sparkles', 'w-3 h-3')} 주요 내용
+          </button>
+          <a href="${esc(articleLink(item))}" target="_blank" rel="noopener noreferrer" title="원문보기"
+            class="flex items-center gap-1 text-wire hover:text-blue-300 text-[0.8rem] px-2 py-1 rounded-md transition border border-wire/30 bg-wire/10 whitespace-nowrap">
+            원문보기 ${icon('external-link', 'w-3 h-3')}
+          </a>
+        </div>`;
     }
 
     function newsCardHtml(item, showBadge = true) {
@@ -807,19 +870,11 @@
         <article class="news-row bg-ink2/60 border border-line rounded-xl p-4 hover:border-gold/40 transition-all duration-300">
           <div class="flex items-center gap-2 flex-wrap mb-2">
             ${showBadge ? badgesHtml(item) : ''}
-            <span class="text-muted font-mono">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
+            <span class="text-muted font-mono text-[0.72rem]">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
           </div>
-          <h3 class="row-title font-sans text-[1.46rem] font-bold text-paper transition leading-snug break-keep mb-3">${item.title}</h3>
-          <div class="flex items-center gap-2">
-            <button onclick="openSummary(${item.id})" class="flex items-center gap-1.5 bg-ink3 hover:bg-line text-paper px-3.5 py-2 rounded-lg transition border border-line">
-              ${icon('file-text', 'w-3.5 h-3.5')} 요약
-            </button>
-            <button onclick="openBrief(${item.id})" class="flex items-center gap-1.5 bg-gold/15 hover:bg-gold/25 text-gold2 px-3.5 py-2 rounded-lg transition border border-gold/30">
-              ${icon('sparkles', 'w-3.5 h-3.5')} 주요 내용
-            </button>
-            <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 text-wire hover:text-blue-300 px-3.5 py-2 rounded-lg transition border border-wire/30 bg-wire/10">
-              원문보기 ${icon('external-link', 'w-3.5 h-3.5')}
-            </a>
+          <div class="flex flex-col sm:flex-row sm:items-start gap-3">
+            <h3 class="row-title flex-1 min-w-0 font-sans text-[1.46rem] font-bold text-paper transition leading-snug break-keep">${item.title}</h3>
+            ${actionsHtml(item)}
           </div>
         </article>`;
     }
@@ -852,19 +907,11 @@
                   <div class="flex-1 min-w-0 space-y-2">
                     <div class="flex items-center gap-2 flex-wrap">
                       ${badgesHtml(it)}
-                      <span class="text-muted font-mono">${it.source}${it.datetime ? ' · ' + formatDate(it.datetime) : ''}</span>
+                      <span class="text-muted font-mono text-[0.72rem]">${it.source}${it.datetime ? ' · ' + formatDate(it.datetime) : ''}</span>
                     </div>
-                    <h3 class="row-title font-sans text-[1.46rem] font-bold text-paper leading-snug break-keep">${it.title}</h3>
-                    <div class="flex items-center gap-2 pt-1">
-                      <button onclick="openSummary(${it.id})" class="flex items-center gap-1.5 bg-ink3 hover:bg-line text-paper px-3.5 py-2 rounded-lg transition border border-line">
-                        ${icon('file-text', 'w-3.5 h-3.5')} 요약
-                      </button>
-                      <button onclick="openBrief(${it.id})" class="flex items-center gap-1.5 bg-gold/15 hover:bg-gold/25 text-gold2 px-3.5 py-2 rounded-lg transition border border-gold/30">
-                        ${icon('sparkles', 'w-3.5 h-3.5')} 주요 내용
-                      </button>
-                      <a href="${it.url}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 text-wire hover:text-blue-300 px-3.5 py-2 rounded-lg transition border border-wire/30 bg-wire/10">
-                        원문보기 ${icon('external-link', 'w-3.5 h-3.5')}
-                      </a>
+                    <div class="flex flex-col sm:flex-row sm:items-start gap-3">
+                      <h3 class="row-title flex-1 min-w-0 font-sans text-[1.46rem] font-bold text-paper leading-snug break-keep">${it.title}</h3>
+                      ${actionsHtml(it)}
                     </div>
                   </div>
                 </div>
@@ -1005,27 +1052,32 @@
     async function openSummary(id) {
       const item = currentResults.find(n => n.id === id);
       if (!item) return;
+      const link = articleLink(item);   // [수정] 원문보기와 똑같은 주소를 요약에도 사용
       document.getElementById('modal-category').textContent =
         catsOf(item).map((c) => categoryLabels[c] || '기타').join(', ');
       document.getElementById('modal-title').textContent = item.title;
       document.getElementById('modal-source').textContent = item.source;
       document.getElementById('modal-time').textContent = item.datetime ? ' · ' + formatDate(item.datetime) : '';
-      document.getElementById('modal-link').href = item.url || '#';
+      document.getElementById('modal-link').href = link;
       document.getElementById('summary-modal').classList.remove('hidden');
 
       // 요약은 반드시 '원문 본문'에서 추출한 핵심 3문장만 보여준다
       paintSummary([]);
       const loading = document.getElementById('modal-loading');
 
-      if (!item.url || item.url === '#') { paintSummary(['요약할 원문 주소가 없습니다.']); return; }
-      if (coreSummaryCache.has(item.url)) { paintSummary(coreSummaryCache.get(item.url)); return; }
+      if (!link || link === '#') { paintSummary(['요약할 원문 주소가 없습니다.']); return; }
+      if (coreSummaryCache.has(link)) { paintSummary(coreSummaryCache.get(link)); return; }
 
       loading.classList.remove('hidden');
       try {
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/article-summary?url=${encodeURIComponent(item.url)}&max=3`);
+        // [수정] 원문이 막혔을 때 서버가 우회할 수 있도록 네이버 링크와 기존 요약문을 함께 보낸다
+        const p = new URLSearchParams({ url: link, max: '3' });
+        if (item.naverUrl) p.set('naver', item.naverUrl);
+        if (Array.isArray(item.summary)) p.set('desc', item.summary.join(' ').slice(0, 1000));
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/article-summary?${p.toString()}`);
         const data = await res.json();
         if (Array.isArray(data.sentences) && data.sentences.length) {
-          coreSummaryCache.set(item.url, data.sentences);
+          coreSummaryCache.set(link, data.sentences);
           applySummary(item, data.sentences);
           if (!document.getElementById('summary-modal').classList.contains('hidden')) paintSummary(data.sentences);
         } else {
@@ -1087,13 +1139,17 @@
       const item = currentResults.find(n => n.id === id);
       if (!item) return;
 
-      document.getElementById('brief-link').href = item.url || '#';
+      const link = articleLink(item);   // [수정] 원문보기와 똑같은 주소를 AI 정리에도 사용
+      document.getElementById('brief-link').href = link;
       document.getElementById('brief-note').textContent = '';
       document.getElementById('brief-body').innerHTML = briefLoadingHtml();
       document.getElementById('brief-modal').classList.remove('hidden');
 
       try {
-        const params = new URLSearchParams({ url: item.url, title: item.title });
+        const params = new URLSearchParams({ url: link, title: item.title });
+        if (item.naverUrl) params.set('naver', item.naverUrl);   // 원문 차단 시 네이버 뉴스로 우회
+        // [수정] 본문을 끝내 못 읽으면 네이버 요약문이라도 근거로 쓰도록 함께 전달
+        if (Array.isArray(item.summary)) params.set('desc', item.summary.join(' ').slice(0, 1000));
         const res = await fetch(`${NAVER_PROXY_BASE}/api/deep-brief?${params.toString()}`);
         const data = await res.json();
 
@@ -1103,8 +1159,9 @@
           return;
         }
         document.getElementById('brief-body').innerHTML = briefHtml(data);
-        document.getElementById('brief-note').textContent =
-          `AI(${data.model || 'Gemini'})가 원문을 읽고 정리했습니다 · 사실 확인은 원문을 참고하세요`;
+        document.getElementById('brief-note').textContent = data.partial
+          ? `원문 본문을 읽지 못해 네이버 요약문만으로 정리했습니다 · 자세한 내용은 원문보기를 이용하세요`
+          : `AI(${data.model || 'Gemini'})가 원문을 읽고 정리했습니다 · 사실 확인은 원문을 참고하세요`;
       } catch (e) {
         console.error(e);
         document.getElementById('brief-body').innerHTML =
