@@ -1073,6 +1073,7 @@
         // [수정] 원문이 막혔을 때 서버가 우회할 수 있도록 네이버 링크와 기존 요약문을 함께 보낸다
         const p = new URLSearchParams({ url: link, max: '3' });
         if (item.naverUrl) p.set('naver', item.naverUrl);
+        if (item.title) p.set('title', item.title);   // [추가] 제목 핵심 단어로 문장 선별
         if (Array.isArray(item.summary)) p.set('desc', item.summary.join(' ').slice(0, 1000));
         const res = await fetch(`${NAVER_PROXY_BASE}/api/article-summary?${p.toString()}`);
         const data = await res.json();

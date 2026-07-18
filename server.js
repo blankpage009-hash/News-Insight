@@ -199,6 +199,11 @@ const VERIFY_CONCURRENCY = 6;
 const articleTextCache = new Map(); // url -> { ts, text }
 const ARTICLE_TTL = 1000 * 60 * 30;
 
+// 지정한 밀리초만큼 잠깐 기다린다 (429 재시도·호출 간격 조절용)
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+
 async function mapLimit(list, limit, worker) {
   const out = new Array(list.length);
   let idx = 0;
@@ -271,6 +276,16 @@ function findBlock(html, tag, attrRe) {
   return '';
 }
 
+// [개선] 블록 안에서 '링크(<a>) 글자'가 차지하는 비율(0~1)을 잰다.
+//   비율이 높으면 = 목록/추천/메뉴/관련기사 묶음 → 본문이 아님.
+function linkTextRatio(htmlBlock) {
+  const all = stripHtml(htmlBlock || '');
+  if (all.length < 40) return 0;
+  const anchors = htmlBlock.match(/<a\b[^>]*>[\s\S]*?<\/a>/gi) || [];
+  const linkChars = anchors.reduce((n, a) => n + stripHtml(a).length, 0);
+  return linkChars / all.length;
+}
+
 // [B] JSON-LD 안의 articleBody (많은 언론사가 이걸 넣어둔다 = 가장 깨끗한 본문)
 function pickJsonLdBody(html) {
   const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
@@ -288,7 +303,11 @@ function pickJsonLdBody(html) {
 // [B] <p> 태그를 모두 모아 본문 재구성 (최후의 수단)
 function pickParagraphs(html) {
   const ps = html.match(/<p\b[^>]*>[\s\S]*?<\/p>/gi) || [];
-  const text = ps.map((p) => stripHtml(p)).filter((t) => t.length > 30).join(' ');
+  const text = ps
+    .filter((p) => linkTextRatio(p) < 0.4)   // [개선] 링크가 대부분인 문단(목록성) 제외
+    .map((p) => stripHtml(p))
+    .filter((t) => t.length > 30)
+    .join(' ');
   return text;
 }
 
@@ -310,8 +329,11 @@ function extractBodyFromHtml(html) {
 
   let best = '';
   for (const get of candidates) {
-    const text = stripHtml(get() || '');
-    if (text.length > best.length) best = text;
+    const rawBlock = get() || '';         // stripHtml 하기 전의 원본(링크 판별에 필요)
+    const text = stripHtml(rawBlock);
+    // [개선] '가장 긴 덩어리 선택'을 그대로 쓰지 않고,
+    //   링크가 절반 이상인 덩어리(목록/추천/메뉴)는 본문 후보에서 뺀다.
+    if (text.length > best.length && linkTextRatio(rawBlock) < 0.5) best = text;
     if (best.length >= 600) break; // 충분히 길면 더 안 찾는다 (속도)
   }
   if (best.length < 150) best = pickMeta(html, 'og:description') || best;
@@ -921,20 +943,46 @@ const summaryCache = new Map(); // `${url}::${max}` -> { ts, sentences }
 const SUMMARY_TTL = 1000 * 60 * 30;
 
 // 기사 본문에 섞여 들어오는 잡음(저작권/기자정보/SNS 안내 등)
-const NOISE_PAT = /(무단\s?전재|재배포|저작권자|ⓒ|©|기자\s*=|구독|앱 다운로드|카카오톡|페이스북|네이버에서|사진=|영상=|제보|▶)/;
+//   [확장] 목록성 문구도 추가 : 많이 본 / 관련기사 / 추천 / 이전·다음 기사 / 인기기사 등
+const NOISE_PAT = /(무단\s?전재|재배포|저작권자|ⓒ|©|기자\s*=|구독|앱 다운로드|카카오톡|페이스북|네이버에서|사진=|영상=|제보|▶|많이\s?본|관련\s?기사|추천\s?기사|추천\s?뉴스|인기\s?기사|이전\s?기사|다음\s?기사|주요\s?뉴스|헤드라인|포토\s?뉴스|많이\s?읽은|함께\s?본)/;
+
+// 제목에서 '핵심 단어'만 뽑는다 (조사·기호 제거, 2글자 이상만)
+function keywordsFromTitle(title = '') {
+  return String(title)
+    .replace(/[^가-힣A-Za-z0-9\s]/g, ' ')   // 특수문자 제거
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 2)
+    .slice(0, 12);
+}
 
 // 본문에서 핵심 문장 max개만 추림
-function coreSentences(text, max = 3) {
-  const out = [];
+//   [개선] 무조건 앞 3문장이 아니라, 제목 핵심 단어가 들어간 문장을 우선으로 뽑는다.
+function coreSentences(text, max = 3, title = '') {
+  // 1) 잡음·길이 조건을 통과한 '깨끗한 문장' 후보를 순서대로 모은다
+  const clean = [];
   for (const s of splitSummary(text)) {
     const t = s.trim();
     if (t.length < 20 || t.length > 250) continue; // 너무 짧거나 긴 문장 제외
     if (NOISE_PAT.test(t)) continue;
-    if (out.includes(t)) continue;
-    out.push(t);
-    if (out.length >= max) break;
+    if (clean.includes(t)) continue;
+    clean.push(t);
   }
-  return out;
+
+  // 2) 제목 핵심 단어가 몇 개 들어있는지로 점수를 매긴다 (많이 겹칠수록 위로)
+  const keys = keywordsFromTitle(title);
+  const scored = clean.map((t, i) => {
+    const lower = t.toLowerCase();
+    const hit = keys.filter((k) => lower.includes(k.toLowerCase())).length;
+    return { t, i, hit };
+  });
+
+  // 3) 점수 높은 순 → 같으면 원문 등장 순서(앞쪽) 우선
+  scored.sort((a, b) => (b.hit - a.hit) || (a.i - b.i));
+
+  // 4) 상위 max개를 고르되, 최종 출력은 '원문에 나온 순서'로 정렬(자연스러운 읽기)
+  const picked = scored.slice(0, max).sort((a, b) => a.i - b.i);
+  return picked.map((x) => x.t);
 }
 
 function pickMeta(html, prop) {
@@ -963,10 +1011,22 @@ app.get('/api/article-summary', async (req, res) => {
       return res.status(200).json({ sentences: [], error: 'paywall' });
     }
 
-    let sentences = coreSentences(best, max);
+    const title = String(req.query.title || '');
+    const desc = String(req.query.desc || '');
 
-    // 본문에서 못 뽑았으면 프런트가 보내준 네이버 요약문으로라도 만든다
-    if (!sentences.length) sentences = coreSentences(String(req.query.desc || ''), max);
+    let sentences = coreSentences(best, max, title);
+
+    // [개선] 추출 품질이 낮으면(본문이 너무 짧거나 / 건진 문장이 1개 이하 /
+    //   문장 총 길이가 빈약하면) 차라리 네이버 요약문을 우선 사용한다.
+    const lowQuality =
+      best.length < 400 || sentences.length < 2 || sentences.join('').length < 60;
+    if (lowQuality && desc.trim().length >= 60) {
+      const fromDesc = coreSentences(desc, max, title);
+      if (fromDesc.length) sentences = fromDesc;
+    }
+
+    // 그래도 비었으면 네이버 요약문으로라도 만든다
+    if (!sentences.length) sentences = coreSentences(desc, max, title);
     if (!sentences.length) throw new Error('본문 추출 실패');
 
     summaryCache.set(cacheKey, { ts: Date.now(), sentences });
@@ -986,12 +1046,15 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 // [수정] 모델을 하나로 고정하지 않는다.
 //   구글이 구형 모델을 신규 API 키에 막으면서 404가 나기 때문에,
 //   후보를 순서대로 시도하고 성공한 모델을 기억해서 재사용한다.
+// [429 대응] 무료 한도가 가장 넉넉한 Flash-Lite 계열을 앞쪽에 둔다.
+//   (분당 요청 한도가 커서 429가 훨씬 덜 난다.)
 const MODEL_CANDIDATES = [
   process.env.GEMINI_MODEL, // .env 에 지정했다면 1순위
+  'gemini-2.5-flash-lite',  // 무료 한도 가장 넉넉 → 최우선
+  'gemini-flash-lite-latest',
   'gemini-flash-latest',
-  'gemini-3-flash',
-  'gemini-2.5-flash-lite',
   'gemini-2.5-flash',
+  'gemini-3-flash',
 ].filter(Boolean);
 
 let ACTIVE_MODEL = null; // 실제로 성공한 모델 이름
@@ -1041,8 +1104,12 @@ async function callGeminiOnce(model, prompt) {
       }),
     });
     if (!r.ok) {
-      const err = new Error(`Gemini ${r.status}: ${(await r.text()).slice(0, 200)}`);
+      const bodyText = await r.text();
+      const err = new Error(`Gemini ${r.status}: ${bodyText.slice(0, 200)}`);
       err.status = r.status;
+      // 429일 때 구글이 알려주는 '재시도까지 대기 시간'을 뽑아둔다 (예: "retryDelay":"37s")
+      const m = bodyText.match(/"retryDelay"\s*:\s*"?(\d+(?:\.\d+)?)s/i);
+      if (m) err.retryAfterMs = Math.ceil(parseFloat(m[1]) * 1000);
       throw err;
     }
     const data = await r.json();
@@ -1052,8 +1119,8 @@ async function callGeminiOnce(model, prompt) {
   }
 }
 
-// 후보 목록을 돌면서 '되는 모델'을 찾는다
-async function callGemini(prompt) {
+// 후보 목록을 돌면서 '되는 모델'을 찾아 한 번 호출한다 (404는 다음 후보로)
+async function callGeminiModels(prompt) {
   const list = ACTIVE_MODEL ? [ACTIVE_MODEL] : MODEL_CANDIDATES;
   let lastErr;
 
@@ -1067,12 +1134,64 @@ async function callGemini(prompt) {
       lastErr = e;
       if (e.status === 404) {
         console.warn(`[Gemini] ${model} 사용 불가(404) → 다음 후보 시도`);
+        // 확정돼 있던 모델이 갑자기 막혔다면 확정을 풀고 전체 후보를 다시 시도
+        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt); }
         continue; // 모델이 없는 경우만 다음 후보로
       }
-      throw e; // 400 / 429 등은 모델 문제가 아니므로 즉시 중단
+      throw e; // 400 / 429 등은 모델 문제가 아니므로 위로 던진다
     }
   }
   throw new Error(`쓸 수 있는 Gemini 모델을 찾지 못했습니다. /api/gemini-models 로 확인해 보세요. (${lastErr?.message || ''})`);
+}
+
+// -----------------------------------------------------------------
+// [429 대응 ①] 호출 큐 : 한 번에 하나씩 + 최소 간격을 강제한다.
+//   여러 사람이 동시에 '주요 내용'을 눌러도 순서대로 내보내
+//   분당 한도를 넘지 않게 한다. (= 대기열 + "N초에 1회")
+// -----------------------------------------------------------------
+const GEMINI_MIN_INTERVAL = 6000; // ms. 호출 사이 최소 6초 간격 (분당 한도 아래로 유지)
+let geminiChain = Promise.resolve();
+let lastGeminiAt = 0;
+
+function enqueueGemini(task) {
+  const run = geminiChain.then(async () => {
+    const wait = GEMINI_MIN_INTERVAL - (Date.now() - lastGeminiAt);
+    if (wait > 0) await sleep(wait);     // 직전 호출과 간격 벌리기
+    lastGeminiAt = Date.now();
+    return task();
+  });
+  geminiChain = run.then(() => {}, () => {}); // 에러가 나도 대기열이 끊기지 않게
+  return run;
+}
+
+// -----------------------------------------------------------------
+// [429 대응 ②③] 프론트가 실제로 부르는 함수
+//   ② 429면 잠깐 기다렸다 자동 재시도(backoff). 구글이 알려준 대기 시간을 우선 사용.
+//   ③ 끝내 실패하면 사용자에게 '친절한 안내 메시지'를 던진다.
+// -----------------------------------------------------------------
+async function callGemini(prompt) {
+  const MAX_RETRY = 2; // 429일 때 최대 2번 더 시도
+  for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
+    try {
+      return await enqueueGemini(() => callGeminiModels(prompt));
+    } catch (e) {
+      if (e.status === 429 && attempt < MAX_RETRY) {
+        // 구글이 알려준 대기 시간이 있으면 그만큼, 없으면 8초 → 16초로 점점 늘려 기다린다
+        const backoff = e.retryAfterMs || 8000 * Math.pow(2, attempt);
+        const capped = Math.min(backoff, 30000); // 너무 오래는 안 기다림(최대 30초)
+        console.warn(`[Gemini] 429 → ${Math.round(capped / 1000)}초 후 재시도 (${attempt + 1}/${MAX_RETRY})`);
+        await sleep(capped);
+        continue;
+      }
+      if (e.status === 429) {
+        // 재시도까지 실패 → 당황하지 않도록 친절히 안내
+        const friendly = new Error('무료 사용량 한도에 도달했어요. 잠시 후(약 1분 뒤) 다시 시도해 주세요.');
+        friendly.status = 429;
+        throw friendly;
+      }
+      throw e;
+    }
+  }
 }
 
 // [추가] 내 API 키로 실제 쓸 수 있는 모델 목록 확인
@@ -1119,7 +1238,11 @@ app.get('/api/deep-brief', async (req, res) => {
       return res.json({ error: '원문 본문을 읽지 못했습니다. 해당 언론사가 자동 수집을 막았을 수 있습니다. (원문보기로 확인해 주세요)' });
     }
 
-    const raw = await callGemini(`${BRIEF_PROMPT}\n\n[기사 제목]\n${title}\n\n[기사 본문]\n${body}`);
+    // [토큰 절약] 본문을 3500자로 줄인다. 앞부분에 핵심이 몰려 있어
+    //   품질은 크게 안 떨어지면서 토큰(=사용량)을 아낄 수 있다.
+    const bodyForAI = body.slice(0, 3500);
+
+    const raw = await callGemini(`${BRIEF_PROMPT}\n\n[기사 제목]\n${title}\n\n[기사 본문]\n${bodyForAI}`);
 
     let brief;
     try {
