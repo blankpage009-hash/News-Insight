@@ -6,6 +6,11 @@
 //  2) /api/article-summary : 원문 본문에서 잡음 제거 후 핵심 문장 N개(기본 2개)만 반환
 //  3) /api/all/sections, /api/logistics/sections : perSection 파라미터로 노출 개수 조절
 //
+// [정확도 고도화 업데이트]
+//  [H] DOMAINS      : 카테고리별 '맥락 단어(context)' / '제외 단어(exclude)' 사전
+//  [I] refineByDomain : 사명(주체) + 맥락 2중 게이트 → '한진관광 여행' 같은 오탐 제거
+//  검색어 보강      : '한진' → '한진택배' / '한진 물류' (네이버 단계에서 이미 AND)
+//
 // 실행: npm install → node server.js → http://localhost:3000
 
 require('dotenv').config();
@@ -86,6 +91,102 @@ function itemMatchesAnyTerm(item, terms) {
 }
 
 // -----------------------------------------------------------------
+// [추가] 검색어 파싱 : 공백 = AND, 콤마 = OR
+//   '롯데 한진'  -> ['롯데 한진']        (한 덩어리 → 두 단어 모두 포함해야 통과)
+//   '롯데, 한진' -> ['롯데', '한진']     (각각 검색 후 합침 → 둘 중 하나만 있어도 통과)
+// -----------------------------------------------------------------
+function parseQuery(q) {
+  return String(q || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// -----------------------------------------------------------------
+// [F] 동의어·표기 확장 : 같은 뜻인데 다르게 쓰는 말도 함께 검색
+// -----------------------------------------------------------------
+const SYNONYMS = [
+  { re: /\bVCM\b/i, adds: ['Value Creation Meeting', '밸류크리에이션미팅'] },
+  { re: /롯데글로벌로지스/, adds: ['롯데택배'] },
+  { re: /CJ대한통운/i, adds: ['대한통운'] },
+  { re: /현대글로비스/, adds: ['글로비스'] },
+  { re: /LX판토스/i, adds: ['판토스'] },
+  { re: /뉴욕증시/, adds: ['미국 증시'] },
+  { re: /코스피/, adds: ['KOSPI'] },
+  { re: /코스닥/, adds: ['KOSDAQ'] },
+];
+
+function expandTerm(term) {
+  const out = [term];
+  SYNONYMS.forEach(({ re, adds }) => {
+    if (re.test(term)) adds.forEach((a) => out.push(term.replace(re, a).replace(/\s+/g, ' ').trim()));
+  });
+  return [...new Set(out)];
+}
+
+// -----------------------------------------------------------------
+// [G] 매칭 강도
+//   strict : 검색어의 모든 단어가 제목+요약에 있어야 통과
+//   loose  : 검색어의 단어 중 하나라도 있으면 통과 (결과 0건일 때 마지막 수단)
+// -----------------------------------------------------------------
+function tokensOf(term) {
+  return String(term || '').toLowerCase().split(/\s+/).filter(Boolean);
+}
+function itemText(it) {
+  return `${it.title || ''} ${(it.summary || []).join(' ')}`.toLowerCase();
+}
+function matchBy(mode, it, terms) {
+  const text = itemText(it);
+  if (mode === 'loose') return terms.some((t) => tokensOf(t).some((k) => text.includes(k)));
+  return terms.some((t) => {
+    const ks = tokensOf(t);
+    return ks.length > 0 && ks.every((k) => text.includes(k));
+  });
+}
+
+// -----------------------------------------------------------------
+// [H] 도메인 사전 : 카테고리별 '맥락 단어'와 '제외 단어'
+//   context : 이 카테고리 기사라면 반드시 등장할 법한 단어
+//   exclude : 이 단어가 제목에 있으면 카테고리가 아님 (예: 한진관광 → 여행)
+// -----------------------------------------------------------------
+const DOMAINS = {
+  logistics: {
+    context: ['물류','택배','배송','운송','화물','창고','풀필먼트','3PL','포워딩',
+              '해운','항만','컨테이너','통관','물류센터','배차','라스트마일',
+              '공급망','SCM','허브터미널','수출입','이커머스','유통'],
+    exclude: ['관광','여행','트래블','패키지여행','항공권','호텔','리조트',
+              '면세','골프','레저','유람선','크루즈','뮤지컬','공연'],
+  },
+  stock: {
+    context: ['증시','코스피','코스닥','주가','지수','상장','시가총액','거래대금',
+              '외국인','기관','공매도','나스닥','다우','S&P','장중','종가','급등','급락'],
+    exclude: ['부고','인사이동','채용공고'],
+  },
+  economy: {
+    context: ['금리','물가','환율','성장률','경기','수출','수입','고용','재정',
+              '통화','한국은행','기재부','GDP','인플레이션','예산'],
+    exclude: [],
+  },
+  society: {
+    context: ['국회','정부','법안','검찰','경찰','판결','재판','대통령','여야',
+              '지자체','시위','사고','수사','국정'],
+    exclude: [],
+  },
+  global: {
+    context: ['미국','중국','일본','유럽','EU','유엔','외교','정상회담','관세',
+              '전쟁','국제','현지시간','백악관'],
+    exclude: [],
+  },
+};
+
+// 띄어쓰기 무시 비교 ('물류 센터' == '물류센터')
+function compact(s) { return String(s || '').toLowerCase().replace(/\s+/g, ''); }
+function hitCount(text, words) {
+  const t = compact(text);
+  return (words || []).filter((w) => t.includes(compact(w))).length;
+}
+
+// -----------------------------------------------------------------
 // [추가] 카테고리 정확도 검증
 //  - 제목에 키워드가 있으면 = 그 기사의 '핵심 주제' → 통과
 //  - 제목에 없으면 원문 본문을 읽어 '앞부분(리드문)'에 키워드가 있는지 확인
@@ -160,12 +261,55 @@ async function filterByCore(items, terms) {
   const targets = pending.slice(0, VERIFY_LIMIT);
   const verified = await mapLimit(targets, VERIFY_CONCURRENCY, async (it) => {
     const body = await fetchArticleText(it.url);
-    if (!body) return null; // 원문 확인 불가 → 안전하게 제외
+    if (!body) return it; // [B] 원문 확인 불가 → 버리지 않고 살려둔다 (언론사 봇 차단이 잦음)
     const lead = body.slice(0, LEAD_CHARS);
     return terms.some((t) => textContainsTerm(lead, t)) ? it : null;
   });
 
   return passed.concat(verified.filter(Boolean));
+}
+
+// -----------------------------------------------------------------
+// [I] 도메인(맥락) 검증
+//   통과 조건
+//     - 제목에 제외어 → 즉시 탈락
+//     - 제목에 사명 O + 맥락어 1개 이상 → 통과
+//     - 제목에 사명 X + 맥락어 2개 이상 → 통과
+//     - 애매하면 원문 리드문을 읽어 맥락어 2개 이상일 때만 통과
+// -----------------------------------------------------------------
+const DOMAIN_VERIFY_LIMIT = 12; // 원문 확인 최대 건수(속도 보호)
+
+async function refineByDomain(items, terms, domKey) {
+  const dom = DOMAINS[domKey];
+  if (!dom) return items;
+
+  const pass = [];
+  const pending = [];
+
+  for (const it of items) {
+    const head = `${it.title || ''} ${(it.summary || []).join(' ')}`;
+
+    if (hitCount(it.title, dom.exclude) > 0) continue;   // 제목 제외어 → 탈락
+    if (hitCount(head, dom.exclude) >= 2) continue;      // 요약에도 제외어 다수 → 탈락
+
+    const subjectInTitle = terms.some((t) => textContainsTerm(it.title, t));
+    const ctx = hitCount(head, dom.context);
+
+    if (subjectInTitle && ctx >= 1) pass.push(it);
+    else if (ctx >= 2) pass.push(it);
+    else pending.push(it);
+  }
+
+  // 애매한 기사만 원문 리드문 확인
+  const targets = pending.slice(0, DOMAIN_VERIFY_LIMIT);
+  const rescued = await mapLimit(targets, VERIFY_CONCURRENCY, async (it) => {
+    const lead = (await fetchArticleText(it.url)).slice(0, LEAD_CHARS);
+    if (!lead) return null;                              // 확인 불가 → 정확도 우선(탈락)
+    if (hitCount(lead, dom.exclude) >= 2) return null;
+    return hitCount(lead, dom.context) >= 2 ? it : null;
+  });
+
+  return pass.concat(rescued.filter(Boolean));
 }
 
 // -----------------------------------------------------------------
@@ -258,18 +402,38 @@ async function naverSearchRaw(query, display = 30, sort = 'date') {
     .filter((it) => !isRestrictedItem(it));
 }
 
-async function searchByTerms(terms, { display = 15, sort = 'date', dateFrom, dateTo, hours, verify = true } = {}) {
-  const perTermDisplay = Math.max(10, Math.min(30, Number(display) || 15));
+async function searchByTerms(terms, opts = {}) {
+  const {
+    display = 15,
+    sort = 'date',
+    dateFrom,
+    dateTo,
+    hours,
+    verify = true,
+    match = 'strict', // 'strict' | 'loose'
+    expand = false,   // [F] 동의어 확장 사용 여부
+    fetchCount,       // [D] 네이버에 몇 건 요청할지 (미지정 시 자동)
+    domain,           // [I] 도메인(맥락) 검증 키 : 'logistics' | 'stock' | ...
+  } = opts;
+
+  // [D] 넉넉히 받아온 뒤 서버에서 추린다 (요청 비용은 동일)
+  const per = Number(fetchCount) || Math.max(30, Math.min(100, (Number(display) || 15) * 4));
 
   const resultsPerTerm = await Promise.all(
     terms.map(async (term) => {
-      try {
-        const raw = await naverSearchRaw(term, perTermDisplay, sort);
-        return raw.filter((it) => itemMatchesAnyTerm(it, [term]));
-      } catch (e) {
-        console.error(`[검색 실패] "${term}":`, e.message);
-        return [];
-      }
+      const queries = expand ? expandTerm(term) : [term]; // [F]
+      const lists = await Promise.all(
+        queries.map(async (q) => {
+          try {
+            return await naverSearchRaw(q, per, sort);
+          } catch (e) {
+            console.error(`[검색 실패] "${q}":`, e.message);
+            return [];
+          }
+        })
+      );
+      // 확장어로 찾은 기사도 '원래 검색어 또는 확장어' 중 하나에 맞으면 통과
+      return lists.flat().filter((it) => matchBy(match, it, queries));
     })
   );
 
@@ -299,12 +463,15 @@ async function searchByTerms(terms, { display = 15, sort = 'date', dateFrom, dat
     merged = merged.filter((it) => it.datetime && new Date(it.datetime).getTime() >= minTs);
   }
 
-  merged.sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0));
+  // [E] 정확도순(sim)이면 네이버가 준 순서를 유지, 최신순(date)이면 시간 정렬
+  const byDate = (a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0);
+  if (sort !== 'sim') merged.sort(byDate);
 
-  // [추가] 카테고리 정확도 검증 (원문 핵심 내용 확인)
+  // 카테고리 정확도 검증 (원문 핵심 내용 확인) - 키워드 검색에서는 사용하지 않음 [A]
   if (verify) {
     merged = await filterByCore(merged, terms);
-    merged.sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0));
+    if (domain) merged = await refineByDomain(merged, terms, domain); // [I] 맥락 검증
+    if (sort !== 'sim') merged.sort(byDate);
   }
   return merged;
 }
@@ -313,42 +480,39 @@ async function searchByTerms(terms, { display = 15, sort = 'date', dateFrom, dat
 // 카테고리 설정
 // -----------------------------------------------------------------
 const LOGISTICS_SECTIONS = [
-  { key: 'logistics_lotte', label: '롯데글로벌로지스', terms: ['롯데글로벌로지스'] },
+  { key: 'logistics_lotte', label: '롯데글로벌로지스',
+    terms: ['롯데글로벌로지스', '롯데택배'], domain: 'logistics' },
   {
     key: 'logistics_competitor',
     label: '경쟁사',
-    terms: ['CJ대한통운', '한진', 'LX판토스', '삼성SDS', '현대글로비스'],
+    // [I] 사명 단독 대신 '사명 + 물류어' AND 조합으로 검색 → 애초에 여행 기사를 덜 가져온다
+    terms: ['CJ대한통운', '한진택배', '한진 물류', '한진 택배',
+            'LX판토스', '삼성SDS 물류', '현대글로비스'],
+    domain: 'logistics',
   },
-  { key: 'logistics_domestic', label: '국내 물류', terms: ['국내 물류', '국내물류'] },
-  { key: 'logistics_global', label: '글로벌 물류', terms: ['글로벌 물류', '해외 물류', '국제 물류'] },
+  { key: 'logistics_domestic', label: '국내 물류',
+    terms: ['국내 물류', '국내물류'], domain: 'logistics' },
+  { key: 'logistics_global', label: '글로벌 물류',
+    terms: ['글로벌 물류', '해외 물류', '국제 물류'], domain: 'logistics' },
 ];
 
 // [추가] 증시 하위 카테고리
 const STOCK_SECTIONS = [
-  {
-    key: 'stock_domestic',
-    label: '국내 증시 시황',
-    terms: ['코스피', '코스닥', '국내 증시'],
-  },
-  {
-    key: 'stock_us',
-    label: '미국 증시 시황',
-    terms: ['뉴욕증시', '나스닥', '미국 증시', '다우지수'],
-  },
-  {
-    key: 'stock_issue',
-    label: '증시 이슈 섹터',
-    terms: ['테마주', '급등주', '수혜주', '증시 이슈'],
-  },
+  { key: 'stock_domestic', label: '국내 증시 시황',
+    terms: ['코스피', '코스닥', '국내 증시'], domain: 'stock' },
+  { key: 'stock_us', label: '미국 증시 시황',
+    terms: ['뉴욕증시', '나스닥', '미국 증시', '다우지수'], domain: 'stock' },
+  { key: 'stock_issue', label: '증시 이슈 섹터',
+    terms: ['테마주', '급등주', '수혜주', '증시 이슈'], domain: 'stock' },
 ];
 
 const ALL_SECTIONS = [
   { key: 'breaking', label: '속보', terms: ['속보'], breaking: true },
-  { key: 'logistics', label: '물류', terms: ['물류', '롯데글로벌로지스'] },
-  { key: 'economy', label: '경제', terms: ['경제 금리'] },
-  { key: 'society', label: '정치/사회', terms: ['정치', '국회', '사건사고'] },
-  { key: 'global', label: '글로벌', terms: ['국제'] },
-  { key: 'stock', label: '증시', terms: ['증시 코스피'] },
+  { key: 'logistics', label: '물류', terms: ['물류', '롯데글로벌로지스'], domain: 'logistics' },
+  { key: 'economy', label: '경제', terms: ['경제 금리'], domain: 'economy' },
+  { key: 'society', label: '정치/사회', terms: ['정치', '국회', '사건사고'], domain: 'society' },
+  { key: 'global', label: '글로벌', terms: ['국제'], domain: 'global' },
+  { key: 'stock', label: '증시', terms: ['증시 코스피'], domain: 'stock' },
 ];
 
 // -----------------------------------------------------------------
@@ -386,14 +550,56 @@ app.get('/api/breaking', async (req, res) => {
 // -----------------------------------------------------------------
 // /api/news
 // -----------------------------------------------------------------
+// 게재기간 라벨
+const HOURS_TEXT = { 1: '1시간', 3: '3시간', 12: '12시간', 24: '1일', 168: '1주일', 720: '1달', 8760: '1년' };
+function hoursText(h) {
+  const n = Number(h);
+  return n > 0 ? (HOURS_TEXT[n] || `${n}시간`) : '전체 기간';
+}
+
 app.get('/api/news', async (req, res) => {
-  const { q, display = '20', sort = 'date', dateFrom, dateTo, hours } = req.query;
+  const { q, display = '20', sort = 'date', hours = '24' } = req.query;
   if (!q || !q.trim()) return res.status(400).json({ error: '검색어(q)가 필요합니다.' });
 
+  const terms = parseQuery(q);                       // 콤마 = OR, 공백 = AND
+  const mode = terms.length > 1 ? 'or' : 'and';
+  const limit = Math.min(Number(display) || 20, 50);
+
+  // [C] 결과가 0건이면 조건을 한 단계씩 완화하는 사다리
+  const reqH = Number(hours) > 0 ? Number(hours) : 0; // 0 = 모두(전체 기간)
+  const steps = [{ match: 'strict', hours: String(reqH || 'all'), note: null }];
+  if (reqH > 0) {
+    if (reqH < 168) steps.push({ match: 'strict', hours: '168', note: '최근 1주일' });
+    if (reqH < 720) steps.push({ match: 'strict', hours: '720', note: '최근 1달' });
+    steps.push({ match: 'strict', hours: 'all', note: '전체 기간' });
+  }
+  steps.push({ match: 'loose', hours: 'all', note: '전체 기간 · 단어 일부만 일치' });
+
   try {
-    const limit = Math.min(Number(display) || 20, 50);
-    const items = await searchByTerms([q.trim()], { display: limit, sort, dateFrom, dateTo, hours });
-    res.json({ items: items.slice(0, limit) });
+    let items = [];
+    let used = steps[0];
+    for (const s of steps) {
+      items = await searchByTerms(terms, {
+        display: limit,
+        sort,
+        hours: s.hours,
+        verify: false,   // [A] 사용자가 직접 친 키워드는 원문 검증 생략
+        match: s.match,
+        expand: true,    // [F] 동의어 확장
+        fetchCount: 100, // [D] 최대치로 받아온 뒤 추림
+      });
+      used = s;
+      if (items.length) break;
+    }
+
+    res.json({
+      items: items.slice(0, limit),
+      mode,
+      terms,
+      relaxed: used.note,                 // 조건을 완화했다면 안내 문구용
+      requested: hoursText(reqH),
+      total: items.length,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
@@ -406,11 +612,11 @@ app.get('/api/news', async (req, res) => {
 // -----------------------------------------------------------------
 const BRIEFING_SOURCES = [
   { cat: 'breaking', terms: ['속보'] },
-  { cat: 'economy', terms: ['경제 금리', '환율'] },
-  { cat: 'stock', terms: ['증시 코스피'] },
-  { cat: 'logistics', terms: ['물류'] },
-  { cat: 'society', terms: ['정치', '사건사고'] },
-  { cat: 'global', terms: ['국제'] },
+  { cat: 'economy', terms: ['경제 금리', '환율'], domain: 'economy' },
+  { cat: 'stock', terms: ['증시 코스피'], domain: 'stock' },
+  { cat: 'logistics', terms: ['물류'], domain: 'logistics' },
+  { cat: 'society', terms: ['정치', '사건사고'], domain: 'society' },
+  { cat: 'global', terms: ['국제'], domain: 'global' },
 ];
 
 const STOPWORDS = new Set(['그리고', '하지만', '이번', '위해', '통해', '대한', '관련', '기자', '뉴스', '속보', '단독', '종합']);
@@ -442,7 +648,7 @@ app.get('/api/briefing', async (req, res) => {
       BRIEFING_SOURCES.map(async (src) => {
         const items = src.cat === 'breaking'
           ? await fetchBreaking(10)
-          : (await searchByTerms(src.terms, { display: 10, dateFrom, dateTo, hours })).slice(0, 10);
+          : (await searchByTerms(src.terms, { display: 10, dateFrom, dateTo, hours, domain: src.domain })).slice(0, 10);
         return items.map((it) => ({ ...it, cat: src.cat }));
       })
     );
@@ -516,7 +722,7 @@ app.get('/api/all/sections', async (req, res) => {
       ALL_SECTIONS.map(async (sec) => {
         const items = sec.breaking
           ? await fetchBreaking(limit)
-          : (await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo, hours })).slice(0, limit);
+          : (await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain })).slice(0, limit);
         return { key: sec.key, label: sec.label, items };
       })
     );
@@ -540,7 +746,7 @@ function registerSectionRoutes(base, SECTIONS) {
     try {
       const sections = await Promise.all(
         SECTIONS.map(async (sec) => {
-          const items = await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo, hours });
+          const items = await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain });
           return { key: sec.key, label: sec.label, items: items.slice(0, limit) };
         })
       );
@@ -558,7 +764,7 @@ function registerSectionRoutes(base, SECTIONS) {
     const { dateFrom, dateTo, display = '20', hours } = req.query;
     try {
       const limit = Math.min(Number(display) || 20, 50);
-      const items = await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo, hours });
+      const items = await searchByTerms(sec.terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain });
       res.json({ items: items.slice(0, limit), label: sec.label });
     } catch (err) {
       console.error(err);
@@ -652,6 +858,99 @@ app.get('/api/article-summary', async (req, res) => {
     res.json({ sentences });
   } catch (err) {
     res.status(200).json({ sentences: [], error: err.message });
+  }
+});
+
+// -----------------------------------------------------------------
+// [J] /api/deep-brief : 원문을 Gemini에게 읽혀 '주요 내용'으로 정리
+//  - fetchArticleText()로 원문 본문 확보 → Gemini에 전달 → JSON으로 회신
+//  - 같은 URL은 6시간 캐시 (재클릭 시 API 호출 없음 = 무료)
+// -----------------------------------------------------------------
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+if (!GEMINI_API_KEY) {
+  console.warn('[경고] .env 에 GEMINI_API_KEY 가 없습니다. (주요 내용 기능 비활성화)');
+}
+
+const briefCache = new Map();            // url -> { ts, brief }
+const BRIEF_TTL = 1000 * 60 * 60 * 6;    // 6시간
+
+const BRIEF_PROMPT = `너는 신문사 편집기자다. 아래 [기사 본문]만 근거로 삼아 독자가 30초 안에 이해할 수 있게 정리하라.
+
+[절대 규칙]
+- 본문에 없는 사실·숫자·날짜·이름을 절대 만들어내지 마라.
+- 확실하지 않은 항목은 아예 빼라.
+- 모든 문장은 한국어 존댓말('~습니다')로 끝내라.
+
+[table 작성법]
+- 항목명(key)은 기사 성격에 맞게 스스로 정하라. (예: 정의, 시점, 주체, 규모, 배경, 영향, 전망)
+- 3~6개. 표로 정리할 사실이 부족하면 빈 배열 []로 둬라.
+
+[bullets 작성법]
+- 2~5개. 표에 담기 어려운 맥락이나 의미를 담아라.
+
+[출력 형식] 아래 JSON만 출력. 다른 말 금지.
+{
+  "headline": "핵심을 담은 짧은 제목",
+  "lead": "핵심을 3~4문장으로 요약한 문단",
+  "table": [{ "key": "항목명", "value": "내용" }],
+  "bullets": ["핵심 포인트 문장"]
+}`;
+
+async function callGemini(prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
+      }),
+    });
+    if (!r.ok) throw new Error(`Gemini ${r.status}: ${(await r.text()).slice(0, 150)}`);
+    const data = await r.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+app.get('/api/deep-brief', async (req, res) => {
+  const url = req.query.url;
+  const title = String(req.query.title || '').slice(0, 200);
+
+  if (!GEMINI_API_KEY) return res.json({ error: '.env 에 GEMINI_API_KEY 가 없습니다.' });
+  if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'url이 필요합니다.' });
+
+  const cached = briefCache.get(url);
+  if (cached && Date.now() - cached.ts < BRIEF_TTL) return res.json(cached.brief);
+
+  try {
+    const body = await fetchArticleText(url);   // 기존 함수 재사용
+    if (!body || body.length < 200) {
+      return res.json({ error: '원문 본문을 읽지 못했습니다. 해당 언론사가 자동 수집을 막았을 수 있습니다.' });
+    }
+
+    const raw = await callGemini(`${BRIEF_PROMPT}\n\n[기사 제목]\n${title}\n\n[기사 본문]\n${body}`);
+
+    let brief;
+    try {
+      brief = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    } catch {
+      return res.json({ error: 'AI 응답을 해석하지 못했습니다. 다시 시도해 주세요.' });
+    }
+
+    brief.model = GEMINI_MODEL;
+    briefCache.set(url, { ts: Date.now(), brief });
+    res.json(brief);
+  } catch (err) {
+    console.error('[deep-brief]', err.message);
+    res.json({ error: err.message });
   }
 });
 
