@@ -258,36 +258,13 @@
         <!-- [추가] 카테고리/검색 메뉴와 Setting 을 나누는 구분선 -->
         <div class="border-t border-line my-2"></div>
 
-        <!-- [추가] Setting (접이식 · 디폴트 숨김) : 각 섹션별 기사 가져오기 키워드 설정 -->
+        <!-- [수정] Setting : 누르면 오른쪽(기사 영역)에서 키워드를 설정한다 -->
         <div>
           <button id="setting-toggle-btn" onclick="toggleSettingPanel()"
             class="cat-btn text-[1.25rem] flex items-center justify-between px-4 py-3 rounded-xl transition w-full text-muted hover:bg-ink3">
             <span>Setting</span>
             <span class="flex items-center gap-1.5" id="setting-toggle-icons"></span>
           </button>
-
-          <div id="setting-panel" class="hidden ml-3 mt-2 border-l border-line pl-3 space-y-3">
-            <p class="text-gold2 font-semibold text-[1.05rem]">기사 가져오기 키워드</p>
-            <p class="text-muted leading-relaxed text-[0.8rem] bg-ink/60 border border-line rounded-lg px-3 py-2">
-              섹션별로 <span class="text-gold2 font-semibold">포함</span>·<span class="text-gold2 font-semibold">제외</span> 키워드를 정하면
-              항상 이 값을 기준으로 기사를 가져옵니다.<br>
-              여러 개는 <span class="text-gold2 font-semibold">콤마(,)</span>로 구분하세요.
-            </p>
-
-            <!-- 섹션별 포함/제외 키워드 입력칸 (JS가 그려 넣음) -->
-            <div id="keyword-settings" class="space-y-2"></div>
-
-            <div class="flex gap-2 pt-1">
-              <button id="setting-save-btn" onclick="saveKeywordSettings()"
-                class="flex-1 flex items-center justify-center gap-2 bg-gold hover:bg-gold2 text-ink font-semibold px-4 py-2.5 rounded-xl transition whitespace-nowrap">
-                저장 후 새로고침
-              </button>
-              <button onclick="resetKeywordSettings()" title="기본값으로 되돌리기"
-                class="flex items-center justify-center gap-1.5 text-muted hover:text-gold border border-line rounded-xl px-3 py-2.5 transition whitespace-nowrap">
-                기본값
-              </button>
-            </div>
-          </div>
         </div>
 
       </div>
@@ -347,6 +324,40 @@
 
       <!-- [추가] 모바일 전용 하위 섹션 필터 칩 (좌측 사이드바가 위로 밀려도 여기서 바로 선택) -->
       <div id="mobile-subnav" class="gap-2 overflow-x-auto pb-1 -mx-1 px-1" style="display:none"></div>
+
+      <!-- [추가] Setting 화면 : 사이드바 Setting을 누르면 여기(기사 영역)에서 키워드를 설정한다 -->
+      <div id="setting-view" class="hidden bg-ink2/40 border border-gold/30 rounded-2xl">
+        <!-- [수정] 스크롤을 내려도 '저장 후 새로고침/기본값/닫기' 버튼을 바로 쓸 수 있게 헤더를 상단 고정(sticky) -->
+        <header class="sticky z-30 rounded-t-2xl flex items-center justify-between gap-x-3 gap-y-2 flex-wrap px-5 py-3 bg-gradient-to-r from-gold/20 via-ink2 to-ink2 border-b border-line"
+          style="top: calc(var(--stick-top, 121px) - 1px)">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="text-gold shrink-0" id="setting-view-icon"></span>
+            <h2 class="font-sans font-bold text-gold text-xl truncate">기사 가져오기 키워드 설정</h2>
+          </div>
+          <!-- [수정] 저장/기본값 버튼을 제목 옆(헤더)으로 이동 -->
+          <div class="flex items-center gap-2 shrink-0">
+            <button id="setting-save-btn" onclick="saveKeywordSettings()"
+              class="flex items-center justify-center gap-1.5 bg-gold hover:bg-gold2 text-ink font-semibold px-3.5 py-2 rounded-lg transition text-[0.9rem] whitespace-nowrap">
+              저장 후 새로고침
+            </button>
+            <button onclick="resetKeywordSettings()" title="기본값으로 되돌리기"
+              class="flex items-center justify-center text-muted hover:text-gold border border-line rounded-lg px-3 py-2 transition text-[0.9rem] whitespace-nowrap">
+              기본값
+            </button>
+            <button onclick="closeSettingView(false)" title="닫고 기사로 돌아가기"
+              class="flex items-center justify-center text-muted hover:text-gold border border-line rounded-lg px-3 py-2 transition text-[0.9rem] whitespace-nowrap">닫기</button>
+          </div>
+        </header>
+        <div class="p-5 space-y-3">
+          <p class="text-muted leading-relaxed text-[1.05rem] bg-ink/60 border border-line rounded-lg px-3 py-2.5">
+            섹션별로 <span class="text-gold2 font-semibold">포함</span>·<span class="text-gold2 font-semibold">제외</span> 키워드를 정하면
+            항상 이 값을 기준으로 기사를 가져옵니다. 여러 개는 <span class="text-gold2 font-semibold">콤마(,)</span>로 구분하세요.
+          </p>
+
+          <!-- 섹션별 포함/제외 키워드 입력칸 (JS가 그려 넣음) -->
+          <div id="keyword-settings" class="space-y-2"></div>
+        </div>
+      </div>
 
       <!-- 결과 -->
       <div id="news-list" class="space-y-5"></div>
@@ -409,9 +420,9 @@
     const topLevelCategories = ['briefing', 'all', 'breaking', 'logistics', 'economy', 'society', 'global', 'stock'];
 
     const stockSubcategories = [
-      { key: 'stock_domestic', label: '국내 증시 시황' },
-      { key: 'stock_us', label: '미국 증시 시황' },
-      { key: 'stock_issue', label: '증시 이슈 섹터' },
+      { key: 'stock_domestic', label: '국내' },
+      { key: 'stock_us', label: '해외' },
+      { key: 'stock_issue', label: '이슈 섹터' },
     ];
 
     const logisticsSubcategories = [
@@ -419,6 +430,7 @@
       { key: 'logistics_competitor', label: '경쟁사' },
       { key: 'logistics_domestic', label: '국내 물류' },
       { key: 'logistics_global', label: '글로벌 물류' },
+      { key: 'logistics_freight', label: '운임지수' },
     ];
 
     const categoryLabels = {
@@ -426,13 +438,15 @@
       breaking: '속보', all: '전체', logistics: '물류',
       logistics_lotte: '롯데글로벌로지스', logistics_competitor: '경쟁사',
       logistics_domestic: '국내 물류', logistics_global: '글로벌 물류',
+      logistics_freight: '운임지수',
       economy: '경제', society: '정치/사회', global: '글로벌', stock: '증시',
-      stock_domestic: '국내 증시 시황', stock_us: '미국 증시 시황', stock_issue: '증시 이슈 섹터'
+      stock_domestic: '국내', stock_us: '해외', stock_issue: '이슈 섹터'
     };
     const categoryIcons = {
       briefing: 'sparkles', all: 'grid', breaking: 'siren', logistics: 'package',
       logistics_lotte: 'package', logistics_competitor: 'package',
       logistics_domestic: 'package', logistics_global: 'package',
+      logistics_freight: 'line-chart',
       economy: 'line-chart', society: 'users', global: 'globe', stock: 'candlestick',
       stock_domestic: 'candlestick', stock_us: 'candlestick', stock_issue: 'candlestick'
     };
@@ -460,7 +474,8 @@
     let expandedStock = false;
     let expandedSearch = false;         // 키워드 검색 토글 상태
     let expandedFilter = false;         // Filter(노출 건수/게재 기간/정렬) 토글 상태 · 디폴트 숨김
-    let expandedSetting = false;        // Setting(기사 가져오기 키워드) 토글 상태 · 디폴트 숨김
+    let settingMode = false;            // Setting(기사 가져오기 키워드) 화면 열림 여부 · 오른쪽 기사 영역에 표시
+    let settingCollapsed = {};          // [추가] 설정 화면의 각 섹션 토글 접힘 상태 (기본: 접힘)
     let currentResults = [];
     let sectionState = [];   // 카테고리 박스 상태(펼침/개수) 저장
     let isLoading = false;
@@ -516,6 +531,7 @@
       logistics_competitor: { include: ['CJ대한통운','한진택배','한진 물류','한진 택배','LX판토스','삼성SDS 물류','현대글로비스'], exclude: [...LOGI_EXCLUDE] },
       logistics_domestic:   { include: ['국내 물류','국내물류'], exclude: [...LOGI_EXCLUDE] },
       logistics_global:     { include: ['글로벌 물류','해외 물류','국제 물류'], exclude: [...LOGI_EXCLUDE] },
+      logistics_freight:    { include: ['SCFI','항공화물 운임','벌크 운임'], exclude: [...LOGI_EXCLUDE] },
       // 증시 하위 섹션
       stock_domestic:       { include: ['코스피','코스닥','국내 증시'], exclude: [...STOCK_EXCLUDE] },
       stock_us:             { include: ['뉴욕증시','나스닥','미국 증시','다우지수'], exclude: [...STOCK_EXCLUDE] },
@@ -530,6 +546,7 @@
       { key: 'logistics_competitor', depth: 1 },
       { key: 'logistics_domestic', depth: 1 },
       { key: 'logistics_global', depth: 1 },
+      { key: 'logistics_freight', depth: 1 },
       { key: 'economy', depth: 0 },
       { key: 'society', depth: 0 },
       { key: 'global', depth: 0 },
@@ -683,53 +700,139 @@
     }
 
     // ---------------------------------------------------------------
-    // [추가] Setting 토글 (기사 가져오기 키워드) · 디폴트 숨김
+    // [수정] Setting : 사이드바 버튼을 누르면 '오른쪽 기사 영역'에 설정 화면을 연다.
+    //   settingMode = true  → 오른쪽에 키워드 설정 UI를 보여주고 기사 목록은 숨김
+    //   settingMode = false → 다시 기사 목록으로 돌아감
     // ---------------------------------------------------------------
     function renderSettingToggle() {
       document.getElementById('setting-toggle-icons').innerHTML =
-        icon('settings', 'w-5 h-5') + icon(expandedSetting ? 'chevron-up' : 'chevron-down', 'w-4 h-4 opacity-70');
-      document.getElementById('setting-panel').classList.toggle('hidden', !expandedSetting);
+        icon('settings', 'w-5 h-5') + icon(settingMode ? 'chevron-up' : 'chevron-down', 'w-4 h-4 opacity-70');
       const btn = document.getElementById('setting-toggle-btn');
-      btn.classList.toggle('text-gold2', expandedSetting);
-      btn.classList.toggle('bg-ink3', expandedSetting);
-      btn.classList.toggle('text-muted', !expandedSetting);
+      btn.classList.toggle('text-gold2', settingMode);
+      btn.classList.toggle('bg-ink3', settingMode);
+      btn.classList.toggle('text-muted', !settingMode);
     }
 
     function toggleSettingPanel() {
-      expandedSetting = !expandedSetting;
+      if (settingMode) closeSettingView(false);
+      else openSettingView();
+    }
+
+    // 오른쪽(기사 영역)에 키워드 설정 화면을 연다.
+    function openSettingView() {
+      settingMode = true;
+      renderKeywordSettings();                       // 최신 값으로 입력칸 다시 그림
+      hideFallbackBanner();
+      document.getElementById('news-list').classList.add('hidden');
+      document.getElementById('cat-header').classList.add('hidden');
+      const sub = document.getElementById('mobile-subnav');
+      if (sub) sub.style.display = 'none';
+      const iconEl = document.getElementById('setting-view-icon');
+      if (iconEl) iconEl.innerHTML = icon('settings', 'w-5 h-5');
+      document.getElementById('setting-view').classList.remove('hidden');
+      document.getElementById('status-line').textContent =
+        '기사 가져오기 키워드 설정 · 섹션별 포함/제외 키워드를 정하세요.';
       renderSettingToggle();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // 설정 화면을 닫고 기사 화면으로 돌아간다. rerun=true 면 새 키워드로 다시 검색.
+    function closeSettingView(rerun) {
+      settingMode = false;
+      document.getElementById('setting-view').classList.add('hidden');
+      document.getElementById('news-list').classList.remove('hidden');
+      renderSettingToggle();
+      if (rerun) {
+        runSearch();                       // 새 키워드로 다시 가져오기 (제목 바도 이때 갱신됨)
+      } else if (currentResults.length) {
+        updateCatHeader();                 // 그냥 닫기 → 보고 있던 제목 바/칩 원래대로 복구
+      }
+    }
+
+    // 한 섹션의 '포함/제외 키워드' 입력칸(제목 없이 텍스트박스 2개)만 만든다.
+    function kwFieldRow(key) {
+      const taClass = 'w-full bg-ink border border-line rounded-lg px-2.5 py-2 text-paper text-[1.05rem] focus:outline-none focus:border-gold/70 resize-y';
+      const kwv = userKeywords[key] || { include: [], exclude: [] };
+      const inc = esc((kwv.include || []).join(', '));
+      const exc = esc((kwv.exclude || []).join(', '));
+      return `
+        <div class="space-y-2">
+          <div>
+            <label class="text-muted text-[0.9rem] block mb-1">포함 키워드</label>
+            <textarea data-kw-key="${key}" data-kw-type="include" rows="2" class="${taClass}" placeholder="예: 물류, 택배">${inc}</textarea>
+          </div>
+          <div>
+            <label class="text-muted text-[0.9rem] block mb-1">제외 키워드</label>
+            <textarea data-kw-key="${key}" data-kw-type="exclude" rows="2" class="${taClass}" placeholder="예: 여행, 관광">${exc}</textarea>
+          </div>
+        </div>`;
+    }
+
+    // 한 섹션을 '토글 버튼 + 접히는 본문' 카드로 만든다. (상위/하위 공용)
+    //  [수정] 하위 섹션(isChild=true)도 각자 토글 버튼을 갖는다.
+    function kwSectionHtml(key, children, isChild) {
+      const kwv = userKeywords[key] || { include: [], exclude: [] };
+      const incN = (kwv.include || []).length;
+      const excN = (kwv.exclude || []).length;
+      const childN = children.length;
+      const collapsed = settingCollapsed[key] !== false;   // 기본값: 접힘(true)
+      const bodyHidden = collapsed ? 'hidden' : '';
+      const chevRot = collapsed ? 'rotate(0deg)' : 'rotate(180deg)';
+      const childrenHtml = children.map((c) => kwSectionHtml(c, [], true)).join('');
+
+      // 상위/하위에 따라 카드 모양·글자 크기·들여쓰기를 다르게 준다.
+      const cardClass = isChild
+        ? 'ml-2 bg-ink/25 border border-line/70 rounded-lg overflow-hidden'
+        : 'bg-ink/40 border border-line rounded-lg overflow-hidden';
+      const titleSize = isChild ? 'text-[1.02rem]' : 'text-[1.15rem]';
+      const iconEl = isChild
+        ? '<span class="text-muted shrink-0 font-mono">└</span>'
+        : `<span class="text-gold2 shrink-0">${icon(categoryIcons[key] || 'grid', 'w-4 h-4')}</span>`;
+
+      return `
+        <div class="${cardClass}">
+          <button type="button" onclick="toggleSettingSection('${key}')"
+            class="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-ink3/60 transition text-left">
+            ${iconEl}
+            <span class="font-semibold text-paper ${titleSize}">${categoryLabels[key] || key}</span>
+            <span class="font-mono text-muted text-[0.8rem] whitespace-nowrap">포함 ${incN} · 제외 ${excN}${childN ? ` · 하위 ${childN}` : ''}</span>
+            <span id="setting-chev-${key}" class="text-muted ml-auto shrink-0 transition-transform" style="transform:${chevRot}">${icon('chevron-down', 'w-5 h-5')}</span>
+          </button>
+          <div id="setting-body-${key}" class="${bodyHidden} px-3 pb-3 pt-1 space-y-3 border-t border-line/60">
+            ${kwFieldRow(key)}
+            ${childrenHtml}
+          </div>
+        </div>`;
     }
 
     // 섹션별 포함/제외 키워드 입력칸을 그린다.
+    //  상위 섹션 → 토글, 그 안의 하위 섹션도 각각 토글.
     function renderKeywordSettings() {
       const wrap = document.getElementById('keyword-settings');
       if (!wrap) return;
-      const taClass = 'w-full bg-ink border border-line rounded-lg px-2.5 py-1.5 text-paper text-[0.85rem] focus:outline-none focus:border-gold/70 resize-y';
 
-      wrap.innerHTML = KEYWORD_SETTING_ORDER.map(({ key, depth }) => {
-        const kwv = userKeywords[key] || { include: [], exclude: [] };
-        const inc = esc((kwv.include || []).join(', '));
-        const exc = esc((kwv.exclude || []).join(', '));
-        const indent = depth ? 'ml-2 border-l border-line pl-2' : '';
-        const arrow = depth ? '<span class="text-muted">└</span> ' : '';
-        return `
-          <div class="${indent}">
-            <div class="bg-ink/40 border border-line rounded-lg p-2.5 space-y-1.5">
-              <p class="text-paper/90 font-semibold text-[0.95rem]">${arrow}${categoryLabels[key] || key}</p>
-              <div>
-                <label class="text-muted text-[0.72rem] block mb-1">포함 키워드</label>
-                <textarea data-kw-key="${key}" data-kw-type="include" rows="2" class="${taClass}" placeholder="예: 물류, 택배">${inc}</textarea>
-              </div>
-              <div>
-                <label class="text-muted text-[0.72rem] block mb-1">제외 키워드</label>
-                <textarea data-kw-key="${key}" data-kw-type="exclude" rows="2" class="${taClass}" placeholder="예: 여행, 관광">${exc}</textarea>
-              </div>
-            </div>
-          </div>`;
-      }).join('');
+      // KEYWORD_SETTING_ORDER를 상위 섹션 기준으로 묶는다. (하위 섹션은 직전 상위에 붙임)
+      const groups = [];
+      KEYWORD_SETTING_ORDER.forEach(({ key, depth }) => {
+        if (depth === 0) groups.push({ key, children: [] });
+        else if (groups.length) groups[groups.length - 1].children.push(key);
+      });
+
+      wrap.innerHTML = groups.map((g) => kwSectionHtml(g.key, g.children, false)).join('');
     }
 
-    // 입력한 키워드를 저장하고, 곧바로 현재 화면을 새 기준으로 다시 불러온다.
+    // 섹션 제목(토글 버튼)을 누르면 해당 섹션을 펼치거나 접는다. (입력값은 그대로 유지)
+    function toggleSettingSection(key) {
+      const body = document.getElementById('setting-body-' + key);
+      const chev = document.getElementById('setting-chev-' + key);
+      if (!body) return;
+      const willOpen = body.classList.contains('hidden');   // 지금 숨겨져 있으면 → 펼친다
+      body.classList.toggle('hidden', !willOpen);
+      settingCollapsed[key] = !willOpen;                    // 상태 기억 (다시 그릴 때 유지)
+      if (chev) chev.style.transform = willOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+    }
+
+    // 입력한 키워드를 저장하고, 설정 화면을 닫은 뒤 새 기준으로 기사를 다시 불러온다.
     function saveKeywordSettings() {
       document.querySelectorAll('#keyword-settings textarea[data-kw-key]').forEach((ta) => {
         const key = ta.getAttribute('data-kw-key');
@@ -738,22 +841,17 @@
         userKeywords[key][type] = parseKwText(ta.value);
       });
       persistKeywords();
-      runSearch();   // 새 키워드 기준으로 즉시 다시 가져오기
-
-      const btn = document.getElementById('setting-save-btn');
-      if (btn) {
-        const orig = btn.textContent;
-        btn.textContent = '저장됨 ✓';
-        setTimeout(() => { btn.textContent = orig; }, 1500);
-      }
+      closeSettingView(true);   // 설정 화면 닫고 → 새 키워드로 즉시 다시 가져오기
     }
 
-    // 모든 키워드를 기본값으로 되돌린다.
+    // 모든 키워드를 기본값으로 되돌린다. (설정 화면에는 그대로 머무름)
+    //  [수정] 실수 방지를 위해 한 번 더 확인한 뒤 실행한다.
     function resetKeywordSettings() {
+      const ok = window.confirm('모든 섹션의 포함/제외 키워드를 기본값으로 되돌립니다.\n지금 입력한 내용은 사라집니다. 계속할까요?');
+      if (!ok) return;   // '취소'를 누르면 아무것도 하지 않음
       userKeywords = cloneKeywords(DEFAULT_KEYWORDS);
       persistKeywords();
-      renderKeywordSettings();
-      runSearch();
+      renderKeywordSettings();   // 입력칸을 기본값으로 다시 그려줌
     }
 
     // 좌측 Filter를 바꾸면 검색을 다시 실행 (제목 바 필터는 updateCatHeader에서 자동 동기화)
@@ -1066,6 +1164,9 @@
       const el = document.getElementById('mobile-subnav');
       if (!el) return;
 
+      // [추가] 설정 화면이 열려 있으면 칩을 숨긴다
+      if (settingMode) { el.style.display = 'none'; el.innerHTML = ''; return; }
+
       // 데스크톱에서는 사용하지 않음
       if (window.innerWidth >= 1024) { el.style.display = 'none'; return; }
 
@@ -1101,6 +1202,7 @@
     // ---------------------------------------------------------------
     async function runSearch() {
       if (isLoading) return;
+      if (settingMode) closeSettingView(false);   // [추가] 설정 화면이 열려 있으면 닫고 기사 화면으로
       isLoading = true;
       hideFallbackBanner();
       document.getElementById('cat-header').classList.add('hidden');
@@ -1356,12 +1458,52 @@
       renderSectionsFromState();
     }
 
-    function changeSectionCount(key, v) {
+    // 한 섹션 박스의 '노출 건수'를 바꾸면 → 그 섹션만 즉시 다시 보여준다.
+    //  - 이미 받아둔 기사로 충분하면 재요청 없이 바로 반영 (토큰/요청 절약)
+    //  - 더 많이 요청하면 '그 섹션 하나만' 서버에서 다시 가져온다 (다른 섹션은 그대로 유지)
+    async function changeSectionCount(key, v) {
       const s = sectionState.find(x => x.key === key);
       if (!s) return;
-      s.count = Number(v) || 5;
+      const newCount = Number(v) || 5;
+      s.count = newCount;
       s.collapsed = false;
+
+      // 받아둔 기사(최대 30건)로 충분 → 재요청 없이 그 섹션만 즉시 다시 그림
+      if (newCount <= s.items.length) { renderSectionsFromState(); return; }
+
+      // 더 많이 요청 → 그 섹션 하나만 서버에서 즉시 리프레시
+      s._loading = true;
       renderSectionsFromState();
+      try {
+        const fresh = await fetchOneSection(key, newCount);
+        if (fresh) {
+          s.items = sortItemsByCurrent(decorateItems(fresh, key));
+          mergeCatsAcrossSections(sectionState);                 // 섹션 겹침 태그 다시 계산
+          currentResults = sectionState.flatMap((x) => x.items); // 요약/원문 링크가 새 기사를 찾도록 갱신
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        s._loading = false;
+        renderSectionsFromState();
+      }
+    }
+
+    // [추가] 지금 보고 있는 묶음 화면에서 '한 섹션'만 다시 가져온다.
+    //  - 전체(all) 화면  : 최상위 섹션      → /api/topic/{key}
+    //  - 물류/증시 화면  : 하위 섹션        → /api/{base}/section/{key}
+    async function fetchOneSection(key, count) {
+      const params = new URLSearchParams({ display: String(count), hours: String(getHours()) });
+      setKwParam(params);   // 현재 키워드 설정 반영
+      let endpoint;
+      if (currentCategory === 'all') {
+        endpoint = `/api/topic/${key}`;
+      } else {
+        const base = key.split('_')[0];   // 예) logistics_competitor → logistics
+        endpoint = `/api/${base}/section/${key}`;
+      }
+      const data = await apiGet(`${endpoint}?${params.toString()}`);
+      return Array.isArray(data.items) ? data.items : [];
     }
 
     function visibleCount() {
@@ -1384,7 +1526,7 @@
               <h2 class="font-sans font-bold text-gold text-xl truncate">${sec.label}</h2>
               ${icon(sec.collapsed ? 'chevron-down' : 'chevron-up', 'w-4 h-4 text-muted shrink-0')}
             </button>
-            <span class="text-muted font-mono whitespace-nowrap">${shown.length}건</span>
+            <span class="text-muted font-mono whitespace-nowrap">${sec._loading ? icon('loader-2', 'w-4 h-4 animate-spin') : shown.length + '건'}</span>
             <select onchange="changeSectionCount('${sec.key}', this.value)"
               class="bg-ink border border-line rounded-lg px-2 py-1 text-paper font-mono focus:outline-none focus:border-gold/70">
               ${[3, 5, 10, 15, 20, 30].map(n => `<option value="${n}" ${sec.count === n ? 'selected' : ''}>${n}개</option>`).join('')}

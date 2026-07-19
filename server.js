@@ -153,7 +153,8 @@ const DOMAINS = {
   logistics: {
     context: ['물류','택배','배송','운송','화물','창고','풀필먼트','3PL','포워딩',
               '해운','항만','컨테이너','통관','물류센터','배차','라스트마일',
-              '공급망','SCM','허브터미널','수출입','이커머스','유통'],
+              '공급망','SCM','허브터미널','수출입','이커머스','유통',
+              '운임','운임지수','SCFI','BDI','벌크','컨테이너선','항공화물'],
     exclude: ['관광','여행','트래블','패키지여행','항공권','호텔','리조트',
               '면세','골프','레저','유람선','크루즈','뮤지컬','공연'],
   },
@@ -705,15 +706,17 @@ const LOGISTICS_SECTIONS = [
     terms: ['국내 물류', '국내물류'], domain: 'logistics' },
   { key: 'logistics_global', label: '글로벌 물류',
     terms: ['글로벌 물류', '해외 물류', '국제 물류'], domain: 'logistics' },
+  { key: 'logistics_freight', label: '운임지수',
+    terms: ['SCFI', '항공화물 운임', '벌크 운임'], domain: 'logistics' },
 ];
 
 // [추가] 증시 하위 카테고리
 const STOCK_SECTIONS = [
-  { key: 'stock_domestic', label: '국내 증시 시황',
+  { key: 'stock_domestic', label: '국내',
     terms: ['코스피', '코스닥', '국내 증시'], domain: 'stock' },
-  { key: 'stock_us', label: '미국 증시 시황',
+  { key: 'stock_us', label: '해외',
     terms: ['뉴욕증시', '나스닥', '미국 증시', '다우지수'], domain: 'stock' },
-  { key: 'stock_issue', label: '증시 이슈 섹터',
+  { key: 'stock_issue', label: '이슈 섹터',
     terms: ['테마주', '급등주', '수혜주', '증시 이슈'], domain: 'stock' },
 ];
 
