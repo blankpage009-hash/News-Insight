@@ -133,81 +133,93 @@
         <!-- [추가] SECTION 제목 아래 구분선 -->
         <div class="border-t border-line"></div>
 
-        <!-- Filter (접이식 · 디폴트 숨김) : 노출 건수 / 게재 기간 / 정렬 -->
-        <div>
-          <button id="filter-toggle-btn" onclick="toggleFilterPanel()"
-            class="cat-btn text-[1.25rem] flex items-center justify-between px-4 py-3 rounded-xl transition w-full text-muted hover:bg-ink3">
-            <span>Filter</span>
-            <span class="flex items-center gap-1.5" id="filter-toggle-icons"></span>
-          </button>
-
-          <div id="filter-panel" class="hidden ml-3 mt-2 border-l border-line pl-3 space-y-2">
-            <div class="flex items-center justify-between gap-2">
-              <label for="count-select" class="text-muted whitespace-nowrap">노출 건수</label>
-              <select id="count-select" onchange="onLeftFilterChange()" title="노출 개수"
-                class="bg-ink border border-line rounded-lg px-2 py-1.5 text-paper font-mono focus:outline-none focus:border-gold/70">
-                <option value="5" selected>5개</option>
-                <option value="10">10개</option>
-                <option value="15">15개</option>
-                <option value="20">20개</option>
-                <option value="30">30개</option>
-              </select>
-            </div>
-            <div class="flex items-center justify-between gap-2">
-              <label for="hours-select" class="text-muted whitespace-nowrap">게재 기간</label>
-              <select id="hours-select" onchange="onLeftFilterChange()" title="기사 게재 기간 (현재 시각 기준)"
-                class="bg-ink border border-line rounded-lg px-2 py-1.5 text-paper font-mono focus:outline-none focus:border-gold/70">
-                <option value="1">1시간전</option>
-                <option value="3">3시간전</option>
-                <option value="12">12시간전</option>
-                <option value="24" selected>1일전</option>
-                <option value="168">1주일전</option>
-                <option value="720">1달전</option>
-                <option value="8760">1년전</option>
-                <option value="all">모두</option>
-              </select>
-            </div>
-            <div class="flex items-center justify-between gap-2">
-              <label for="sort-select" class="text-muted whitespace-nowrap">정렬</label>
-              <select id="sort-select" onchange="onLeftFilterChange()" title="정렬 기준"
-                class="bg-ink border border-line rounded-lg px-2 py-1.5 text-paper font-mono focus:outline-none focus:border-gold/70">
-                <option value="sim" selected>정확도순</option>
-                <option value="date">최신순</option>
-              </select>
-            </div>
-          </div>
+        <!-- [수정] 좌측 Filter 메뉴는 삭제하고, 오른쪽 기사 영역 제목 바(cat-header)의
+             노출건수/게재기간/정렬 선택으로 대체했다. 아래 3개 select는 그 상태를
+             그대로 저장하는 용도로만 남겨두고(hidden), 기존 getCount()/getHours()/getSort() 로직은
+             그대로 재사용한다. -->
+        <div class="hidden">
+          <select id="count-select" onchange="onLeftFilterChange()">
+            <option value="5">5개</option>
+            <option value="10" selected>10개</option>
+            <option value="15">15개</option>
+            <option value="20">20개</option>
+            <option value="30">30개</option>
+          </select>
+          <select id="hours-select" onchange="onLeftFilterChange()">
+            <option value="1">1시간전</option>
+            <option value="3">3시간전</option>
+            <option value="12">12시간전</option>
+            <option value="24" selected>1일전</option>
+            <option value="168">1주일전</option>
+            <option value="720">1달전</option>
+            <option value="8760">1년전</option>
+            <option value="all">모두</option>
+          </select>
+          <select id="sort-select" onchange="onLeftFilterChange()">
+            <option value="sim" selected>정확도순</option>
+            <option value="date">최신순</option>
+          </select>
         </div>
-
-        <!-- [추가] 필터와 Today's Briefing 사이 구분선 -->
-        <div class="border-t border-line"></div>
 
         <div class="flex flex-col gap-2" id="category-filters"></div>
 
         <!-- 카테고리 목록과 키워드 검색 구분선 -->
         <div class="border-t border-line my-2"></div>
 
-        <!-- 키워드 검색 (카테고리 메뉴의 한 항목 · 토글) -->
+        <!-- 키워드 검색 (누르면 오른쪽 기사 영역에 팝업으로 열린다) -->
         <div>
           <button id="search-toggle-btn" onclick="toggleSearchPanel()"
             class="cat-btn text-[1.25rem] flex items-center justify-between px-4 py-3 rounded-xl transition w-full text-muted hover:bg-ink3">
             <span>키워드 검색</span>
             <span class="flex items-center gap-1.5" id="search-toggle-icons"></span>
           </button>
+        </div>
 
-          <div id="search-panel" class="hidden ml-3 mt-2 border-l border-line pl-3 space-y-3">
+        <!-- [추가] 카테고리/검색 메뉴와 Setting 을 나누는 구분선 -->
+        <div class="border-t border-line my-2"></div>
+
+        <!-- [수정] Setting : 누르면 오른쪽(기사 영역)에서 키워드를 설정한다 -->
+        <div>
+          <button id="setting-toggle-btn" onclick="toggleSettingPanel()"
+            class="cat-btn text-[1.25rem] flex items-center justify-between px-4 py-3 rounded-xl transition w-full text-muted hover:bg-ink3">
+            <span>Setting</span>
+            <span class="flex items-center gap-1.5" id="setting-toggle-icons"></span>
+          </button>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- 우측 콘텐츠 -->
+    <section class="lg:col-span-3 space-y-6 relative">
+
+      <!-- 키워드 검색 팝업 (사이드바 '키워드 검색'을 누르면 이 기사 영역 위에 뜬다) -->
+      <div id="search-popup" class="hidden absolute inset-0 z-40">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-[1px]" onclick="closeSearchPopup()"></div>
+        <div class="relative mt-3 mx-auto w-full max-w-2xl bg-ink2 border border-gold/40 rounded-2xl shadow-2xl shadow-black/50 max-h-[86vh] overflow-y-auto">
+          <header class="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-3.5 border-b border-line bg-gradient-to-r from-gold/15 via-ink2 to-ink2 rounded-t-2xl">
+            <div class="flex items-center gap-2.5">
+              <svg class="w-5 h-5 text-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+              <h2 class="font-sans font-bold text-gold text-xl">키워드 검색</h2>
+            </div>
+            <button onclick="closeSearchPopup()" title="닫기" class="text-muted hover:text-paper transition">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </header>
+          <div class="p-5 space-y-3">
             <div class="relative">
               <input type="text" id="search-input" placeholder="예: 롯데글로벌로지스, 반도체 수출..."
                 class="w-full bg-ink border border-line rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-gold/70 transition">
               <svg class="absolute left-3 top-3 text-muted w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
             </div>
             <!-- 검색어 규칙 안내 -->
-            <p class="text-muted leading-relaxed text-[0.8rem] bg-ink/60 border border-line rounded-lg px-3 py-2">
+            <p class="text-muted leading-relaxed text-[0.85rem] bg-ink/60 border border-line rounded-lg px-3 py-2">
               <span class="text-gold2 font-semibold">띄어쓰기 = AND</span> · 롯데 한진 → 둘 다 포함<br>
               <span class="text-gold2 font-semibold">콤마(,) = OR</span> · 롯데, 한진 → 하나만 있어도
             </p>
 
             <!-- 노출 건수 / 게재 기간 / 정렬 -->
-            <div class="space-y-2">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div class="flex items-center justify-between gap-2">
                 <label for="search-count-select" class="text-muted whitespace-nowrap">노출 건수</label>
                 <select id="search-count-select" onchange="onSearchClick()" title="노출 개수"
@@ -242,8 +254,8 @@
                 </select>
               </div>
             </div>
-            <div class="flex gap-2">
-              <button id="search-btn" onclick="onSearchClick()"
+            <div class="flex gap-2 pt-1">
+              <button id="search-btn" onclick="submitSearch()"
                 class="flex-1 flex items-center justify-center gap-2 bg-gold hover:bg-gold2 text-ink font-semibold px-4 py-2.5 rounded-xl transition whitespace-nowrap">
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg> 검색
               </button>
@@ -254,24 +266,7 @@
             </div>
           </div>
         </div>
-
-        <!-- [추가] 카테고리/검색 메뉴와 Setting 을 나누는 구분선 -->
-        <div class="border-t border-line my-2"></div>
-
-        <!-- [수정] Setting : 누르면 오른쪽(기사 영역)에서 키워드를 설정한다 -->
-        <div>
-          <button id="setting-toggle-btn" onclick="toggleSettingPanel()"
-            class="cat-btn text-[1.25rem] flex items-center justify-between px-4 py-3 rounded-xl transition w-full text-muted hover:bg-ink3">
-            <span>Setting</span>
-            <span class="flex items-center gap-1.5" id="setting-toggle-icons"></span>
-          </button>
-        </div>
-
       </div>
-    </aside>
-
-    <!-- 우측 콘텐츠 -->
-    <section class="lg:col-span-3 space-y-6">
 
       <!-- 상태 바 -->
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-1">
@@ -365,35 +360,8 @@
     </section>
   </main>
 
-  <!-- 요약 팝업 모달 -->
-  <div id="summary-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeSummaryOnBackdrop(event)">
-    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
-      <div class="flex justify-between items-start gap-4 p-6 pb-3 shrink-0">
-        <span id="modal-category" class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30"></span>
-        <button onclick="closeSummary()" class="text-muted hover:text-paper transition">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-        </button>
-      </div>
-      <div class="px-6 overflow-y-auto grow space-y-4">
-        <h3 id="modal-title" class="font-sans text-[2.03rem] font-bold text-paper leading-snug break-keep"></h3>
-        <ul id="modal-summary" class="space-y-2.5 text-paper/90 leading-relaxed break-keep pb-2 whitespace-pre-line"></ul>
-        <p id="modal-loading" class="hidden text-muted font-mono text-sm pb-4">원문 본문을 읽고 핵심 3문장을 정리하는 중...</p>
-      </div>
-      <div class="flex flex-wrap justify-between items-center gap-3 p-6 pt-4 mt-2 border-t border-line shrink-0">
-        <div class="text-muted font-mono flex items-center gap-2">
-          <span id="modal-source"></span><span id="modal-time"></span>
-        </div>
-        <a id="modal-link" href="#" target="_blank" rel="noopener noreferrer"
-          class="flex items-center gap-1.5 text-wire hover:text-blue-300 px-4 py-2 rounded-lg transition border border-wire/30 bg-wire/10 font-semibold">
-          원문보기
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-        </a>
-      </div>
-    </div>
-  </div>
-
   <!-- 주요 내용(AI 정리) 팝업 모달 -->
-  <div id="brief-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeBriefOnBackdrop(event)">
+  <div id="brief-modal" class="hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeBriefOnBackdrop(event)">
     <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-4xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
       <div class="flex justify-between items-center gap-4 p-6 pb-3 shrink-0">
         <span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-gold/15 text-gold2 rounded-md border border-gold/30">주요 내용</span>
@@ -413,16 +381,46 @@
     </div>
   </div>
 
+  <!-- 관련기사 팝업 모달 -->
+  <div id="related-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeRelatedOnBackdrop(event)">
+    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-start gap-4 p-6 pb-3 shrink-0">
+        <div class="min-w-0">
+          <span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30">관련기사</span>
+          <p class="text-muted mt-2 text-[0.95rem] break-keep">기준 기사: <span id="related-source-title" class="text-paper/80"></span></p>
+        </div>
+        <button onclick="closeRelated()" class="text-muted hover:text-paper transition shrink-0">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div id="related-body" class="px-6 pb-6 overflow-y-auto grow space-y-3"></div>
+    </div>
+  </div>
+
   <script>
     // ---------------------------------------------------------------
     // 설정
     // ---------------------------------------------------------------
-    const topLevelCategories = ['briefing', 'all', 'breaking', 'logistics', 'economy', 'society', 'global', 'stock'];
+    const topLevelCategories = ['briefing', 'all', 'breaking', 'logistics', 'economy', 'society', 'global', 'stock', 'sports'];
 
     const stockSubcategories = [
       { key: 'stock_domestic', label: '국내' },
       { key: 'stock_us', label: '해외' },
       { key: 'stock_issue', label: '이슈 섹터' },
+    ];
+
+    // [추가] 스포츠 하위 섹션 (증시 아래)
+    const sportsSubcategories = [
+      { key: 'sports_pohang', label: '포항스틸러스' },
+      { key: 'sports_kfootball', label: '국내축구' },
+      { key: 'sports_wfootball', label: '해외축구' },
+      { key: 'sports_baseball', label: '해외야구' },
+      { key: 'sports_etc', label: '기타' },
+    ];
+
+    // [추가] 경제 하위 섹션 (거시경제/시장)
+    const economySubcategories = [
+      { key: 'economy_macro', label: '거시경제/시장' },
     ];
 
     const logisticsSubcategories = [
@@ -440,7 +438,11 @@
       logistics_domestic: '국내 물류', logistics_global: '글로벌 물류',
       logistics_freight: '운임지수',
       economy: '경제', society: '정치/사회', global: '글로벌', stock: '증시',
-      stock_domestic: '국내', stock_us: '해외', stock_issue: '이슈 섹터'
+      stock_domestic: '국내', stock_us: '해외', stock_issue: '이슈 섹터',
+      economy_macro: '거시경제/시장',
+      sports: '스포츠',
+      sports_pohang: '포항스틸러스', sports_kfootball: '국내축구', sports_wfootball: '해외축구',
+      sports_baseball: '해외야구', sports_etc: '기타'
     };
     const categoryIcons = {
       briefing: 'sparkles', all: 'grid', breaking: 'siren', logistics: 'package',
@@ -448,7 +450,11 @@
       logistics_domestic: 'package', logistics_global: 'package',
       logistics_freight: 'line-chart',
       economy: 'line-chart', society: 'users', global: 'globe', stock: 'candlestick',
-      stock_domestic: 'candlestick', stock_us: 'candlestick', stock_issue: 'candlestick'
+      stock_domestic: 'candlestick', stock_us: 'candlestick', stock_issue: 'candlestick',
+      economy_macro: 'line-chart',
+      sports: 'trophy',
+      sports_pohang: 'trophy', sports_kfootball: 'trophy', sports_wfootball: 'trophy',
+      sports_baseball: 'trophy', sports_etc: 'trophy'
     };
 
     const categoryQueryMap = {
@@ -464,6 +470,8 @@
       if (!cat) return null;
       if (cat.startsWith('logistics_')) return 'logistics';
       if (cat.startsWith('stock_')) return 'stock';
+      if (cat.startsWith('economy_')) return 'economy';   // [추가]
+      if (cat.startsWith('sports_')) return 'sports';      // [추가]
       return null;
     }
     // 이 카테고리가 '하위 섹션'인지 여부
@@ -472,11 +480,13 @@
     let currentCategory = 'briefing';   // 기본 메인화면
     let expandedLogistics = false;
     let expandedStock = false;
+    let expandedSports = false;         // [추가] 스포츠 펼침 상태
+    let expandedEconomy = false;        // [추가] 경제 펼침 상태
     let expandedSearch = false;         // 키워드 검색 토글 상태
-    let expandedFilter = false;         // Filter(노출 건수/게재 기간/정렬) 토글 상태 · 디폴트 숨김
     let settingMode = false;            // Setting(기사 가져오기 키워드) 화면 열림 여부 · 오른쪽 기사 영역에 표시
     let settingCollapsed = {};          // [추가] 설정 화면의 각 섹션 토글 접힘 상태 (기본: 접힘)
     let currentResults = [];
+    let relatedItems = [];   // [추가] 관련기사 팝업에 뜬 기사들 (요약/주요내용 버튼이 id로 찾도록 보관)
     let sectionState = [];   // 카테고리 박스 상태(펼침/개수) 저장
     let isLoading = false;
     let nextId = 0;
@@ -497,6 +507,8 @@
       users: '<path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/>',
       globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
       candlestick: '<path d="M9 5v4"/><rect width="4" height="6" x="7" y="9" rx="1"/><path d="M9 15v2"/><path d="M17 3v2"/><rect width="4" height="8" x="15" y="5" rx="1"/><path d="M17 13v3"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/>',
+      trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+      link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
       'chevron-down': '<path d="m6 9 6 6 6-6"/>',
       'chevron-up': '<path d="m18 15-6-6-6 6"/>',
       sliders: '<line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/>',
@@ -517,6 +529,7 @@
     // 도메인 공통 제외어 (server.js 의 DOMAINS[*].exclude 와 동일)
     const LOGI_EXCLUDE = ['관광','여행','트래블','패키지여행','항공권','호텔','리조트','면세','골프','레저','유람선','크루즈','뮤지컬','공연'];
     const STOCK_EXCLUDE = ['부고','인사이동','채용공고'];
+    const SPORTS_EXCLUDE = [];   // [추가] 스포츠 공통 제외어 (필요 시 추가)
 
     const DEFAULT_KEYWORDS = {
       // 상위 섹션 (전체 화면에서 사용)
@@ -536,6 +549,15 @@
       stock_domestic:       { include: ['코스피','코스닥','국내 증시'], exclude: [...STOCK_EXCLUDE] },
       stock_us:             { include: ['뉴욕증시','나스닥','미국 증시','다우지수'], exclude: [...STOCK_EXCLUDE] },
       stock_issue:          { include: ['테마주','급등주','수혜주','증시 이슈'], exclude: [...STOCK_EXCLUDE] },
+      // [추가] 경제 하위 섹션 (거시경제/시장)
+      economy_macro:        { include: ['환율','유가','원자재 가격','금리','물가','기준금리','국제유가'], exclude: [] },
+      // [추가] 스포츠 상위 + 하위 섹션
+      sports:               { include: ['스포츠','축구','야구'], exclude: [...SPORTS_EXCLUDE] },
+      sports_pohang:        { include: ['포항스틸러스','포항 스틸러스'], exclude: [...SPORTS_EXCLUDE] },
+      sports_kfootball:     { include: ['K리그','축구 국가대표','국내축구'], exclude: [...SPORTS_EXCLUDE] },
+      sports_wfootball:     { include: ['해외축구','프리미어리그','챔피언스리그','손흥민','이강인'], exclude: [...SPORTS_EXCLUDE] },
+      sports_baseball:      { include: ['MLB','메이저리그','해외야구','김하성','이정후'], exclude: [...SPORTS_EXCLUDE] },
+      sports_etc:           { include: ['농구','배구','골프 선수','테니스','스포츠'], exclude: [...SPORTS_EXCLUDE] },
     };
 
     // 설정 화면에 보여줄 순서와 들여쓰기 (depth 1 = 하위 섹션)
@@ -548,12 +570,19 @@
       { key: 'logistics_global', depth: 1 },
       { key: 'logistics_freight', depth: 1 },
       { key: 'economy', depth: 0 },
+      { key: 'economy_macro', depth: 1 },
       { key: 'society', depth: 0 },
       { key: 'global', depth: 0 },
       { key: 'stock', depth: 0 },
       { key: 'stock_domestic', depth: 1 },
       { key: 'stock_us', depth: 1 },
       { key: 'stock_issue', depth: 1 },
+      { key: 'sports', depth: 0 },
+      { key: 'sports_pohang', depth: 1 },
+      { key: 'sports_kfootball', depth: 1 },
+      { key: 'sports_wfootball', depth: 1 },
+      { key: 'sports_baseball', depth: 1 },
+      { key: 'sports_etc', depth: 1 },
     ];
 
     const KEYWORDS_STORAGE_KEY = 'newsInsightKeywords_v1';
@@ -614,14 +643,19 @@
       return document.getElementById(id).value || 'sim';
     }
 
-    // 현재 정렬값에 맞춰 목록 정렬 (최신순=date만 클라이언트 정렬, 정확도순=서버 순서 유지)
-    function sortItemsByCurrent(list) {
-      if (getSort() !== 'date') return list;
+    // 지정한 정렬값에 맞춰 목록 정렬 (최신순=date만 클라이언트 정렬, 정확도순=서버 순서 유지)
+    //  섹션 박스는 각자 다른 정렬을 가질 수 있어 sortMode를 직접 받는 버전을 둔다.
+    function sortItemsBy(list, sortMode) {
+      if (sortMode !== 'date') return list;
       return [...list].sort((a, b) => {
         const ta = new Date(a.datetime || 0).getTime() || 0;
         const tb = new Date(b.datetime || 0).getTime() || 0;
         return tb - ta;
       });
+    }
+    // 현재(전역) 정렬값 기준 정렬
+    function sortItemsByCurrent(list) {
+      return sortItemsBy(list, getSort());
     }
     const HOURS_LABEL = { 1: '1시간', 3: '3시간', 12: '12시간', 24: '1일', 168: '1주일', 720: '1달', 8760: '1년', all: '전체 기간' };
     function hoursLabel() { return HOURS_LABEL[getHours()] || getHours() + '시간'; }
@@ -633,7 +667,6 @@
       loadKeywords();               // [추가] 저장된 '기사 가져오기 키워드' 불러오기
       renderCategoryButtons();
       renderSearchToggle();
-      renderFilterToggle();
       renderSettingToggle();        // [추가]
       renderKeywordSettings();      // [추가]
       updateStickTop();
@@ -655,7 +688,7 @@
       setInterval(refreshIndexTicker, 30000);
 
       document.getElementById('search-input').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') onSearchClick();
+        if (e.key === 'Enter') submitSearch();
       });
 
       runSearch();
@@ -667,36 +700,42 @@
     function renderSearchToggle() {
       document.getElementById('search-toggle-icons').innerHTML =
         icon('search', 'w-5 h-5') + icon(expandedSearch ? 'chevron-up' : 'chevron-down', 'w-4 h-4 opacity-70');
-      const panel = document.getElementById('search-panel');
-      panel.classList.toggle('hidden', !expandedSearch);
+      const popup = document.getElementById('search-popup');
+      popup.classList.toggle('hidden', !expandedSearch);
       const btn = document.getElementById('search-toggle-btn');
       btn.classList.toggle('text-gold2', expandedSearch);
       btn.classList.toggle('bg-ink3', expandedSearch);
       btn.classList.toggle('text-muted', !expandedSearch);
     }
 
+    // 사이드바 '키워드 검색' → 오른쪽 기사 영역 위에 검색 팝업을 연다/닫는다.
     function toggleSearchPanel() {
       expandedSearch = !expandedSearch;
       renderSearchToggle();
-      if (expandedSearch) document.getElementById('search-input').focus();
+      if (expandedSearch) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });   // 팝업이 화면 상단에 보이도록
+        setTimeout(() => document.getElementById('search-input').focus(), 50);
+      }
     }
 
-    // ---------------------------------------------------------------
-    // Filter 토글 (노출 건수 / 게재 기간 / 정렬) · 디폴트 숨김
-    // ---------------------------------------------------------------
-    function renderFilterToggle() {
-      document.getElementById('filter-toggle-icons').innerHTML =
-        icon('sliders', 'w-5 h-5') + icon(expandedFilter ? 'chevron-up' : 'chevron-down', 'w-4 h-4 opacity-70');
-      document.getElementById('filter-panel').classList.toggle('hidden', !expandedFilter);
-      const btn = document.getElementById('filter-toggle-btn');
-      btn.classList.toggle('text-gold2', expandedFilter);
-      btn.classList.toggle('bg-ink3', expandedFilter);
-      btn.classList.toggle('text-muted', !expandedFilter);
+    function closeSearchPopup() {
+      expandedSearch = false;
+      renderSearchToggle();
     }
 
-    function toggleFilterPanel() {
-      expandedFilter = !expandedFilter;
-      renderFilterToggle();
+    // 팝업에서 '검색' 버튼/엔터 → 팝업을 닫고 결과를 보여준다.
+    function submitSearch() {
+      closeSearchPopup();
+      runSearch();
+    }
+
+    // 섹션(카테고리)로 이동할 때 : 키워드 검색을 끄고(입력값 비움) 팝업도 닫는다.
+    //   → runSearch()가 키워드가 아니라 해당 섹션 기사를 불러오게 된다.
+    function exitKeywordSearch() {
+      const inp = document.getElementById('search-input');
+      if (inp) inp.value = '';
+      expandedSearch = false;
+      renderSearchToggle();
     }
 
     // ---------------------------------------------------------------
@@ -885,7 +924,9 @@
     // 하위 카테고리를 가진 상위 카테고리 정의
     const EXPANDABLE = {
       logistics: { subs: logisticsSubcategories, isOpen: () => expandedLogistics },
+      economy: { subs: economySubcategories, isOpen: () => expandedEconomy },   // [추가]
       stock: { subs: stockSubcategories, isOpen: () => expandedStock },
+      sports: { subs: sportsSubcategories, isOpen: () => expandedSports },      // [추가]
     };
 
     function renderCategoryButtons() {
@@ -953,10 +994,24 @@
     function setExpanded(cat, open) {
       if (cat === 'logistics') expandedLogistics = open;
       if (cat === 'stock') expandedStock = open;
+      if (cat === 'economy') expandedEconomy = open;   // [추가]
+      if (cat === 'sports') expandedSports = open;      // [추가]
+    }
+
+    // [추가] Today's Briefing 은 노출 건수 기본값이 10개, 그 외 카테고리는 5개.
+    //   같은 '노출 건수' 셀렉트를 공유하므로, 브리핑에 들어오고/나갈 때만 값을 맞춰준다.
+    //   (사용자가 필터에서 직접 바꾼 값은 그 화면을 보는 동안은 그대로 유지된다)
+    function applyBriefingCountDefault(newCat, oldCat) {
+      const sel = document.getElementById('count-select');
+      if (!sel) return;
+      if (newCat === 'briefing' && oldCat !== 'briefing') sel.value = '10';
+      else if (newCat !== 'briefing' && oldCat === 'briefing') sel.value = '5';
     }
 
     // 물류 / 증시처럼 하위 카테고리가 있는 버튼 클릭
     function onExpandableClick(cat) {
+      exitKeywordSearch();   // 키워드 검색 결과를 보다가 섹션을 누르면 검색을 닫고 이동
+      applyBriefingCountDefault(cat, currentCategory);
       const inThisGroup = currentCategory === cat || currentCategory.startsWith(cat + '_');
       if (inThisGroup) {
         const willOpen = !EXPANDABLE[cat].isOpen();
@@ -971,6 +1026,8 @@
     }
 
     function selectCategory(cat) {
+      exitKeywordSearch();   // 키워드 검색 결과를 보다가 섹션을 누르면 검색을 닫고 이동
+      applyBriefingCountDefault(cat, currentCategory);
       currentCategory = cat;
       Object.keys(EXPANDABLE).forEach((g) => {
         setExpanded(g, cat === g || cat.startsWith(g + '_'));
@@ -983,7 +1040,7 @@
 
     function resetSearch() {
       document.getElementById('search-input').value = '';
-      document.getElementById('count-select').value = '5';
+      document.getElementById('count-select').value = '10';   // 초기화 후 Today's Briefing으로 돌아가므로 기본 10개
       document.getElementById('hours-select').value = '24';
       document.getElementById('sort-select').value = 'sim';
       document.getElementById('search-count-select').value = '10';
@@ -992,10 +1049,10 @@
       currentCategory = 'briefing';
       expandedLogistics = false;
       expandedStock = false;
+      expandedSports = false;    // [추가]
+      expandedEconomy = false;   // [추가]
       expandedSearch = false;
-      expandedFilter = false;
       renderSearchToggle();
-      renderFilterToggle();
       renderCategoryButtons();
       runSearch();
     }
@@ -1037,7 +1094,7 @@
 
     // 섹션은 항상 30건 받아옴 → 박스별 개수 필터를 재검색 없이 즉시 반영
     async function fetchSectionsData(endpoint, { dateFrom, dateTo }) {
-      const params = new URLSearchParams({ perSection: '30', hours: String(getHours()) });
+      const params = new URLSearchParams({ perSection: '30', hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
       setKwParam(params);   // [추가] 키워드 설정 반영
@@ -1047,7 +1104,7 @@
     }
 
     async function fetchSubSectionData(base, key, { dateFrom, dateTo }) {
-      const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()) });
+      const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
       setKwParam(params);   // [추가] 키워드 설정 반영
@@ -1058,7 +1115,7 @@
 
     // [추가] 단일 상위 섹션(경제/정치·사회/글로벌 등) : '전체' 화면과 같은 키워드 설정 사용
     async function fetchTopic(key, { dateFrom, dateTo }) {
-      const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()) });
+      const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
       setKwParam(params);
@@ -1171,17 +1228,17 @@
       if (window.innerWidth >= 1024) { el.style.display = 'none'; return; }
 
       const keyword = document.getElementById('search-input').value.trim();
-      // 지금 보고 있는 화면이 어느 상위 섹션에 속하는지 판단
+      // 지금 보고 있는 화면이 어느 상위(펼침형) 섹션에 속하는지 판단
       let parent = null;
       if (!keyword) {
-        if (currentCategory === 'logistics' || currentCategory === 'stock') parent = currentCategory;
-        else parent = parentCategoryOf(currentCategory); // 하위 섹션이면 상위로 환산
+        if (EXPANDABLE[currentCategory]) parent = currentCategory;          // 상위 섹션을 직접 보고 있음
+        else parent = parentCategoryOf(currentCategory);                    // 하위 섹션이면 상위로 환산
       }
 
-      // 물류/증시 계열이 아니면 칩 숨김
-      if (!parent) { el.style.display = 'none'; el.innerHTML = ''; return; }
+      // 펼침형(물류/경제/증시/스포츠) 계열이 아니면 칩 숨김
+      if (!parent || !EXPANDABLE[parent]) { el.style.display = 'none'; el.innerHTML = ''; return; }
 
-      const subs = parent === 'logistics' ? logisticsSubcategories : stockSubcategories;
+      const subs = EXPANDABLE[parent].subs;
       const chip = (cat, label) => {
         const active = currentCategory === cat;
         return `<button onclick="selectCategory('${cat}')"
@@ -1219,12 +1276,13 @@
 
       nextId = 0;
       currentResults = [];
+      relatedItems = [];   // [추가] 새 검색 시 관련기사 임시목록도 비워 id 충돌 방지
       sectionState = [];
 
       try {
         if (keyword) {
           const data = await fetchFlatNews({ q: keyword, sort: getSort() });
-          const list = sortItemsByCurrent(decorateItems(data.items, ['all', 'logistics', 'stock', 'briefing'].includes(currentCategory) ? 'society' : currentCategory));
+          const list = sortItemsByCurrent(decorateItems(data.items, ['all', 'logistics', 'stock', 'sports', 'briefing'].includes(currentCategory) ? 'society' : currentCategory));
           currentResults = list;
 
           const modeText = data.mode === 'or' ? 'OR(하나라도 포함)' : 'AND(모두 포함)';
@@ -1248,7 +1306,7 @@
           renderBriefing(list);
           if (!list.length) showFallbackBanner('브리핑에 표시할 기사를 찾지 못했습니다.');
 
-        } else if (['all', 'logistics', 'stock'].includes(currentCategory)) {
+        } else if (['all', 'logistics', 'stock', 'sports'].includes(currentCategory)) {
           const endpoint = currentCategory === 'all' ? '/api/all/sections' : `/api/${currentCategory}/sections`;
           const sections = await fetchSectionsData(endpoint, { dateFrom, dateTo });
           sectionState = sections.map((sec) => ({
@@ -1256,6 +1314,8 @@
             label: sec.label,
             items: sortItemsByCurrent(decorateItems(sec.items, sec.key)),
             count: getCount(),
+            hours: getHours(),   // [추가] 섹션별 게재 기간 (제목 바에서 개별 조정 가능)
+            sort: getSort(),     // [추가] 섹션별 정렬 (제목 바에서 개별 조정 가능)
             collapsed: false,
           }));
           mergeCatsAcrossSections(sectionState);
@@ -1265,7 +1325,8 @@
           renderSectionsFromState();
           if (!currentResults.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 기간을 조정해보세요.');
 
-        } else if (currentCategory.startsWith('logistics_') || currentCategory.startsWith('stock_')) {
+        } else if (currentCategory.startsWith('logistics_') || currentCategory.startsWith('stock_')
+                   || currentCategory.startsWith('economy_') || currentCategory.startsWith('sports_')) {
           const base = currentCategory.split('_')[0];
           const items = await fetchSubSectionData(base, currentCategory, { dateFrom, dateTo });
           const list = sortItemsByCurrent(decorateItems(items, currentCategory));
@@ -1333,12 +1394,6 @@
       document.getElementById('news-count').textContent = 0;
     }
 
-    // 요약 글머리표(ㆍ) 3개
-    function summaryListHtml(sentences) {
-      return (sentences || []).slice(0, 3).map(s =>
-        `<li class="flex gap-2"><span class="text-gold shrink-0">ㆍ</span><span>${s}</span></li>`).join('');
-    }
-
     // 이 기사가 걸린 카테고리 목록 (원본 그대로 · 하위 섹션 포함)
     function catsOf(item) {
       const list = (Array.isArray(item.cats) && item.cats.length)
@@ -1364,14 +1419,16 @@
       ).join('');
     }
 
-    // 요약 / 주요 내용 / 원문보기 버튼 묶음 (기사 제목 오른쪽에 배치)
-    function actionsHtml(item) {
-      return `
-        <div class="shrink-0 flex items-center gap-1.5 sm:justify-end">
-          <button onclick="openSummary(${item.id})" title="요약"
+    // 주요 내용 / 원문보기 / 관련기사 버튼 묶음 (기사 제목 오른쪽에 배치)
+    //  showRelated=false 이면 '관련기사' 버튼을 뺀다. (관련기사 팝업 안의 기사에는 넣지 않음)
+    function actionsHtml(item, showRelated = true) {
+      const relatedBtn = showRelated ? `
+          <button onclick="openRelated(${item.id})" title="관련기사"
             class="flex items-center gap-1 bg-ink3 hover:bg-line text-paper text-[0.8rem] px-2 py-1 rounded-md transition border border-line whitespace-nowrap">
-            ${icon('file-text', 'w-3 h-3')} 요약
-          </button>
+            ${icon('link', 'w-3 h-3')} 관련기사
+          </button>` : '';
+      return `
+        <div class="shrink-0 flex items-center gap-1.5 flex-wrap sm:justify-end">
           <button onclick="openBrief(${item.id})" title="주요 내용"
             class="flex items-center gap-1 bg-gold/15 hover:bg-gold/25 text-gold2 text-[0.8rem] px-2 py-1 rounded-md transition border border-gold/30 whitespace-nowrap">
             ${icon('sparkles', 'w-3 h-3')} 주요 내용
@@ -1380,7 +1437,23 @@
             class="flex items-center gap-1 text-wire hover:text-blue-300 text-[0.8rem] px-2 py-1 rounded-md transition border border-wire/30 bg-wire/10 whitespace-nowrap">
             원문보기 ${icon('external-link', 'w-3 h-3')}
           </a>
+          ${relatedBtn}
         </div>`;
+    }
+
+    // 관련기사 팝업 안의 기사 카드 (기본 카드와 같은 형태, 단 '관련기사' 버튼은 제외)
+    function relatedCardHtml(item) {
+      return `
+        <article class="news-row bg-ink2/60 border border-line rounded-xl p-4 hover:border-gold/40 transition-all duration-300">
+          <div class="flex items-center gap-2 flex-wrap mb-2">
+            ${badgesHtml(item)}
+            <span class="text-muted font-mono text-[0.72rem]">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-start gap-3">
+            <h3 class="row-title flex-1 min-w-0 font-sans text-[1.3rem] font-bold text-paper transition leading-snug break-keep">${item.title}</h3>
+            ${actionsHtml(item, false)}
+          </div>
+        </article>`;
     }
 
     function newsCardHtml(item) {
@@ -1458,26 +1531,18 @@
       renderSectionsFromState();
     }
 
-    // 한 섹션 박스의 '노출 건수'를 바꾸면 → 그 섹션만 즉시 다시 보여준다.
-    //  - 이미 받아둔 기사로 충분하면 재요청 없이 바로 반영 (토큰/요청 절약)
-    //  - 더 많이 요청하면 '그 섹션 하나만' 서버에서 다시 가져온다 (다른 섹션은 그대로 유지)
-    async function changeSectionCount(key, v) {
+    // 한 섹션 박스의 상태(노출 건수/게재 기간/정렬)를 바꾸면 그 섹션만 다시 가져와 보여준다.
+    //  다른 섹션은 그대로 유지된다.
+    async function refreshSection(key) {
       const s = sectionState.find(x => x.key === key);
       if (!s) return;
-      const newCount = Number(v) || 5;
-      s.count = newCount;
-      s.collapsed = false;
-
-      // 받아둔 기사(최대 30건)로 충분 → 재요청 없이 그 섹션만 즉시 다시 그림
-      if (newCount <= s.items.length) { renderSectionsFromState(); return; }
-
-      // 더 많이 요청 → 그 섹션 하나만 서버에서 즉시 리프레시
       s._loading = true;
+      s.collapsed = false;
       renderSectionsFromState();
       try {
-        const fresh = await fetchOneSection(key, newCount);
+        const fresh = await fetchOneSection(key, s.count, s.hours, s.sort);
         if (fresh) {
-          s.items = sortItemsByCurrent(decorateItems(fresh, key));
+          s.items = sortItemsBy(decorateItems(fresh, key), s.sort);   // 이 섹션만의 정렬값 적용
           mergeCatsAcrossSections(sectionState);                 // 섹션 겹침 태그 다시 계산
           currentResults = sectionState.flatMap((x) => x.items); // 요약/원문 링크가 새 기사를 찾도록 갱신
         }
@@ -1489,11 +1554,41 @@
       }
     }
 
+    // '노출 건수' 변경 : 이미 받아둔 기사로 충분하면 재요청 없이 바로 반영 (토큰/요청 절약)
+    async function changeSectionCount(key, v) {
+      const s = sectionState.find(x => x.key === key);
+      if (!s) return;
+      const newCount = Number(v) || 5;
+      s.count = newCount;
+      s.collapsed = false;
+
+      // 받아둔 기사로 충분 → 재요청 없이 그 섹션만 즉시 다시 그림
+      if (newCount <= s.items.length) { renderSectionsFromState(); return; }
+
+      await refreshSection(key);   // 더 많이 요청 → 그 섹션 하나만 서버에서 다시 가져옴
+    }
+
+    // '게재 기간' 변경 : 결과 집합 자체가 달라지므로 항상 그 섹션만 다시 가져온다.
+    async function changeSectionHours(key, v) {
+      const s = sectionState.find(x => x.key === key);
+      if (!s) return;
+      s.hours = v;
+      await refreshSection(key);
+    }
+
+    // '정렬' 변경 : 정확도순(sim)은 네이버 원본 순서가 필요해 항상 다시 가져온다.
+    async function changeSectionSort(key, v) {
+      const s = sectionState.find(x => x.key === key);
+      if (!s) return;
+      s.sort = v;
+      await refreshSection(key);
+    }
+
     // [추가] 지금 보고 있는 묶음 화면에서 '한 섹션'만 다시 가져온다.
     //  - 전체(all) 화면  : 최상위 섹션      → /api/topic/{key}
     //  - 물류/증시 화면  : 하위 섹션        → /api/{base}/section/{key}
-    async function fetchOneSection(key, count) {
-      const params = new URLSearchParams({ display: String(count), hours: String(getHours()) });
+    async function fetchOneSection(key, count, hours, sort) {
+      const params = new URLSearchParams({ display: String(count), hours: String(hours), sort: String(sort) });
       setKwParam(params);   // 현재 키워드 설정 반영
       let endpoint;
       if (currentCategory === 'all') {
@@ -1520,17 +1615,28 @@
         const shown = sec.items.slice(0, sec.count);
         return `
         <section class="bg-ink2/40 border border-line rounded-2xl overflow-hidden">
-          <header class="flex items-center gap-3 px-5 py-3 bg-ink3/60 border-b border-line">
+          <header class="flex items-center gap-3 flex-wrap px-5 py-3 bg-ink3/60 border-b border-line">
             <button onclick="toggleSection('${sec.key}')" class="flex items-center gap-2.5 flex-1 min-w-0 text-left hover:opacity-80 transition">
               ${icon(categoryIcons[sec.key] || 'grid', 'w-5 h-5 text-gold shrink-0')}
               <h2 class="font-sans font-bold text-gold text-xl truncate">${sec.label}</h2>
               ${icon(sec.collapsed ? 'chevron-down' : 'chevron-up', 'w-4 h-4 text-muted shrink-0')}
             </button>
             <span class="text-muted font-mono whitespace-nowrap">${sec._loading ? icon('loader-2', 'w-4 h-4 animate-spin') : shown.length + '건'}</span>
-            <select onchange="changeSectionCount('${sec.key}', this.value)"
-              class="bg-ink border border-line rounded-lg px-2 py-1 text-paper font-mono focus:outline-none focus:border-gold/70">
-              ${[3, 5, 10, 15, 20, 30].map(n => `<option value="${n}" ${sec.count === n ? 'selected' : ''}>${n}개</option>`).join('')}
-            </select>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <select onchange="changeSectionCount('${sec.key}', this.value)" title="노출 건수"
+                class="bg-ink border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
+                ${[3, 5, 10, 15, 20, 30].map(n => `<option value="${n}" ${sec.count === n ? 'selected' : ''}>${n}개</option>`).join('')}
+              </select>
+              <select onchange="changeSectionHours('${sec.key}', this.value)" title="게재 기간"
+                class="bg-ink border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
+                ${Object.entries(HOURS_LABEL).map(([v, label]) => `<option value="${v}" ${sec.hours === v ? 'selected' : ''}>${label}</option>`).join('')}
+              </select>
+              <select onchange="changeSectionSort('${sec.key}', this.value)" title="정렬"
+                class="bg-ink border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
+                <option value="sim" ${sec.sort === 'sim' ? 'selected' : ''}>정확도순</option>
+                <option value="date" ${sec.sort === 'date' ? 'selected' : ''}>최신순</option>
+              </select>
+            </div>
           </header>
           <div class="${sec.collapsed ? 'hidden' : ''} p-4 space-y-3">
             ${shown.length
@@ -1542,14 +1648,6 @@
 
       document.getElementById('news-count').textContent = visibleCount();
       updateCatHeader();
-    }
-
-    // ---- 원문에서 핵심 3줄 요약 (요약 버튼 클릭 시에만 호출) ----
-    const coreSummaryCache = new Map();
-
-    function applySummary(it, sentences) {
-      it.summary = sentences.slice(0, 3);
-      it.enriched = true;
     }
 
     function formatDate(iso) {
@@ -1605,57 +1703,12 @@
       }
     }
 
-    // ---------------------------------------------------------------
-    // 요약 모달
-    // ---------------------------------------------------------------
-    function paintSummary(sentences) {
-      document.getElementById('modal-summary').innerHTML = summaryListHtml(sentences);
+    // 현재 화면 기사(currentResults) + 관련기사 팝업 기사(relatedItems)에서 id로 찾는다
+    function findItem(id) {
+      return currentResults.find(n => n.id === id) || relatedItems.find(n => n.id === id);
     }
 
-    async function openSummary(id) {
-      const item = currentResults.find(n => n.id === id);
-      if (!item) return;
-      const link = articleLink(item);   // [수정] 원문보기와 똑같은 주소를 요약에도 사용
-      document.getElementById('modal-category').textContent =
-        catsOf(item).map((c) => categoryLabels[c] || '기타').join(', ');
-      document.getElementById('modal-title').textContent = item.title;
-      document.getElementById('modal-source').textContent = item.source;
-      document.getElementById('modal-time').textContent = item.datetime ? ' · ' + formatDate(item.datetime) : '';
-      document.getElementById('modal-link').href = link;
-      document.getElementById('summary-modal').classList.remove('hidden');
-
-      // 요약은 반드시 '원문 본문'에서 추출한 핵심 3문장만 보여준다
-      paintSummary([]);
-      const loading = document.getElementById('modal-loading');
-
-      if (!link || link === '#') { paintSummary(['요약할 원문 주소가 없습니다.']); return; }
-      if (coreSummaryCache.has(link)) { paintSummary(coreSummaryCache.get(link)); return; }
-
-      loading.classList.remove('hidden');
-      try {
-        // [수정] 원문이 막혔을 때 서버가 우회할 수 있도록 네이버 링크와 기존 요약문을 함께 보낸다
-        const p = new URLSearchParams({ url: link, max: '3' });
-        if (item.naverUrl) p.set('naver', item.naverUrl);
-        if (item.title) p.set('title', item.title);   // [추가] 제목 핵심 단어로 문장 선별
-        if (Array.isArray(item.summary)) p.set('desc', item.summary.join(' ').slice(0, 1000));
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/article-summary?${p.toString()}`);
-        const data = await res.json();
-        if (Array.isArray(data.sentences) && data.sentences.length) {
-          coreSummaryCache.set(link, data.sentences);
-          applySummary(item, data.sentences);
-          if (!document.getElementById('summary-modal').classList.contains('hidden')) paintSummary(data.sentences);
-        } else {
-          paintSummary(['원문에서 본문을 추출하지 못했습니다. 원문보기를 이용해 주세요.']);
-        }
-      } catch (e) {
-        console.error(e);
-        paintSummary(['요약을 불러오지 못했습니다. 원문보기를 이용해 주세요.']);
-      } finally { loading.classList.add('hidden'); }
-    }
-
-    function closeSummary() { document.getElementById('summary-modal').classList.add('hidden'); }
-    function closeSummaryOnBackdrop(e) { if (e.target.id === 'summary-modal') closeSummary(); }
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeSummary(); closeBrief(); } });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeBrief(); closeRelated(); } });
 
     // ---------------------------------------------------------------
     // 주요 내용 모달 (AI 정리)
@@ -1692,15 +1745,22 @@
             <span class="text-gold shrink-0">ㆍ</span><span>${esc(x)}</span>
           </li>`).join('')}</ul>` : '';
 
+      const keywords = (b.keywords || []).length ? `
+        <ul class="space-y-1.5">${b.keywords.map(k => `
+          <li class="text-muted text-[0.82rem] leading-relaxed break-keep">
+            <span class="text-gold2 font-semibold">${esc(k.term)}</span> · ${esc(k.explain)}
+          </li>`).join('')}</ul>` : '';
+
       return `
         ${b.headline ? `<h3 class="font-sans text-[1.7rem] font-bold text-paper leading-snug break-keep">${esc(b.headline)}</h3>` : ''}
         ${b.lead ? `<p class="text-paper/90 leading-relaxed break-keep">${esc(b.lead)}</p>` : ''}
         ${table ? `<div><h4 class="font-bold text-gold2 text-lg mb-2">핵심 정리</h4>${table}</div>` : ''}
-        ${bullets ? `<div><h4 class="font-bold text-gold2 text-lg mb-2">주요 포인트</h4>${bullets}</div>` : ''}`;
+        ${bullets ? `<div><h4 class="font-bold text-gold2 text-lg mb-2">주요 포인트</h4>${bullets}</div>` : ''}
+        ${keywords ? `<div class="pt-3 border-t border-line/60"><h4 class="font-bold text-muted text-xs uppercase tracking-widest mb-2">주석</h4>${keywords}</div>` : ''}`;
     }
 
     async function openBrief(id) {
-      const item = currentResults.find(n => n.id === id);
+      const item = findItem(id);
       if (!item) return;
 
       const link = articleLink(item);   // [수정] 원문보기와 똑같은 주소를 AI 정리에도 사용
@@ -1735,6 +1795,61 @@
 
     function closeBrief() { document.getElementById('brief-modal').classList.add('hidden'); }
     function closeBriefOnBackdrop(e) { if (e.target.id === 'brief-modal') closeBrief(); }
+
+    // ---------------------------------------------------------------
+    // 관련기사 팝업
+    //  - 기준 기사 제목으로 서버에 관련기사를 요청(/api/related)
+    //  - 받은 기사들을 기본 카드 형태(요약/주요내용/원문보기 포함)로 팝업에 그린다
+    //  - 팝업 기사도 요약/주요내용 버튼이 동작하도록 relatedItems에 등록해 둔다
+    // ---------------------------------------------------------------
+    function relatedLoadingHtml() {
+      return `<div class="space-y-3">
+        ${[100, 100, 100].map(() => `<div class="skeleton bg-ink3/70 rounded-xl h-24"></div>`).join('')}
+        <p class="text-muted font-mono text-sm pt-1">관련 있는 기사를 찾는 중입니다...</p>
+      </div>`;
+    }
+
+    async function openRelated(id) {
+      const item = findItem(id);
+      if (!item) return;
+
+      document.getElementById('related-source-title').textContent = item.title;
+      document.getElementById('related-body').innerHTML = relatedLoadingHtml();
+      document.getElementById('related-modal').classList.remove('hidden');
+
+      try {
+        const p = new URLSearchParams({ title: item.title, url: articleLink(item), display: '5' });
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/related?${p.toString()}`);
+        const data = await res.json();
+
+        if (data.error) {
+          document.getElementById('related-body').innerHTML =
+            `<div class="text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3">${esc(data.error)}</div>`;
+          return;
+        }
+
+        // 기준 기사와 같은 카테고리 태그를 물려주되, 관련기사는 원본 섹션을 알 수 없으므로
+        // 화면에는 기준 기사의 대표 섹션을 그대로 사용한다.
+        const baseCat = (Array.isArray(item.cats) && item.cats.length) ? item.cats[0] : (item.category || 'society');
+        const list = decorateItems(data.items || [], baseCat);
+
+        // 요약/주요내용 버튼이 id로 찾을 수 있도록 등록 (누적)
+        relatedItems = relatedItems.concat(list);
+
+        if (!list.length) {
+          document.getElementById('related-body').innerHTML = emptyBoxHtml('관련 기사를 찾지 못했습니다.');
+          return;
+        }
+        document.getElementById('related-body').innerHTML = list.map((it) => relatedCardHtml(it)).join('');
+      } catch (e) {
+        console.error(e);
+        document.getElementById('related-body').innerHTML =
+          `<div class="text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3">관련 기사를 불러오지 못했습니다.</div>`;
+      }
+    }
+
+    function closeRelated() { document.getElementById('related-modal').classList.add('hidden'); }
+    function closeRelatedOnBackdrop(e) { if (e.target.id === 'related-modal') closeRelated(); }
 
     function hideFallbackBanner() { document.getElementById('fallback-banner').classList.add('hidden'); }
     function showFallbackBanner(msg) {
