@@ -1637,6 +1637,9 @@ app.get('/api/indices', async (req, res) => {
 // /api/market-extra : 한국 기준금리 / 미국 기준금리 / 원-달러 환율
 // -----------------------------------------------------------------
 const FALLBACK_KR_BASE_RATE = { name: '한국 기준금리', priceStr: '2.75%', change: 0.25, live: false };
+// FRED(fred.stlouisfed.org)가 일부 배포 환경(Render 등)의 아웃바운드 네트워크에서 막혀 있어
+// 매번 타임아웃되는 경우를 대비한 폴백값. FRED 접속이 가능한 환경에서는 사용되지 않는다.
+const FALLBACK_US_BASE_RATE = { name: '미국 기준금리', priceStr: '3.50~3.75%', change: -0.25, live: false };
 
 async function fetchUsdKrw() {
   const res = await fetchWithTimeout('https://api.stock.naver.com/marketindex/exchange/FX_USDKRW', {
@@ -1686,17 +1689,22 @@ async function fetchFredSeries(seriesId) {
 }
 
 async function fetchUsBaseRate() {
-  const [upper, lower] = await Promise.all([
-    fetchFredSeries('DFEDTARU'),
-    fetchFredSeries('DFEDTARL'),
-  ]);
-  const diff = upper.latest - upper.prev;
-  return {
-    name: '미국 기준금리',
-    priceStr: `${lower.latest.toFixed(2)}~${upper.latest.toFixed(2)}%`,
-    change: diff,
-    live: true,
-  };
+  try {
+    const [upper, lower] = await Promise.all([
+      fetchFredSeries('DFEDTARU'),
+      fetchFredSeries('DFEDTARL'),
+    ]);
+    const diff = upper.latest - upper.prev;
+    return {
+      name: '미국 기준금리',
+      priceStr: `${lower.latest.toFixed(2)}~${upper.latest.toFixed(2)}%`,
+      change: diff,
+      live: true,
+    };
+  } catch (e) {
+    console.error('[미국 기준금리 조회 실패, 폴백값 사용]', e.message);
+    return FALLBACK_US_BASE_RATE;
+  }
 }
 
 function ymd(d) {
