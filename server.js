@@ -18,6 +18,7 @@ const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch'); // v2
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,11 +30,64 @@ if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
   console.warn('[경고] .env 에 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 이 없습니다.');
 }
 
+// ECOS(한국은행) 무료 API 키. 발급 전까지는 고정값으로 대체.
+// 발급: https://ecos.bok.or.kr → 마이페이지 → Open API 활용신청
+const ECOS_API_KEY = process.env.ECOS_API_KEY;
+if (!ECOS_API_KEY) {
+  console.warn('[경고] .env 에 ECOS_API_KEY 가 없어 한국 기준금리는 고정값으로 표시됩니다.');
+}
+
 app.use(cors());
+app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname)));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'news-insight-naver.html'));
+});
+
+// -----------------------------------------------------------------
+// 키워드 설정 저장소
+//   기기(브라우저)마다 따로 저장되던 localStorage 대신 서버 파일에 보관한다.
+//   → 웹·아이폰·아이패드가 같은 서버를 바라보므로 설정이 자동으로 동기화된다.
+// -----------------------------------------------------------------
+const KEYWORDS_FILE = path.join(__dirname, 'keywords.json');
+
+function readKeywordsFile() {
+  try {
+    const raw = fs.readFileSync(KEYWORDS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};   // 파일이 없거나 깨졌으면 빈 설정(=프론트의 기본값 사용)
+  }
+}
+
+app.get('/api/settings/keywords', (req, res) => {
+  res.json({ keywords: readKeywordsFile() });
+});
+
+app.post('/api/settings/keywords', (req, res) => {
+  const kw = req.body && req.body.keywords;
+  if (!kw || typeof kw !== 'object' || Array.isArray(kw)) {
+    return res.status(400).json({ error: 'keywords 객체가 필요합니다.' });
+  }
+  // 저장 전 형태를 정리한다. (include/exclude 문자열 배열만 남김)
+  const clean = {};
+  Object.keys(kw).forEach((key) => {
+    const v = kw[key] || {};
+    const pick = (arr) => (Array.isArray(arr) ? arr.map((s) => String(s).trim()).filter(Boolean) : []);
+    clean[key] = { include: pick(v.include), exclude: pick(v.exclude) };
+  });
+  try {
+    // 임시 파일에 먼저 쓰고 교체 → 저장 중 서버가 죽어도 기존 설정이 깨지지 않는다.
+    const tmp = KEYWORDS_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(clean, null, 2), 'utf8');
+    fs.renameSync(tmp, KEYWORDS_FILE);
+    res.json({ ok: true, keywords: clean });
+  } catch (e) {
+    console.error('[키워드 저장 실패]', e.message);
+    res.status(500).json({ error: '설정을 저장하지 못했습니다.' });
+  }
 });
 
 // -----------------------------------------------------------------
@@ -1564,6 +1618,117 @@ app.get('/api/indices', async (req, res) => {
   if (items.length === 0) {
     return res.status(502).json({ error: '증시 지수 정보를 가져오지 못했습니다.', items: [] });
   }
+  res.json({ items });
+});
+
+// -----------------------------------------------------------------
+// /api/market-extra : 한국 기준금리 / 미국 기준금리 / 원-달러 환율
+// -----------------------------------------------------------------
+const FALLBACK_KR_BASE_RATE = { name: '한국 기준금리', priceStr: '2.75%', change: 0.25, live: false };
+
+async function fetchUsdKrw() {
+  const res = await fetch('https://api.stock.naver.com/marketindex/exchange/FX_USDKRW', {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
+      Accept: 'application/json',
+      Referer: 'https://finance.naver.com/',
+    },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const info = data.exchangeInfo;
+  const price = toNum(info.closePrice);
+  const change = toNum(info.fluctuations);
+  const percent = toNum(info.fluctuationsRatio);
+  const isDown = info.fluctuationsType?.code === '5' || info.fluctuationsType?.code === '4';
+  const signedChange = isDown ? -change : change;
+  const signedPercent = isDown ? -percent : percent;
+  return {
+    name: '원/달러 환율',
+    priceStr: price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    change: signedChange,
+    changePercent: signedPercent,
+    live: true,
+  };
+}
+
+// FRED(세인트루이스 연은) 공개 CSV. API 키 불필요.
+// [최신값, 최신값과 다른 직전 값] 을 반환 (동결 여부 판단용)
+async function fetchFredSeries(seriesId) {
+  const res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}`, {
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const csv = await res.text();
+  const lines = csv.trim().split('\n').filter(Boolean);
+  const values = [];
+  for (let i = lines.length - 1; i >= 1; i--) {
+    const [, valueStr] = lines[i].split(',');
+    const value = toNum(valueStr);
+    if (!Number.isNaN(value)) values.push(value);
+  }
+  if (!values.length) throw new Error(`${seriesId} 값 없음`);
+  const latest = values[0];
+  const prev = values.find((v) => v !== latest);
+  return { latest, prev: prev === undefined ? latest : prev };
+}
+
+async function fetchUsBaseRate() {
+  const [upper, lower] = await Promise.all([
+    fetchFredSeries('DFEDTARU'),
+    fetchFredSeries('DFEDTARL'),
+  ]);
+  const diff = upper.latest - upper.prev;
+  return {
+    name: '미국 기준금리',
+    priceStr: `${lower.latest.toFixed(2)}~${upper.latest.toFixed(2)}%`,
+    change: diff,
+    live: true,
+  };
+}
+
+function ymd(d) {
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// 한국은행 ECOS : 한국은행 기준금리 (통계표 722Y001, 항목 0101000, 일 단위)
+// 월 단위(M)는 발표 시차 때문에 금통위 결정 당월에도 이전 값이 나올 수 있어 일 단위(D)로 조회한다.
+async function fetchKrBaseRate() {
+  if (!ECOS_API_KEY) return FALLBACK_KR_BASE_RATE;
+  const now = new Date();
+  const start = ymd(new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()));
+  const end = ymd(now);
+  const url = `https://ecos.bok.or.kr/api/StatisticSearch/${ECOS_API_KEY}/json/kr/1/1000/722Y001/D/${start}/${end}/0101000`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const rows = data?.StatisticSearch?.row;
+  if (!Array.isArray(rows) || !rows.length) throw new Error('ECOS 응답 형식 해석 불가');
+  const sorted = [...rows].sort((a, b) => a.TIME.localeCompare(b.TIME));
+  const latest = toNum(sorted[sorted.length - 1].DATA_VALUE);
+  // 직전 값과 다른 최근 값을 찾아 변동폭을 계산 (같은 값이 반복되는 일자는 건너뜀)
+  let prev = latest;
+  for (let i = sorted.length - 2; i >= 0; i--) {
+    const v = toNum(sorted[i].DATA_VALUE);
+    if (v !== latest) { prev = v; break; }
+  }
+  const diff = latest - prev;
+  return {
+    name: '한국 기준금리',
+    priceStr: `${latest.toFixed(2)}%`,
+    change: diff,
+    live: true,
+  };
+}
+
+app.get('/api/market-extra', async (req, res) => {
+  const settled = await Promise.allSettled([fetchKrBaseRate(), fetchUsBaseRate(), fetchUsdKrw()]);
+  const labels = ['한국 기준금리', '미국 기준금리', '원/달러 환율'];
+  const items = settled.map((result, i) => {
+    if (result.status === 'fulfilled') return result.value;
+    console.error(`[market-extra 조회 실패] ${labels[i]}:`, result.reason?.message || result.reason);
+    return null;
+  }).filter(Boolean);
   res.json({ items });
 });
 

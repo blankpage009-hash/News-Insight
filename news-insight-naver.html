@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>News Insight</title>
+<title>Beyond News</title>
 
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -96,7 +96,7 @@
         <svg class="w-5 h-5 text-ink" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8z"/></svg>
       </div>
       <div class="leading-tight">
-        <h1 class="font-sans font-bold tracking-wide text-paper text-2xl sm:text-3xl">NEWS INSIGHT</h1>
+        <h1 class="font-sans font-bold tracking-wide text-paper text-2xl sm:text-3xl">Beyond News</h1>
         <p class="font-mono text-muted tracking-widest text-[0.65rem] sm:text-xs">REAL-TIME WIRE DESK</p>
       </div>
     </div>
@@ -597,23 +597,54 @@
       return out;
     }
 
-    // 저장된 설정을 불러오되, 기본값 위에 덮어써 누락 없이 채운다.
-    function loadKeywords() {
-      let saved = {};
-      try { saved = JSON.parse(localStorage.getItem(KEYWORDS_STORAGE_KEY) || '{}') || {}; } catch { saved = {}; }
+    // 저장된 설정(saved)을 기본값 위에 덮어써 누락 없이 채운다.
+    function mergeKeywords(saved) {
       const merged = cloneKeywords(DEFAULT_KEYWORDS);
       Object.keys(merged).forEach((k) => {
-        if (saved[k]) {
+        if (saved && saved[k]) {
           if (Array.isArray(saved[k].include)) merged[k].include = saved[k].include;
           if (Array.isArray(saved[k].exclude)) merged[k].exclude = saved[k].exclude;
         }
       });
-      userKeywords = merged;
       return merged;
     }
 
-    function persistKeywords() {
+    function readLocalKeywords() {
+      try { return JSON.parse(localStorage.getItem(KEYWORDS_STORAGE_KEY) || '{}') || {}; } catch { return {}; }
+    }
+
+    // 설정은 서버에 보관한다. → 웹·아이폰·아이패드가 같은 값을 공유한다.
+    // 서버에 못 붙으면(오프라인 등) 마지막으로 받아둔 localStorage 캐시로 동작한다.
+    async function loadKeywords() {
+      let saved = null;
+      try {
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/settings/keywords`);
+        if (res.ok) {
+          const data = await res.json();
+          saved = data.keywords || {};
+          try { localStorage.setItem(KEYWORDS_STORAGE_KEY, JSON.stringify(saved)); } catch {}
+        }
+      } catch {}
+      if (!saved) saved = readLocalKeywords();   // 서버 실패 시 캐시 폴백
+      userKeywords = mergeKeywords(saved);
+      return userKeywords;
+    }
+
+    async function persistKeywords() {
+      // 캐시를 먼저 갱신해 두면 저장이 실패해도 이 기기에서는 설정이 유지된다.
       try { localStorage.setItem(KEYWORDS_STORAGE_KEY, JSON.stringify(userKeywords)); } catch {}
+      try {
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/settings/keywords`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keywords: userKeywords }),
+        });
+        if (!res.ok) throw new Error('저장 실패');
+        return true;
+      } catch {
+        alert('설정을 서버에 저장하지 못했습니다.\n이 기기에서만 적용되며, 다른 기기와 동기화되지 않습니다.');
+        return false;
+      }
     }
 
     // 서버 요청에 붙일 kw 파라미터에 현재 설정을 담는다.
@@ -663,8 +694,8 @@
     // ---------------------------------------------------------------
     // 초기화
     // ---------------------------------------------------------------
-    function init() {
-      loadKeywords();               // [추가] 저장된 '기사 가져오기 키워드' 불러오기
+    async function init() {
+      await loadKeywords();         // [추가] 서버에 저장된 '기사 가져오기 키워드' 불러오기 (기기 간 동기화)
       renderCategoryButtons();
       renderSearchToggle();
       renderSettingToggle();        // [추가]
@@ -872,24 +903,24 @@
     }
 
     // 입력한 키워드를 저장하고, 설정 화면을 닫은 뒤 새 기준으로 기사를 다시 불러온다.
-    function saveKeywordSettings() {
+    async function saveKeywordSettings() {
       document.querySelectorAll('#keyword-settings textarea[data-kw-key]').forEach((ta) => {
         const key = ta.getAttribute('data-kw-key');
         const type = ta.getAttribute('data-kw-type');
         if (!userKeywords[key]) userKeywords[key] = { include: [], exclude: [] };
         userKeywords[key][type] = parseKwText(ta.value);
       });
-      persistKeywords();
+      await persistKeywords();
       closeSettingView(true);   // 설정 화면 닫고 → 새 키워드로 즉시 다시 가져오기
     }
 
     // 모든 키워드를 기본값으로 되돌린다. (설정 화면에는 그대로 머무름)
     //  [수정] 실수 방지를 위해 한 번 더 확인한 뒤 실행한다.
-    function resetKeywordSettings() {
-      const ok = window.confirm('모든 섹션의 포함/제외 키워드를 기본값으로 되돌립니다.\n지금 입력한 내용은 사라집니다. 계속할까요?');
+    async function resetKeywordSettings() {
+      const ok = window.confirm('모든 섹션의 포함/제외 키워드를 기본값으로 되돌립니다.\n지금 입력한 내용은 사라집니다.\n(모든 기기에 함께 적용됩니다.) 계속할까요?');
       if (!ok) return;   // '취소'를 누르면 아무것도 하지 않음
       userKeywords = cloneKeywords(DEFAULT_KEYWORDS);
-      persistKeywords();
+      await persistKeywords();
       renderKeywordSettings();   // 입력칸을 기본값으로 다시 그려줌
     }
 
@@ -1676,12 +1707,41 @@
     // KOSPI → KOSDAQ → NASDAQ → S&P 500 → DOW JONES 순서 고정
     const INDEX_ORDER = ['KOSPI', 'KOSDAQ', 'NASDAQ', 'S&P 500', 'DOW JONES'];
 
+    // 기준금리·환율 항목 (한국은행 ECOS / FRED / 네이버 환율 API에서 실시간 조회)
+    let extraTickerHtml = '';
+
+    function formatExtraEntry(item) {
+      const isUp = item.change > 0, isDown = item.change < 0;
+      const arrow = isUp ? '▲' : isDown ? '▼' : '－';
+      const colorClass = isUp ? 'text-rose-400' : isDown ? 'text-blue-400' : 'text-muted';
+      const changeText = item.change === 0
+        ? '(동결)'
+        : item.changePercent !== undefined
+          ? `${arrow}${Math.abs(item.change).toFixed(2)} (${arrow}${Math.abs(item.changePercent).toFixed(2)}%)`
+          : `(${arrow}${Math.abs(item.change).toFixed(2)}%p)`;
+      return `<span class="flex items-center gap-2">
+        <span class="text-gold font-semibold tracking-wider">${item.name}</span>
+        <span class="tabular-nums text-paper">${item.priceStr}</span>
+        <span class="${colorClass} tabular-nums">${changeText}</span></span>`;
+    }
+
+    async function refreshExtraTicker() {
+      try {
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/market-extra`);
+        if (!res.ok) throw new Error('시장지표 API 오류: ' + res.status);
+        const data = await res.json();
+        extraTickerHtml = Array.isArray(data.items) ? data.items.map(formatExtraEntry).join('') : '';
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
     function renderIndexTicker(items) {
       const sorted = [...items].sort(
         (a, b) => INDEX_ORDER.indexOf(a.name) - INDEX_ORDER.indexOf(b.name)
       );
       const html = sorted.length
-        ? sorted.map(formatIndexEntry).join('')
+        ? sorted.map(formatIndexEntry).join('') + extraTickerHtml
         : '<span>지수 정보를 불러오는 중입니다...</span>';
       // 같은 내용을 두 벌 채워야 끊김 없이 계속 순환한다
       document.getElementById('ticker-content').innerHTML = html;
@@ -1690,14 +1750,14 @@
 
     async function refreshIndexTicker() {
       try {
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/indices`);
+        const [res] = await Promise.all([fetch(`${NAVER_PROXY_BASE}/api/indices`), refreshExtraTicker()]);
         if (!res.ok) throw new Error('지수 API 오류: ' + res.status);
         const data = await res.json();
         if (!Array.isArray(data.items) || !data.items.length) throw new Error('지수 데이터 없음');
         renderIndexTicker(data.items);
       } catch (err) {
         console.error(err);
-        const msg = '<span>지수 정보를 불러올 수 없습니다.</span>';
+        const msg = '<span>지수 정보를 불러올 수 없습니다.</span>' + extraTickerHtml;
         document.getElementById('ticker-content').innerHTML = msg;
         document.getElementById('ticker-content-2').innerHTML = msg;
       }
