@@ -1709,6 +1709,7 @@
 
     // 기준금리·환율 항목 (한국은행 ECOS / FRED / 네이버 환율 API에서 실시간 조회)
     let extraTickerHtml = '';
+    let lastIndexItems = [];
 
     function formatExtraEntry(item) {
       const isUp = item.change > 0, isDown = item.change < 0;
@@ -1749,11 +1750,15 @@
     }
 
     async function refreshIndexTicker() {
+      // 지수 API와 시장지표(기준금리·환율) API는 서로의 응답 지연에 영향받지 않도록 완전히 분리해서 처리한다.
+      // (하나가 느리거나 실패해도 다른 하나는 정상적으로 티커에 표시되어야 함)
+      refreshExtraTicker().then(() => renderIndexTicker(lastIndexItems));
       try {
-        const [res] = await Promise.all([fetch(`${NAVER_PROXY_BASE}/api/indices`), refreshExtraTicker()]);
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/indices`);
         if (!res.ok) throw new Error('지수 API 오류: ' + res.status);
         const data = await res.json();
         if (!Array.isArray(data.items) || !data.items.length) throw new Error('지수 데이터 없음');
+        lastIndexItems = data.items;
         renderIndexTicker(data.items);
       } catch (err) {
         console.error(err);

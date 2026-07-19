@@ -37,6 +37,18 @@ if (!ECOS_API_KEY) {
   console.warn('[경고] .env 에 ECOS_API_KEY 가 없어 한국 기준금리는 고정값으로 표시됩니다.');
 }
 
+// node-fetch v2는 기본 타임아웃이 없어, 배포 환경에서 외부망이 막히면 요청이 무한 대기한다.
+// 그 사이 함께 묶인 다른 요청까지 응답이 안 나가는 걸 막기 위해 모든 외부 fetch에 타임아웃을 강제한다.
+async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname)));
@@ -1627,7 +1639,7 @@ app.get('/api/indices', async (req, res) => {
 const FALLBACK_KR_BASE_RATE = { name: '한국 기준금리', priceStr: '2.75%', change: 0.25, live: false };
 
 async function fetchUsdKrw() {
-  const res = await fetch('https://api.stock.naver.com/marketindex/exchange/FX_USDKRW', {
+  const res = await fetchWithTimeout('https://api.stock.naver.com/marketindex/exchange/FX_USDKRW', {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
       Accept: 'application/json',
@@ -1655,7 +1667,7 @@ async function fetchUsdKrw() {
 // FRED(세인트루이스 연은) 공개 CSV. API 키 불필요.
 // [최신값, 최신값과 다른 직전 값] 을 반환 (동결 여부 판단용)
 async function fetchFredSeries(seriesId) {
-  const res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}`, {
+  const res = await fetchWithTimeout(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}`, {
     headers: { 'User-Agent': 'Mozilla/5.0' },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1699,7 +1711,7 @@ async function fetchKrBaseRate() {
   const start = ymd(new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()));
   const end = ymd(now);
   const url = `https://ecos.bok.or.kr/api/StatisticSearch/${ECOS_API_KEY}/json/kr/1/1000/722Y001/D/${start}/${end}/0101000`;
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   const rows = data?.StatisticSearch?.row;
