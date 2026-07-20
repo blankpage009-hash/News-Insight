@@ -59,26 +59,93 @@ app.get('/', (req, res) => {
 
 // -----------------------------------------------------------------
 // 키워드 설정 저장소
-//   기기(브라우저)마다 따로 저장되던 localStorage 대신 서버 파일에 보관한다.
+//   기기(브라우저)마다 따로 저장되던 localStorage 대신 서버에 보관한다.
 //   → 웹·아이폰·아이패드가 같은 서버를 바라보므로 설정이 자동으로 동기화된다.
+//
+//   [저장 위치] Supabase(Postgres) — 배포 환경(Render 등)은 재배포·재시작 때마다
+//   컨테이너 디스크가 초기화되므로, 로컬 파일에만 두면 설정이 사라진다.
+//   로컬 파일은 Supabase가 응답하지 않을 때를 위한 읽기 캐시로만 쓴다.
 // -----------------------------------------------------------------
 const KEYWORDS_FILE = path.join(__dirname, 'keywords.json');
+const SETTINGS_TABLE = 'app_settings';
+const KEYWORDS_ROW_KEY = 'keywords';
 
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+const SUPABASE_ENABLED = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY);
+if (!SUPABASE_ENABLED) {
+  console.warn('[경고] SUPABASE_URL / SUPABASE_SERVICE_KEY 가 없어 키워드 설정을 로컬 파일에만 저장합니다.');
+  console.warn('       배포 환경에서는 재배포 시 설정이 사라집니다.');
+}
+
+function supabaseHeaders() {
+  return {
+    apikey: SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+// 파일 캐시: Supabase가 죽었을 때만 읽는다. 쓰기는 Supabase 성공 후 따라 쓴다.
 function readKeywordsFile() {
   try {
-    const raw = fs.readFileSync(KEYWORDS_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(fs.readFileSync(KEYWORDS_FILE, 'utf8'));
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};   // 파일이 없거나 깨졌으면 빈 설정(=프론트의 기본값 사용)
   }
 }
 
-app.get('/api/settings/keywords', (req, res) => {
-  res.json({ keywords: readKeywordsFile() });
+function writeKeywordsFile(keywords) {
+  try {
+    // 임시 파일에 먼저 쓰고 교체 → 저장 중 서버가 죽어도 기존 캐시가 깨지지 않는다.
+    const tmp = KEYWORDS_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(keywords, null, 2), 'utf8');
+    fs.renameSync(tmp, KEYWORDS_FILE);
+  } catch (e) {
+    console.error('[키워드 파일 캐시 저장 실패]', e.message);   // 캐시일 뿐이므로 실패해도 진행
+  }
+}
+
+async function readKeywordsFromSupabase() {
+  const url = `${SUPABASE_URL}/rest/v1/${SETTINGS_TABLE}`
+    + `?key=eq.${encodeURIComponent(KEYWORDS_ROW_KEY)}&select=value`;
+  const res = await fetchWithTimeout(url, { headers: supabaseHeaders() });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
+  const rows = await res.json();
+  const value = Array.isArray(rows) && rows.length ? rows[0].value : null;
+  return value && typeof value === 'object' ? value : {};
+}
+
+async function writeKeywordsToSupabase(keywords) {
+  // Prefer: resolution=merge-duplicates → key가 이미 있으면 UPDATE, 없으면 INSERT
+  const url = `${SUPABASE_URL}/rest/v1/${SETTINGS_TABLE}?on_conflict=key`;
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify([{
+      key: KEYWORDS_ROW_KEY,
+      value: keywords,
+      updated_at: new Date().toISOString(),
+    }]),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
+}
+
+app.get('/api/settings/keywords', async (req, res) => {
+  if (!SUPABASE_ENABLED) return res.json({ keywords: readKeywordsFile(), source: 'file' });
+  try {
+    const keywords = await readKeywordsFromSupabase();
+    writeKeywordsFile(keywords);                       // 다음 장애 때 쓸 캐시 갱신
+    res.json({ keywords, source: 'supabase' });
+  } catch (e) {
+    // Supabase를 못 읽었다. 캐시를 내려주되, 이게 최신이 아닐 수 있음을 알린다.
+    console.error('[키워드 조회 실패 → 파일 캐시 사용]', e.message);
+    res.json({ keywords: readKeywordsFile(), source: 'cache', stale: true });
+  }
 });
 
-app.post('/api/settings/keywords', (req, res) => {
+app.post('/api/settings/keywords', async (req, res) => {
   const kw = req.body && req.body.keywords;
   if (!kw || typeof kw !== 'object' || Array.isArray(kw)) {
     return res.status(400).json({ error: 'keywords 객체가 필요합니다.' });
@@ -90,12 +157,17 @@ app.post('/api/settings/keywords', (req, res) => {
     const pick = (arr) => (Array.isArray(arr) ? arr.map((s) => String(s).trim()).filter(Boolean) : []);
     clean[key] = { include: pick(v.include), exclude: pick(v.exclude) };
   });
+
+  if (!SUPABASE_ENABLED) {
+    writeKeywordsFile(clean);
+    return res.json({ ok: true, keywords: clean, source: 'file' });
+  }
   try {
-    // 임시 파일에 먼저 쓰고 교체 → 저장 중 서버가 죽어도 기존 설정이 깨지지 않는다.
-    const tmp = KEYWORDS_FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(clean, null, 2), 'utf8');
-    fs.renameSync(tmp, KEYWORDS_FILE);
-    res.json({ ok: true, keywords: clean });
+    // Supabase 저장이 성공해야만 '저장됨'으로 응답한다. 파일에만 쓰고 성공이라 답하면
+    // 다음 재배포 때 조용히 사라져 사용자가 잃어버린 줄도 모르게 된다.
+    await writeKeywordsToSupabase(clean);
+    writeKeywordsFile(clean);
+    res.json({ ok: true, keywords: clean, source: 'supabase' });
   } catch (e) {
     console.error('[키워드 저장 실패]', e.message);
     res.status(500).json({ error: '설정을 저장하지 못했습니다.' });
@@ -791,6 +863,10 @@ const LOGISTICS_SECTIONS = [
     terms: ['국내 물류', '국내물류'], domain: 'logistics' },
   { key: 'logistics_global', label: '글로벌 물류',
     terms: ['글로벌 물류', '해외 물류', '국제 물류'], domain: 'logistics' },
+  { key: 'logistics_coupang', label: '쿠팡',
+    terms: ['쿠팡 물류', '쿠팡로지스틱스서비스', '로켓배송', '쿠팡 풀필먼트'], domain: 'logistics' },
+  { key: 'logistics_naver', label: '네이버',
+    terms: ['네이버 물류', '네이버 도착보장', '네이버 풀필먼트', '네이버 커머스'], domain: 'logistics' },
   { key: 'logistics_freight', label: '운임지수',
     terms: ['SCFI', '항공화물 운임', '벌크 운임'], domain: 'logistics' },
 ];

@@ -428,6 +428,8 @@
       { key: 'logistics_competitor', label: '경쟁사' },
       { key: 'logistics_domestic', label: '국내 물류' },
       { key: 'logistics_global', label: '글로벌 물류' },
+      { key: 'logistics_coupang', label: '쿠팡' },
+      { key: 'logistics_naver', label: '네이버' },
       { key: 'logistics_freight', label: '운임지수' },
     ];
 
@@ -435,6 +437,7 @@
       briefing: "Today's Briefing",
       breaking: '속보', all: '전체', logistics: '물류',
       logistics_lotte: '롯데글로벌로지스', logistics_competitor: '경쟁사',
+      logistics_coupang: '쿠팡', logistics_naver: '네이버',
       logistics_domestic: '국내 물류', logistics_global: '글로벌 물류',
       logistics_freight: '운임지수',
       economy: '경제', society: '정치/사회', global: '글로벌', stock: '증시',
@@ -447,6 +450,7 @@
     const categoryIcons = {
       briefing: 'sparkles', all: 'grid', breaking: 'siren', logistics: 'package',
       logistics_lotte: 'package', logistics_competitor: 'package',
+      logistics_coupang: 'package', logistics_naver: 'package',
       logistics_domestic: 'package', logistics_global: 'package',
       logistics_freight: 'line-chart',
       economy: 'line-chart', society: 'users', global: 'globe', stock: 'candlestick',
@@ -544,6 +548,8 @@
       logistics_competitor: { include: ['CJ대한통운','한진택배','한진 물류','한진 택배','LX판토스','삼성SDS 물류','현대글로비스'], exclude: [...LOGI_EXCLUDE] },
       logistics_domestic:   { include: ['국내 물류','국내물류'], exclude: [...LOGI_EXCLUDE] },
       logistics_global:     { include: ['글로벌 물류','해외 물류','국제 물류'], exclude: [...LOGI_EXCLUDE] },
+      logistics_coupang:    { include: ['쿠팡 물류','쿠팡로지스틱스서비스','로켓배송','쿠팡 풀필먼트'], exclude: [...LOGI_EXCLUDE] },
+      logistics_naver:      { include: ['네이버 물류','네이버 도착보장','네이버 풀필먼트','네이버 커머스'], exclude: [...LOGI_EXCLUDE] },
       logistics_freight:    { include: ['SCFI','항공화물 운임','벌크 운임'], exclude: [...LOGI_EXCLUDE] },
       // 증시 하위 섹션
       stock_domestic:       { include: ['코스피','코스닥','국내 증시'], exclude: [...STOCK_EXCLUDE] },
@@ -568,6 +574,8 @@
       { key: 'logistics_competitor', depth: 1 },
       { key: 'logistics_domestic', depth: 1 },
       { key: 'logistics_global', depth: 1 },
+      { key: 'logistics_coupang', depth: 1 },
+      { key: 'logistics_naver', depth: 1 },
       { key: 'logistics_freight', depth: 1 },
       { key: 'economy', depth: 0 },
       { key: 'economy_macro', depth: 1 },
@@ -621,11 +629,17 @@
         const res = await fetch(`${NAVER_PROXY_BASE}/api/settings/keywords`);
         if (res.ok) {
           const data = await res.json();
-          saved = data.keywords || {};
-          try { localStorage.setItem(KEYWORDS_STORAGE_KEY, JSON.stringify(saved)); } catch {}
+          const fromServer = data.keywords || {};
+          // 서버가 빈 설정을 주는 건 '저장된 적 없음' 또는 '저장소가 초기화됨'이라는 뜻이다.
+          // 이걸 그대로 받아 캐시까지 덮어쓰면, 저장소가 한 번 날아갔을 때
+          // 접속하는 기기마다 캐시가 연쇄적으로 지워진다. 빈 값이면 캐시를 지키고 그대로 쓴다.
+          if (Object.keys(fromServer).length) {
+            saved = fromServer;
+            try { localStorage.setItem(KEYWORDS_STORAGE_KEY, JSON.stringify(saved)); } catch {}
+          }
         }
       } catch {}
-      if (!saved) saved = readLocalKeywords();   // 서버 실패 시 캐시 폴백
+      if (!saved) saved = readLocalKeywords();   // 서버 실패·빈 응답 시 캐시 폴백
       userKeywords = mergeKeywords(saved);
       return userKeywords;
     }
