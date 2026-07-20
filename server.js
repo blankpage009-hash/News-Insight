@@ -1636,10 +1636,10 @@ app.get('/api/indices', async (req, res) => {
 // -----------------------------------------------------------------
 // /api/market-extra : 한국 기준금리 / 미국 기준금리 / 원-달러 환율
 // -----------------------------------------------------------------
-const FALLBACK_KR_BASE_RATE = { name: '한국 기준금리', priceStr: '2.75%', change: 0.25, live: false };
+const FALLBACK_KR_BASE_RATE = { name: '한국 기준금리', priceStr: '2.75%', change: 0, live: false };
 // FRED(fred.stlouisfed.org)가 일부 배포 환경(Render 등)의 아웃바운드 네트워크에서 막혀 있어
 // 매번 타임아웃되는 경우를 대비한 폴백값. FRED 접속이 가능한 환경에서는 사용되지 않는다.
-const FALLBACK_US_BASE_RATE = { name: '미국 기준금리', priceStr: '3.50~3.75%', change: -0.25, live: false };
+const FALLBACK_US_BASE_RATE = { name: '미국 기준금리', priceStr: '3.50~3.75%', change: 0, live: false };
 
 async function fetchUsdKrw() {
   const res = await fetchWithTimeout('https://api.stock.naver.com/marketindex/exchange/FX_USDKRW', {
@@ -1653,11 +1653,12 @@ async function fetchUsdKrw() {
   const data = await res.json();
   const info = data.exchangeInfo;
   const price = toNum(info.closePrice);
-  const change = toNum(info.fluctuations);
-  const percent = toNum(info.fluctuationsRatio);
+  // 네이버 응답의 fluctuations / fluctuationsRatio 는 이미 부호가 붙어 있다(하락 시 "-9.20").
+  // fluctuationsType(4·5=하락) 은 부호가 빠진 응답에 대비한 보조 판단용으로만 사용한다.
   const isDown = info.fluctuationsType?.code === '5' || info.fluctuationsType?.code === '4';
-  const signedChange = isDown ? -change : change;
-  const signedPercent = isDown ? -percent : percent;
+  const sign = isDown ? -1 : 1;
+  const signedChange = sign * Math.abs(toNum(info.fluctuations));
+  const signedPercent = sign * Math.abs(toNum(info.fluctuationsRatio));
   return {
     name: '원/달러 환율',
     priceStr: price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -1667,8 +1668,13 @@ async function fetchUsdKrw() {
   };
 }
 
+// 직전 FOMC 대비 변동으로 볼 최대 경과일수.
+// FRED 시리즈에는 FOMC 일정이 없으므로, 마지막으로 금리가 바뀐 날이 이 기간보다
+// 오래됐다면 그 사이 회의에서 동결된 것으로 간주한다. (FOMC 정례회의 간격은 약 6~8주)
+const FOMC_RECENT_DAYS = 56;
+
 // FRED(세인트루이스 연은) 공개 CSV. API 키 불필요.
-// [최신값, 최신값과 다른 직전 값] 을 반환 (동결 여부 판단용)
+// 최신값과, 마지막으로 값이 바뀐 시점(직전 값·변경일)을 반환한다.
 async function fetchFredSeries(seriesId) {
   const res = await fetchWithTimeout(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}`, {
     headers: { 'User-Agent': 'Mozilla/5.0' },
@@ -1676,16 +1682,24 @@ async function fetchFredSeries(seriesId) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const csv = await res.text();
   const lines = csv.trim().split('\n').filter(Boolean);
-  const values = [];
-  for (let i = lines.length - 1; i >= 1; i--) {
-    const [, valueStr] = lines[i].split(',');
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const [dateStr, valueStr] = lines[i].split(',');
     const value = toNum(valueStr);
-    if (!Number.isNaN(value)) values.push(value);
+    if (!Number.isNaN(value)) rows.push({ date: dateStr, value });
   }
-  if (!values.length) throw new Error(`${seriesId} 값 없음`);
-  const latest = values[0];
-  const prev = values.find((v) => v !== latest);
-  return { latest, prev: prev === undefined ? latest : prev };
+  if (!rows.length) throw new Error(`${seriesId} 값 없음`);
+  const latest = rows[rows.length - 1].value;
+  let prev = latest;
+  let changedAt = null;
+  for (let i = rows.length - 2; i >= 0; i--) {
+    if (rows[i].value !== latest) {
+      prev = rows[i].value;
+      changedAt = rows[i + 1].date; // 새 값이 처음 적용된 날
+      break;
+    }
+  }
+  return { latest, prev, changedAt };
 }
 
 async function fetchUsBaseRate() {
@@ -1694,7 +1708,11 @@ async function fetchUsBaseRate() {
       fetchFredSeries('DFEDTARU'),
       fetchFredSeries('DFEDTARL'),
     ]);
-    const diff = upper.latest - upper.prev;
+    const daysSinceChange = upper.changedAt
+      ? (Date.now() - new Date(`${upper.changedAt}T00:00:00Z`).getTime()) / 86400000
+      : Infinity;
+    // 마지막 인상·인하가 직전 FOMC보다 이전이면 최근 회의에서는 동결된 것이므로 0으로 표시한다.
+    const diff = daysSinceChange <= FOMC_RECENT_DAYS ? upper.latest - upper.prev : 0;
     return {
       name: '미국 기준금리',
       priceStr: `${lower.latest.toFixed(2)}~${upper.latest.toFixed(2)}%`,
@@ -1726,13 +1744,19 @@ async function fetchKrBaseRate() {
   if (!Array.isArray(rows) || !rows.length) throw new Error('ECOS 응답 형식 해석 불가');
   const sorted = [...rows].sort((a, b) => a.TIME.localeCompare(b.TIME));
   const latest = toNum(sorted[sorted.length - 1].DATA_VALUE);
-  // 직전 값과 다른 최근 값을 찾아 변동폭을 계산 (같은 값이 반복되는 일자는 건너뜀)
+  // 마지막으로 금리가 바뀐 시점을 찾는다 (같은 값이 반복되는 일자는 건너뜀)
   let prev = latest;
+  let changedAt = null;
   for (let i = sorted.length - 2; i >= 0; i--) {
     const v = toNum(sorted[i].DATA_VALUE);
-    if (v !== latest) { prev = v; break; }
+    if (v !== latest) { prev = v; changedAt = sorted[i + 1].TIME; break; }
   }
-  const diff = latest - prev;
+  // 직전 금통위보다 오래된 변동이면 최근 회의에서는 동결된 것으로 보고 0으로 표시한다.
+  const changedDate = changedAt
+    ? new Date(`${changedAt.slice(0, 4)}-${changedAt.slice(4, 6)}-${changedAt.slice(6, 8)}T00:00:00Z`)
+    : null;
+  const daysSinceChange = changedDate ? (Date.now() - changedDate.getTime()) / 86400000 : Infinity;
+  const diff = daysSinceChange <= FOMC_RECENT_DAYS ? latest - prev : 0;
   return {
     name: '한국 기준금리',
     priceStr: `${latest.toFixed(2)}%`,
