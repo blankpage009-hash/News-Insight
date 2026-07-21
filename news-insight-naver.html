@@ -96,6 +96,9 @@
   /* 화이트 테마에서 어두운 배경을 전제로 한 amber 계열 배너 색 보정 */
   :root[data-theme="light"] .text-amber-200 { color: #92400e; }
 
+  /* 로고 원본은 흰색 → 화이트 테마에서는 반전시켜 어둡게 */
+  :root[data-theme="light"] #app-logo { filter: invert(1) brightness(.18); }
+
   html { font-size: 15px; }
   body { font-family: 'Pretendard Variable', Pretendard, sans-serif; }
   ::selection { background: rgb(var(--c-gold) / .33); }
@@ -180,7 +183,7 @@
 
     /* --- 2) 스크롤 시 상단바 축소 (body.tb-compact) --- */
     #top-bar .ticker-viewport,
-    #app-header, #app-logo, #app-title {
+    #app-header, #app-logo {
       transition: max-height .2s ease, opacity .2s ease, padding .2s ease,
                   width .2s ease, height .2s ease, font-size .2s ease;
     }
@@ -191,8 +194,7 @@
       overflow: hidden;
     }
     body.tb-compact #app-header { padding-top: .4rem; padding-bottom: .4rem; }
-    body.tb-compact #app-logo { width: 1.9rem; height: 1.9rem; }
-    body.tb-compact #app-title { font-size: 1.15rem; }
+    body.tb-compact #app-logo { height: 1.6rem; }
     body.tb-compact #app-subtitle { display: none; }
 
     /* --- 카테고리 제목 바가 2줄로 밀리지 않게 압축 --- */
@@ -223,12 +225,13 @@
         class="lg:hidden -ml-1 p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
         <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
       </button>
-      <div id="app-logo" class="w-9 h-9 rounded-lg bg-gradient-to-br from-gold to-gold2 flex items-center justify-center shrink-0">
-        <svg class="w-5 h-5 text-ink" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8z"/></svg>
-      </div>
-      <div class="leading-tight min-w-0">
-        <h1 id="app-title" class="font-sans font-bold tracking-wide text-paper text-2xl sm:text-3xl">Beyond News</h1>
-        <p id="app-subtitle" class="font-mono text-muted tracking-widest text-[0.65rem] sm:text-xs">REAL-TIME WIRE DESK</p>
+      <!-- 로고(아크 마크 + Beyond News 워드마크) + 오른쪽에 밑선 맞춰 붙는 문구 -->
+      <div class="flex items-end gap-2 lg:gap-3 min-w-0">
+        <h1 class="min-w-0 shrink">
+          <img id="app-logo" src="logo-mark.png" alt="Beyond News"
+               class="h-8 sm:h-9 lg:h-10 w-auto max-w-full object-contain object-left align-bottom">
+        </h1>
+        <p id="app-subtitle" class="font-sans font-medium text-muted tracking-wide leading-none text-xs sm:text-sm whitespace-nowrap hidden sm:block">Real-Time Wire Desk</p>
       </div>
     </div>
     <div class="flex items-center gap-4">
