@@ -14,10 +14,20 @@
   tailwind.config = {
     theme: {
       extend: {
+        // [수정] 테마(다크/화이트) 전환을 위해 색을 CSS 변수로 뺀다.
+        //   실제 값은 아래 <style>의 :root(다크) / :root[data-theme="light"](화이트)에 있다.
+        //   rgb(var(--x) / <alpha-value>) 형태라 bg-ink/90 같은 투명도 표기도 그대로 동작한다.
         colors: {
-          ink: '#0A0F1C', ink2: '#111A2C', ink3: '#182339', line: '#22314D',
-          gold: '#D4A054', gold2: '#E8C384', wire: '#5B8DEF', paper: '#ECE8DC', muted: '#8891A6',
-          panel: '#2A3B5F',
+          ink:   'rgb(var(--c-ink) / <alpha-value>)',
+          ink2:  'rgb(var(--c-ink2) / <alpha-value>)',
+          ink3:  'rgb(var(--c-ink3) / <alpha-value>)',
+          line:  'rgb(var(--c-line) / <alpha-value>)',
+          gold:  'rgb(var(--c-gold) / <alpha-value>)',
+          gold2: 'rgb(var(--c-gold2) / <alpha-value>)',
+          wire:  'rgb(var(--c-wire) / <alpha-value>)',
+          paper: 'rgb(var(--c-paper) / <alpha-value>)',
+          muted: 'rgb(var(--c-muted) / <alpha-value>)',
+          panel: 'rgb(var(--c-panel) / <alpha-value>)',
         },
         fontFamily: {
           sans: ['"Pretendard Variable"', 'Pretendard', 'sans-serif'],
@@ -29,10 +39,66 @@
   }
 </script>
 
+<script>
+  // ---------------------------------------------------------------
+  // [추가] 테마(화이트/다크/시스템)
+  //   - 화면이 그려지기 전에 먼저 적용해야 깜빡임(다크→화이트)이 없어서
+  //     본문 스크립트가 아니라 여기(head)에서 바로 실행한다.
+  //   - 저장값 : 'light' | 'dark' | 'system'  (기본 system)
+  // ---------------------------------------------------------------
+  const THEME_STORAGE_KEY = 'newsInsightTheme_v1';
+
+  function readThemePref() {
+    try { return localStorage.getItem(THEME_STORAGE_KEY) || 'system'; } catch { return 'system'; }
+  }
+  function systemPrefersLight() {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  }
+  // 실제로 화면에 입힐 테마('light' | 'dark')를 정해 <html data-theme>에 적는다.
+  function applyTheme(pref) {
+    const mode = (pref === 'light' || pref === 'dark') ? pref : (systemPrefersLight() ? 'light' : 'dark');
+    document.documentElement.setAttribute('data-theme', mode);
+    document.documentElement.style.colorScheme = mode;
+    return mode;
+  }
+  applyTheme(readThemePref());
+
+  // '시스템' 설정일 때는 OS 테마가 바뀌면 즉시 따라간다.
+  if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+      if (readThemePref() === 'system') {
+        applyTheme('system');
+        if (typeof renderThemeButtons === 'function') renderThemeButtons();
+      }
+    });
+  }
+</script>
+
 <style>
+  /* 테마 색상 (다크 = 기본값) · tailwind.config의 rgb(var(--c-*)) 가 이 값을 읽는다 */
+  :root {
+    --c-ink: 10 15 28;      --c-ink2: 17 26 44;    --c-ink3: 24 35 57;
+    --c-line: 34 49 77;     --c-gold: 212 160 84;  --c-gold2: 232 195 132;
+    --c-wire: 91 141 239;   --c-paper: 236 232 220;--c-muted: 136 145 166;
+    --c-panel: 42 59 95;
+    --c-scrollbar: 34 49 77;
+    --c-scrollbar-hover: 44 61 94;
+  }
+  /* 화이트 테마 */
+  :root[data-theme="light"] {
+    --c-ink: 255 255 255;   --c-ink2: 245 246 248; --c-ink3: 229 233 240;
+    --c-line: 210 216 226;  --c-gold: 176 122 30;  --c-gold2: 138 94 18;
+    --c-wire: 37 99 235;    --c-paper: 22 24 29;   --c-muted: 91 99 115;
+    --c-panel: 236 240 247;
+    --c-scrollbar: 197 204 215;
+    --c-scrollbar-hover: 168 177 191;
+  }
+  /* 화이트 테마에서 어두운 배경을 전제로 한 amber 계열 배너 색 보정 */
+  :root[data-theme="light"] .text-amber-200 { color: #92400e; }
+
   html { font-size: 15px; }
   body { font-family: 'Pretendard Variable', Pretendard, sans-serif; }
-  ::selection { background: #D4A05455; }
+  ::selection { background: rgb(var(--c-gold) / .33); }
 
   /* 지수 티커 : 5개 지수가 끊김 없이 반복 순환 */
   .ticker-viewport { overflow: hidden; }
@@ -58,7 +124,7 @@
   }
   .modal-pop { animation: modal-in .18s ease-out; }
 
-  .news-row:hover .row-title { color: #E8C384; }
+  .news-row:hover .row-title { color: rgb(var(--c-gold2)); }
 
   select { background-image: none; }
 
@@ -77,8 +143,8 @@
 
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #22314D; border-radius: 999px; }
-  ::-webkit-scrollbar-thumb:hover { background: #2c3d5e; }
+  ::-webkit-scrollbar-thumb { background: rgb(var(--c-scrollbar)); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-scrollbar-hover)); }
 
   @media (prefers-reduced-motion: reduce) {
     .ticker-track, .skeleton, .modal-pop { animation: none; }
@@ -330,7 +396,7 @@
           style="top: calc(var(--stick-top, 121px) - 1px)">
           <div class="flex items-center gap-2.5 min-w-0">
             <span class="text-gold shrink-0" id="setting-view-icon"></span>
-            <h2 class="font-sans font-bold text-gold text-xl truncate">기사 가져오기 키워드 설정</h2>
+            <h2 class="font-sans font-bold text-gold text-xl truncate">설정</h2>
           </div>
           <!-- [수정] 저장/기본값 버튼을 제목 옆(헤더)으로 이동 -->
           <div class="flex items-center gap-2 shrink-0">
@@ -347,6 +413,35 @@
           </div>
         </header>
         <div class="p-5 space-y-3">
+
+          <!-- [추가] 테마 설정 (화이트 / 다크 / 시스템) · 누르는 즉시 적용되고 이 기기에 저장된다 -->
+          <div class="bg-ink/40 border border-line rounded-lg px-3 py-3 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="text-gold2 shrink-0" id="theme-setting-icon"></span>
+              <span class="font-semibold text-paper text-[1.15rem]">테마</span>
+              <span class="font-mono text-muted text-[0.8rem]">화면 밝기 · 이 기기에만 적용</span>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap" id="theme-buttons"></div>
+          </div>
+
+          <!-- [추가] 설정 비밀번호 변경 -->
+          <div class="bg-ink/40 border border-line rounded-lg px-3 py-3 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="text-gold2 shrink-0" id="pw-setting-icon"></span>
+              <span class="font-semibold text-paper text-[1.15rem]">설정 비밀번호</span>
+              <span class="font-mono text-muted text-[0.8rem]">Setting 진입 시 요구 (기본 7780)</span>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <input type="password" id="new-password-input" placeholder="새 비밀번호"
+                class="bg-ink border border-line rounded-lg px-2.5 py-2 text-paper font-mono text-[1rem] w-40 focus:outline-none focus:border-gold/70">
+              <input type="password" id="new-password-confirm" placeholder="새 비밀번호 확인"
+                class="bg-ink border border-line rounded-lg px-2.5 py-2 text-paper font-mono text-[1rem] w-40 focus:outline-none focus:border-gold/70">
+              <button onclick="changeSettingPassword()"
+                class="text-muted hover:text-gold border border-line rounded-lg px-3 py-2 transition text-[0.9rem] whitespace-nowrap">변경</button>
+              <span id="password-change-msg" class="text-muted text-[0.9rem]"></span>
+            </div>
+          </div>
+
           <p class="text-muted leading-relaxed text-[1.05rem] bg-ink/60 border border-line rounded-lg px-3 py-2.5">
             섹션별로 <span class="text-gold2 font-semibold">포함</span>·<span class="text-gold2 font-semibold">제외</span> 키워드를 정하면
             항상 이 값을 기준으로 기사를 가져옵니다. 여러 개는 <span class="text-gold2 font-semibold">콤마(,)</span>로 구분하세요.
@@ -363,6 +458,29 @@
     </section>
   </main>
 
+  <!-- [추가] 설정 비밀번호 확인 모달 : Setting 을 누르면 먼저 여기서 확인한다 -->
+  <div id="password-modal" class="hidden fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onclick="closePasswordOnBackdrop(event)">
+    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-sm p-6 space-y-4" onclick="event.stopPropagation()">
+      <div class="flex items-center gap-2.5">
+        <span class="text-gold shrink-0" id="password-modal-icon"></span>
+        <h2 class="font-sans font-bold text-gold text-xl">설정 잠금</h2>
+        <button onclick="closePasswordModal()" class="ml-auto text-muted hover:text-paper transition">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <p class="text-muted leading-relaxed">설정을 열려면 비밀번호를 입력하세요.</p>
+      <input type="password" id="password-input" inputmode="numeric" autocomplete="current-password" placeholder="비밀번호"
+        class="w-full bg-ink border border-line rounded-xl px-3 py-2.5 text-paper font-mono tracking-widest focus:outline-none focus:border-gold/70">
+      <p id="password-error" class="hidden text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-lg px-3 py-2 text-[0.9rem]">비밀번호가 올바르지 않습니다.</p>
+      <div class="flex gap-2">
+        <button onclick="submitPassword()"
+          class="flex-1 bg-gold hover:bg-gold2 text-ink font-semibold px-4 py-2.5 rounded-xl transition">확인</button>
+        <button onclick="closePasswordModal()"
+          class="text-muted hover:text-gold border border-line rounded-xl px-4 py-2.5 transition">취소</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 주요 내용(AI 정리) 팝업 모달 -->
   <div id="brief-modal" class="hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeBriefOnBackdrop(event)">
     <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-4xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
@@ -375,21 +493,29 @@
       <div id="brief-body" class="px-6 overflow-y-auto grow space-y-5 pb-4"></div>
       <div class="flex flex-wrap justify-between items-center gap-3 p-6 pt-4 border-t border-line shrink-0">
         <span id="brief-note" class="text-muted font-mono text-[0.75rem]"></span>
-        <a id="brief-link" href="#" target="_blank" rel="noopener noreferrer"
-          class="flex items-center gap-1.5 text-wire hover:text-blue-300 px-4 py-2 rounded-lg transition border border-wire/30 bg-wire/10 font-semibold">
-          원문보기
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-        </a>
+        <!-- [수정] 원문 보기 옆에 '관련 기사' 링크 추가 -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <a id="brief-link" href="#" target="_blank" rel="noopener noreferrer"
+            class="flex items-center gap-1.5 text-wire hover:text-blue-300 px-4 py-2 rounded-lg transition border border-wire/30 bg-wire/10 font-semibold">
+            원문 보기
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+          </a>
+          <button id="brief-related-btn" onclick="openRelatedFromBrief()" title="관련 기사"
+            class="flex items-center gap-1.5 text-paper bg-ink3 hover:bg-line px-4 py-2 rounded-lg transition border border-line font-semibold">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            관련 기사
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- 관련기사 팝업 모달 -->
-  <div id="related-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeRelatedOnBackdrop(event)">
+  <!-- 관련 기사 팝업 모달 ([수정] 주요 내용 팝업(z-60) 위에 뜨도록 z-70) -->
+  <div id="related-modal" class="hidden fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeRelatedOnBackdrop(event)">
     <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
       <div class="flex justify-between items-start gap-4 p-6 pb-3 shrink-0">
         <div class="min-w-0">
-          <span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30">관련기사</span>
+          <span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30">관련 기사</span>
           <p class="text-muted mt-2 text-[0.95rem] break-keep">기준 기사: <span id="related-source-title" class="text-paper/80"></span></p>
         </div>
         <button onclick="closeRelated()" class="text-muted hover:text-paper transition shrink-0">
@@ -404,7 +530,8 @@
     // ---------------------------------------------------------------
     // 설정
     // ---------------------------------------------------------------
-    const topLevelCategories = ['briefing', 'all', 'breaking', 'logistics', 'economy', 'society', 'global', 'stock', 'sports'];
+    // [수정] AI 섹션을 글로벌 아래 · 증시 위에 배치
+    const topLevelCategories = ['briefing', 'all', 'breaking', 'logistics', 'economy', 'society', 'global', 'ai', 'stock', 'sports'];
 
     const stockSubcategories = [
       { key: 'stock_domestic', label: '국내' },
@@ -443,7 +570,7 @@
       logistics_coupang: '쿠팡', logistics_naver: '네이버',
       logistics_domestic: '국내 물류', logistics_global: '글로벌 물류',
       logistics_freight: '운임지수',
-      economy: '경제', society: '정치/사회', global: '글로벌', stock: '증시',
+      economy: '경제', society: '정치/사회', global: '글로벌', ai: 'AI', stock: '증시',
       stock_domestic: '국내', stock_us: '해외', stock_issue: '이슈 섹터',
       economy_macro: '거시경제/시장',
       sports: '스포츠',
@@ -456,7 +583,7 @@
       logistics_coupang: 'package', logistics_naver: 'package',
       logistics_domestic: 'package', logistics_global: 'package',
       logistics_freight: 'line-chart',
-      economy: 'line-chart', society: 'users', global: 'globe', stock: 'candlestick',
+      economy: 'line-chart', society: 'users', global: 'globe', ai: 'cpu', stock: 'candlestick',
       stock_domestic: 'candlestick', stock_us: 'candlestick', stock_issue: 'candlestick',
       economy_macro: 'line-chart',
       sports: 'trophy',
@@ -493,7 +620,8 @@
     let settingMode = false;            // Setting(기사 가져오기 키워드) 화면 열림 여부 · 오른쪽 기사 영역에 표시
     let settingCollapsed = {};          // [추가] 설정 화면의 각 섹션 토글 접힘 상태 (기본: 접힘)
     let currentResults = [];
-    let relatedItems = [];   // [추가] 관련기사 팝업에 뜬 기사들 (요약/주요내용 버튼이 id로 찾도록 보관)
+    let relatedItems = [];   // [추가] 관련 기사 팝업에 뜬 기사들 (요약/주요내용 버튼이 id로 찾도록 보관)
+    let currentBriefId = null;   // [추가] 지금 '주요 내용' 팝업에 떠 있는 기사 id
     let sectionState = [];   // 카테고리 박스 상태(펼침/개수) 저장
     let isLoading = false;
     let nextId = 0;
@@ -515,6 +643,11 @@
       globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
       candlestick: '<path d="M9 5v4"/><rect width="4" height="6" x="7" y="9" rx="1"/><path d="M9 15v2"/><path d="M17 3v2"/><rect width="4" height="8" x="15" y="5" rx="1"/><path d="M17 13v3"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/>',
       trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+      cpu: '<rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>',
+      sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+      moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+      monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
+      lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
       link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
       'chevron-down': '<path d="m6 9 6 6 6-6"/>',
       'chevron-up': '<path d="m18 15-6-6-6 6"/>',
@@ -545,6 +678,8 @@
       economy:              { include: ['경제 금리'], exclude: [] },
       society:              { include: ['정치', '국회', '사건사고'], exclude: [] },
       global:               { include: ['국제'], exclude: [] },
+      // [추가] AI 섹션 (글로벌 아래 · 증시 위)
+      ai:                   { include: ['AI','클로드','GPT','제미나이','그록','엔비디아'], exclude: [] },
       stock:                { include: ['증시 코스피'], exclude: [...STOCK_EXCLUDE] },
       // 물류 하위 섹션
       logistics_lotte:      { include: ['롯데글로벌로지스', '롯데택배'], exclude: [...LOGI_EXCLUDE] },
@@ -584,6 +719,7 @@
       { key: 'economy_macro', depth: 1 },
       { key: 'society', depth: 0 },
       { key: 'global', depth: 0 },
+      { key: 'ai', depth: 0 },
       { key: 'stock', depth: 0 },
       { key: 'stock_domestic', depth: 1 },
       { key: 'stock_us', depth: 1 },
@@ -716,6 +852,7 @@
       renderCategoryButtons();
       renderSearchToggle();
       renderSettingToggle();        // [추가]
+      renderThemeButtons();         // [추가] 테마 선택 버튼
       renderKeywordSettings();      // [추가]
       updateStickTop();
       window.addEventListener('resize', updateStickTop);
@@ -737,6 +874,11 @@
 
       document.getElementById('search-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') submitSearch();
+      });
+
+      // [추가] 비밀번호 입력창에서 Enter → 바로 확인
+      document.getElementById('password-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submitPassword();
       });
 
       runSearch();
@@ -800,15 +942,126 @@
       btn.classList.toggle('text-muted', !settingMode);
     }
 
+    // [수정] 설정은 비밀번호로 잠겨 있다. 이미 확인한 세션이면 바로 열린다.
     function toggleSettingPanel() {
-      if (settingMode) closeSettingView(false);
-      else openSettingView();
+      if (settingMode) { closeSettingView(false); return; }
+      if (isSettingUnlocked()) openSettingView();
+      else openPasswordModal();
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] 설정 접근 잠금 (비밀번호)
+    //   - 기본 비밀번호는 7780. 설정 화면에서 바꿀 수 있고 이 기기에 저장된다.
+    //   - 한 번 통과하면 탭을 닫기 전까지는 다시 묻지 않는다.
+    // ---------------------------------------------------------------
+    const DEFAULT_SETTING_PASSWORD = '7780';
+    const PASSWORD_STORAGE_KEY = 'newsInsightSettingPw_v1';
+    const UNLOCK_SESSION_KEY = 'newsInsightSettingUnlocked_v1';
+
+    function getSettingPassword() {
+      try { return localStorage.getItem(PASSWORD_STORAGE_KEY) || DEFAULT_SETTING_PASSWORD; }
+      catch { return DEFAULT_SETTING_PASSWORD; }
+    }
+    function isSettingUnlocked() {
+      try { return sessionStorage.getItem(UNLOCK_SESSION_KEY) === '1'; } catch { return false; }
+    }
+    function markSettingUnlocked() {
+      try { sessionStorage.setItem(UNLOCK_SESSION_KEY, '1'); } catch {}
+    }
+
+    function openPasswordModal() {
+      const iconEl = document.getElementById('password-modal-icon');
+      if (iconEl) iconEl.innerHTML = icon('lock', 'w-5 h-5');
+      const input = document.getElementById('password-input');
+      input.value = '';
+      document.getElementById('password-error').classList.add('hidden');
+      document.getElementById('password-modal').classList.remove('hidden');
+      setTimeout(() => input.focus(), 50);
+    }
+
+    function closePasswordModal() {
+      document.getElementById('password-modal').classList.add('hidden');
+      renderSettingToggle();   // 취소했으면 사이드바 버튼 표시를 원래대로
+    }
+    function closePasswordOnBackdrop(e) { if (e.target.id === 'password-modal') closePasswordModal(); }
+
+    function submitPassword() {
+      const input = document.getElementById('password-input');
+      if (input.value === getSettingPassword()) {
+        markSettingUnlocked();
+        closePasswordModal();
+        openSettingView();
+      } else {
+        document.getElementById('password-error').classList.remove('hidden');
+        input.value = '';
+        input.focus();
+      }
+    }
+
+    // 설정 화면에서 비밀번호 변경
+    function changeSettingPassword() {
+      const a = document.getElementById('new-password-input');
+      const b = document.getElementById('new-password-confirm');
+      const msg = document.getElementById('password-change-msg');
+      const show = (text, ok) => {
+        msg.textContent = text;
+        msg.classList.toggle('text-gold2', !!ok);
+        msg.classList.toggle('text-amber-200', !ok);
+        msg.classList.toggle('text-muted', false);
+      };
+      const next = a.value.trim();
+      if (!next) { show('새 비밀번호를 입력하세요.', false); return; }
+      if (next !== b.value.trim()) { show('두 입력값이 다릅니다.', false); return; }
+      try {
+        localStorage.setItem(PASSWORD_STORAGE_KEY, next);
+        a.value = ''; b.value = '';
+        show('비밀번호를 변경했습니다. (이 기기에만 적용)', true);
+      } catch {
+        show('비밀번호를 저장하지 못했습니다.', false);
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] 테마 설정 (화이트 / 다크 / 시스템)
+    //   applyTheme / readThemePref 는 <head>에 미리 정의돼 있다. (깜빡임 방지)
+    // ---------------------------------------------------------------
+    const THEME_OPTIONS = [
+      { key: 'light', label: '화이트', icon: 'sun' },
+      { key: 'dark', label: '다크', icon: 'moon' },
+      { key: 'system', label: '시스템', icon: 'monitor' },
+    ];
+
+    function renderThemeButtons() {
+      const wrap = document.getElementById('theme-buttons');
+      if (!wrap) return;
+      const iconEl = document.getElementById('theme-setting-icon');
+      if (iconEl) iconEl.innerHTML = icon('sun', 'w-4 h-4');
+      const pwIconEl = document.getElementById('pw-setting-icon');
+      if (pwIconEl) pwIconEl.innerHTML = icon('lock', 'w-4 h-4');
+
+      const pref = readThemePref();
+      wrap.innerHTML = THEME_OPTIONS.map((o) => {
+        const active = pref === o.key;
+        return `<button type="button" onclick="setTheme('${o.key}')"
+          class="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-[1rem] transition whitespace-nowrap
+            ${active ? 'bg-gold text-ink border-gold font-semibold' : 'bg-ink2 text-muted border-line hover:bg-ink3'}">
+          ${icon(o.icon, 'w-4 h-4')} ${o.label}</button>`;
+      }).join('');
+    }
+
+    function setTheme(pref) {
+      try { localStorage.setItem(THEME_STORAGE_KEY, pref); } catch {}
+      applyTheme(pref);
+      renderThemeButtons();
     }
 
     // 오른쪽(기사 영역)에 키워드 설정 화면을 연다.
     function openSettingView() {
       settingMode = true;
+      renderThemeButtons();                          // [추가] 테마 버튼(현재 선택 상태) 갱신
       renderKeywordSettings();                       // 최신 값으로 입력칸 다시 그림
+      const pwMsg = document.getElementById('password-change-msg');
+      if (pwMsg) pwMsg.textContent = '';
       hideFallbackBanner();
       document.getElementById('news-list').classList.add('hidden');
       document.getElementById('cat-header').classList.add('hidden');
@@ -1550,9 +1803,9 @@
     //  showRelated=false 이면 '관련기사' 버튼을 뺀다. (관련기사 팝업 안의 기사에는 넣지 않음)
     function actionsHtml(item, showRelated = true) {
       const relatedBtn = showRelated ? `
-          <button onclick="openRelated(${item.id})" title="관련기사"
+          <button onclick="openRelated(${item.id})" title="관련 기사"
             class="flex items-center gap-1 bg-ink3 hover:bg-line text-paper text-[0.8rem] px-2 py-1 rounded-md transition border border-line whitespace-nowrap">
-            ${icon('link', 'w-3 h-3')} 관련기사
+            ${icon('link', 'w-3 h-3')} 관련 기사
           </button>` : '';
       return `
         <div class="shrink-0 flex items-center gap-1.5 flex-wrap sm:justify-end">
@@ -1560,9 +1813,9 @@
             class="flex items-center gap-1 bg-gold/15 hover:bg-gold/25 text-gold2 text-[0.8rem] px-2 py-1 rounded-md transition border border-gold/30 whitespace-nowrap">
             ${icon('sparkles', 'w-3 h-3')} 주요 내용
           </button>
-          <a href="${esc(articleLink(item))}" target="_blank" rel="noopener noreferrer" title="원문보기"
+          <a href="${esc(articleLink(item))}" target="_blank" rel="noopener noreferrer" title="원문 보기"
             class="flex items-center gap-1 text-wire hover:text-blue-300 text-[0.8rem] px-2 py-1 rounded-md transition border border-wire/30 bg-wire/10 whitespace-nowrap">
-            원문보기 ${icon('external-link', 'w-3 h-3')}
+            원문 보기 ${icon('external-link', 'w-3 h-3')}
           </a>
           ${relatedBtn}
         </div>`;
@@ -1869,7 +2122,7 @@
       return currentResults.find(n => n.id === id) || relatedItems.find(n => n.id === id);
     }
 
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeBrief(); closeRelated(); } });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeBrief(); closeRelated(); closePasswordModal(); } });
 
     // ---------------------------------------------------------------
     // 주요 내용 모달 (AI 정리)
@@ -1924,7 +2177,8 @@
       const item = findItem(id);
       if (!item) return;
 
-      const link = articleLink(item);   // [수정] 원문보기와 똑같은 주소를 AI 정리에도 사용
+      const link = articleLink(item);   // [수정] 원문 보기와 똑같은 주소를 AI 정리에도 사용
+      currentBriefId = id;              // [추가] 팝업 안 '관련 기사' 버튼이 쓸 기준 기사
       document.getElementById('brief-link').href = link;
       document.getElementById('brief-note').textContent = '';
       document.getElementById('brief-body').innerHTML = briefLoadingHtml();
@@ -1945,13 +2199,20 @@
         }
         document.getElementById('brief-body').innerHTML = briefHtml(data);
         document.getElementById('brief-note').textContent = data.partial
-          ? `원문 본문을 읽지 못해 네이버 요약문만으로 정리했습니다 · 자세한 내용은 원문보기를 이용하세요`
+          ? `원문 본문을 읽지 못해 네이버 요약문만으로 정리했습니다 · 자세한 내용은 원문 보기를 이용하세요`
           : `AI(${data.model || 'Gemini'})가 원문을 읽고 정리했습니다 · 사실 확인은 원문을 참고하세요`;
       } catch (e) {
         console.error(e);
         document.getElementById('brief-body').innerHTML =
           `<div class="text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3">정리를 불러오지 못했습니다.</div>`;
       }
+    }
+
+    // [추가] 주요 내용 팝업의 '관련 기사' → 같은 기사 기준으로 관련 기사 팝업을 연다.
+    //   관련 기사 팝업이 주요 내용 팝업 위에 뜨도록 z-index를 더 높게 잡아 두었다.
+    function openRelatedFromBrief() {
+      if (currentBriefId == null) return;
+      openRelated(currentBriefId);
     }
 
     function closeBrief() { document.getElementById('brief-modal').classList.add('hidden'); }

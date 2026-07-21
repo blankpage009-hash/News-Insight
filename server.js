@@ -316,6 +316,15 @@ const DOMAINS = {
               '전쟁','국제','현지시간','백악관'],
     exclude: [],
   },
+  // [추가] AI 도메인 : 인공지능 모델·기업·반도체 등 AI 맥락 단어
+  ai: {
+    context: ['AI','인공지능','생성형','거대언어모델','LLM','챗봇','모델','알고리즘',
+              '머신러닝','딥러닝','학습','추론','데이터센터','GPU','반도체','가속기',
+              '오픈AI','OpenAI','앤스로픽','Anthropic','클로드','Claude','챗GPT','GPT',
+              '제미나이','Gemini','그록','Grok','엔비디아','NVIDIA','구글','마이크로소프트',
+              '메타','네이버','카카오','AI반도체','서비스','기술','개발','출시'],
+    exclude: [],
+  },
   // [추가] 스포츠 도메인 : 경기/선수/리그 등 스포츠 맥락 단어
   sports: {
     context: ['경기','선수','감독','리그','우승','승리','패배','시즌','구단','팀',
@@ -908,6 +917,8 @@ const ALL_SECTIONS = [
   { key: 'economy', label: '경제', terms: ['경제 금리'], domain: 'economy' },
   { key: 'society', label: '정치/사회', terms: ['정치', '국회', '사건사고'], domain: 'society' },
   { key: 'global', label: '글로벌', terms: ['국제'], domain: 'global' },
+  // [추가] AI 섹션 (글로벌 아래 · 증시 위)
+  { key: 'ai', label: 'AI', terms: ['AI', '클로드', 'GPT', '제미나이', '그록', '엔비디아'], domain: 'ai' },
   { key: 'stock', label: '증시', terms: ['증시 코스피'], domain: 'stock' },
 ];
 
@@ -1483,7 +1494,15 @@ async function callGeminiOnce(model, prompt) {
   }
 }
 
-// 후보 목록을 돌면서 '되는 모델'을 찾아 한 번 호출한다 (404는 다음 후보로)
+// [추가] 구글 쪽 일시적 장애(모델 과부하 등) : 우리 잘못이 아니라 기다리거나 우회하면 되는 상태
+//   503 UNAVAILABLE = "This model is currently experiencing high demand" (가장 흔함)
+//   500/502/504 = 구글 내부 오류 · 게이트웨이 오류
+const GEMINI_TRANSIENT_STATUS = [500, 502, 503, 504];
+function isTransientGeminiError(e) { return GEMINI_TRANSIENT_STATUS.includes(e?.status); }
+
+// 후보 목록을 돌면서 '되는 모델'을 찾아 한 번 호출한다
+//  - 404(모델 없음)  → 다음 후보로
+//  - 503 등 일시 장애 → 그 모델이 붐비는 것이므로 역시 다음 후보로 우회
 async function callGeminiModels(prompt) {
   const list = ACTIVE_MODEL ? [ACTIVE_MODEL] : MODEL_CANDIDATES;
   let lastErr;
@@ -1502,9 +1521,17 @@ async function callGeminiModels(prompt) {
         if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt); }
         continue; // 모델이 없는 경우만 다음 후보로
       }
+      if (isTransientGeminiError(e)) {
+        console.warn(`[Gemini] ${model} 일시 장애(${e.status}) → 다른 모델로 우회 시도`);
+        // 확정 모델이 붐비는 중 → 확정을 풀고 나머지 후보들을 훑는다
+        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt); }
+        continue;
+      }
       throw e; // 400 / 429 등은 모델 문제가 아니므로 위로 던진다
     }
   }
+  // 모든 후보가 일시 장애였다면 그 상태(503 등)를 그대로 위로 올려 재시도 대상이 되게 한다
+  if (isTransientGeminiError(lastErr)) throw lastErr;
   throw new Error(`쓸 수 있는 Gemini 모델을 찾지 못했습니다. /api/gemini-models 로 확인해 보세요. (${lastErr?.message || ''})`);
 }
 
@@ -1534,11 +1561,25 @@ function enqueueGemini(task) {
 //   ③ 끝내 실패하면 사용자에게 '친절한 안내 메시지'를 던진다.
 // -----------------------------------------------------------------
 async function callGemini(prompt) {
-  const MAX_RETRY = 2; // 429일 때 최대 2번 더 시도
+  const MAX_RETRY = 2; // 429 / 503 등일 때 최대 2번 더 시도
   for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
     try {
       return await enqueueGemini(() => callGeminiModels(prompt));
     } catch (e) {
+      // [추가] 503(모델 과부하) 등 일시 장애 : 짧게 기다렸다 다시 시도
+      //   한도 초과(429)와 달리 금방 풀리는 경우가 많아 대기 시간을 더 짧게 잡는다.
+      if (isTransientGeminiError(e) && attempt < MAX_RETRY) {
+        const wait = Math.min(e.retryAfterMs || 2500 * Math.pow(2, attempt), 12000);
+        console.warn(`[Gemini] ${e.status} 일시 장애 → ${Math.round(wait / 1000)}초 후 재시도 (${attempt + 1}/${MAX_RETRY})`);
+        await sleep(wait);
+        continue;
+      }
+      if (isTransientGeminiError(e)) {
+        // 재시도까지 실패 → 개발자용 원문 대신 안내 문구로 바꿔서 올린다
+        const friendly = new Error('AI 서버가 잠시 붐비고 있어요. 30초쯤 뒤에 다시 시도해 주세요.');
+        friendly.status = e.status;
+        throw friendly;
+      }
       if (e.status === 429 && attempt < MAX_RETRY) {
         // 구글이 알려준 대기 시간이 있으면 그만큼, 없으면 8초 → 16초로 점점 늘려 기다린다
         const backoff = e.retryAfterMs || 8000 * Math.pow(2, attempt);
@@ -1599,7 +1640,7 @@ app.get('/api/deep-brief', async (req, res) => {
     }
 
     if (!body || body.length < 60) {
-      return res.json({ error: '원문 본문을 읽지 못했습니다. 해당 언론사가 자동 수집을 막았을 수 있습니다. (원문보기로 확인해 주세요)' });
+      return res.json({ error: '원문 본문을 읽지 못했습니다. 해당 언론사가 자동 수집을 막았을 수 있습니다. (원문 보기로 확인해 주세요)' });
     }
 
     // [토큰 절약] 본문을 3500자로 줄인다. 앞부분에 핵심이 몰려 있어
