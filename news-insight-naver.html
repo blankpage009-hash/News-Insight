@@ -317,6 +317,9 @@
         </div>
       </div>
 
+      <!-- [추가] 운임지수 섹션 전용 SCFI 지수 패널 (제목 바 바로 아래) -->
+      <div id="scfi-panel" class="hidden !mt-0"></div>
+
       <!-- [추가] 모바일 전용 하위 섹션 필터 칩 (좌측 사이드바가 위로 밀려도 여기서 바로 선택) -->
       <div id="mobile-subnav" class="gap-2 overflow-x-auto pb-1 -mx-1 px-1" style="display:none"></div>
 
@@ -809,6 +812,7 @@
       hideFallbackBanner();
       document.getElementById('news-list').classList.add('hidden');
       document.getElementById('cat-header').classList.add('hidden');
+      document.getElementById('scfi-panel').classList.add('hidden');
       const sub = document.getElementById('mobile-subnav');
       if (sub) sub.style.display = 'none';
       const iconEl = document.getElementById('setting-view-icon');
@@ -1254,6 +1258,83 @@
       document.getElementById('cat-header-count').textContent = visibleCount() + '건';
       syncHeaderFilters();
       el.classList.remove('hidden');
+      updateScfiPanel(keyword);
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] 운임지수 섹션 SCFI 패널
+    //  - '물류 > 운임지수'를 보고 있을 때만 제목 바 바로 아래에 표시한다.
+    //  - SCFI는 매주 금요일 1회 발표라 증감은 '전주대비'다.
+    // ---------------------------------------------------------------
+    let scfiData = null;        // 마지막으로 받아온 SCFI 값 (카테고리를 오갈 때 재사용)
+    let scfiFetching = false;
+
+    function scfiDateText(iso) {
+      if (!iso) return '';
+      const d = new Date(`${iso}T00:00:00+08:00`);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' });
+    }
+
+    function scfiPanelHtml() {
+      if (!scfiData) {
+        return `<div class="flex items-center gap-2 px-5 py-3 bg-panel/70 border border-line rounded-xl text-muted font-mono text-[0.9rem]">
+          ${icon('loader-2', 'w-4 h-4 animate-spin')}<span>SCFI 지수를 불러오는 중입니다...</span></div>`;
+      }
+      if (scfiData.error) {
+        return `<div class="px-5 py-3 bg-panel/70 border border-line rounded-xl text-muted font-mono text-[0.9rem]">
+          SCFI 지수를 불러오지 못했습니다.</div>`;
+      }
+      const d = scfiData;
+      const isUp = d.change > 0, isDown = d.change < 0;
+      const arrow = isUp ? '▲' : isDown ? '▼' : '－';
+      const colorClass = isUp ? 'text-rose-400' : isDown ? 'text-blue-400' : 'text-muted';
+      const fmt = n => Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const changeText = d.change === 0
+        ? '보합'
+        : `${arrow}${fmt(d.change)}p (${arrow}${Math.abs(d.changePercent).toFixed(2)}%)`;
+      return `<div class="flex items-center gap-x-4 gap-y-2 flex-wrap px-5 py-3 bg-panel/70 border border-gold/25 rounded-xl">
+        <span class="text-gold2 shrink-0">${icon('line-chart', 'w-4 h-4')}</span>
+        <span class="text-gold font-semibold tracking-wider whitespace-nowrap">SCFI 종합지수</span>
+        <span class="font-mono text-paper text-xl tabular-nums">${d.current.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        <span class="font-mono ${colorClass} tabular-nums whitespace-nowrap">${changeText}</span>
+        <span class="text-muted font-mono text-[0.8rem] whitespace-nowrap">전주(${scfiDateText(d.lastDate)}) ${d.previous.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 대비</span>
+        <span class="text-muted font-mono text-[0.8rem] ml-auto whitespace-nowrap">
+          ${scfiDateText(d.currentDate)} 발표${d.stale ? ' (캐시)' : ''} ·
+          <a href="${d.sourceUrl}" target="_blank" rel="noopener" class="hover:text-gold underline decoration-dotted">상하이해운거래소</a>
+        </span>
+      </div>`;
+    }
+
+    function updateScfiPanel(keyword) {
+      const el = document.getElementById('scfi-panel');
+      if (!el) return;
+      if (keyword || currentCategory !== 'logistics_freight') {
+        el.classList.add('hidden');
+        el.innerHTML = '';
+        return;
+      }
+      el.classList.remove('hidden');
+      el.innerHTML = scfiPanelHtml();
+      if (!scfiData) refreshScfi();
+    }
+
+    async function refreshScfi() {
+      if (scfiFetching) return;
+      scfiFetching = true;
+      try {
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/scfi`);
+        if (!res.ok) throw new Error('SCFI API 오류: ' + res.status);
+        scfiData = await res.json();
+      } catch (err) {
+        console.error(err);
+        scfiData = { error: true };
+      } finally {
+        scfiFetching = false;
+        // 응답이 오는 사이 다른 카테고리로 옮겼을 수 있으니 현재 화면 기준으로만 다시 그린다.
+        const keyword = document.getElementById('search-input').value.trim();
+        if (!settingMode) updateScfiPanel(keyword);
+      }
     }
 
     // ---------------------------------------------------------------
@@ -1308,6 +1389,7 @@
       isLoading = true;
       hideFallbackBanner();
       document.getElementById('cat-header').classList.add('hidden');
+      document.getElementById('scfi-panel').classList.add('hidden');
       setSearchButtonLoading(true);
       renderLoadingSkeleton();
 

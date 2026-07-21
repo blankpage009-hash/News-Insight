@@ -1852,6 +1852,57 @@ app.get('/api/market-extra', async (req, res) => {
   res.json({ items });
 });
 
+// -----------------------------------------------------------------
+// /api/scfi : SCFI(상하이 컨테이너 운임지수) 종합지수
+//  - 상하이해운거래소(SSE) 영문 사이트가 SCFI 표를 그릴 때 쓰는 JSON을 그대로 사용한다.
+//  - SCFI는 매주 금요일 1회 발표라 '전일대비'가 아니라 '전주대비'가 된다.
+//  - 노선별 수치는 로그인 회원에게만 제공되어 null로 오므로 종합지수만 쓴다.
+// -----------------------------------------------------------------
+const SCFI_URL = 'https://en.sse.net.cn/currentIndex?indexName=scfi';
+const SCFI_TTL = 30 * 60 * 1000; // 주 1회 갱신이라 30분 캐시로 충분
+let scfiCache = null; // { ts, payload }
+
+async function fetchScfi() {
+  const res = await fetchWithTimeout(SCFI_URL, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
+      Accept: 'application/json',
+      Referer: 'https://en.sse.net.cn/indices/scfinew.jsp',
+    },
+  }, 10000);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const d = data?.data;
+  const comp = d?.lineDataList?.find(x => x.dataItemTypeName === 'SCFI_T') || d?.lineDataList?.[0];
+  const current = toNum(comp?.currentContent);
+  if (!d || Number.isNaN(current)) throw new Error('SCFI 응답 형식 해석 불가');
+  return {
+    name: 'SCFI 종합지수',
+    current,
+    previous: toNum(comp?.lastContent),
+    change: toNum(comp?.absolute),
+    changePercent: toNum(comp?.percentage),
+    currentDate: d.currentDate || null,
+    lastDate: d.lastDate || null,
+    source: 'Shanghai Shipping Exchange',
+    sourceUrl: 'https://en.sse.net.cn/indices/scfinew.jsp',
+  };
+}
+
+app.get('/api/scfi', async (req, res) => {
+  if (scfiCache && Date.now() - scfiCache.ts < SCFI_TTL) return res.json(scfiCache.payload);
+  try {
+    const payload = await fetchScfi();
+    scfiCache = { ts: Date.now(), payload };
+    res.json(payload);
+  } catch (e) {
+    console.error('[SCFI 조회 실패]', e.message);
+    // 캐시가 있으면 만료됐더라도 빈 화면보다는 마지막 값을 보여주는 편이 낫다.
+    if (scfiCache) return res.json({ ...scfiCache.payload, stale: true });
+    res.status(502).json({ error: 'SCFI 지수를 가져오지 못했습니다.' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`네이버 뉴스 프록시 서버 실행 중: http://localhost:${PORT}`);
 });
