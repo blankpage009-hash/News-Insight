@@ -141,6 +141,66 @@
     }
   }
 
+  /* ---------------------------------------------------------------
+     [추가] 모바일(<1024px) 전용 조정
+       데스크톱 레이아웃은 건드리지 않고 이 블록 안에서만 다르게 잡는다.
+       1) 좌측 SECTION 목록 → 화면 밖에 숨겨두는 슬라이드 패널(드로어)
+       2) 스크롤을 내리면 상단 고정바(헤더+티커)를 축소해 읽는 영역을 넓힌다
+     --------------------------------------------------------------- */
+  #nav-scrim { display: none; }
+
+  @media (max-width: 1023px) {
+    /* --- 1) 사이드바를 드로어로 --- */
+    #sidebar {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      z-index: 60;
+      width: min(86vw, 340px);
+      padding: 12px;
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      background: rgb(var(--c-ink));
+      border-right: 1px solid rgb(var(--c-line));
+      transform: translateX(-100%);
+      transition: transform .24s ease;
+    }
+    body.nav-open #sidebar { transform: translateX(0); }
+    body.nav-open { overflow: hidden; }   /* 드로어 열려 있는 동안 본문 스크롤 잠금 */
+
+    #nav-scrim {
+      display: block;
+      position: fixed; inset: 0; z-index: 55;
+      background: rgb(0 0 0 / .5);
+      opacity: 0; pointer-events: none;
+      transition: opacity .24s ease;
+    }
+    body.nav-open #nav-scrim { opacity: 1; pointer-events: auto; }
+
+    /* --- 2) 스크롤 시 상단바 축소 (body.tb-compact) --- */
+    #top-bar .ticker-viewport,
+    #app-header, #app-logo, #app-title {
+      transition: max-height .2s ease, opacity .2s ease, padding .2s ease,
+                  width .2s ease, height .2s ease, font-size .2s ease;
+    }
+    body.tb-compact .ticker-viewport {
+      max-height: 0; opacity: 0;
+      padding-top: 0; padding-bottom: 0;
+      border-bottom-width: 0;
+      overflow: hidden;
+    }
+    body.tb-compact #app-header { padding-top: .4rem; padding-bottom: .4rem; }
+    body.tb-compact #app-logo { width: 1.9rem; height: 1.9rem; }
+    body.tb-compact #app-title { font-size: 1.15rem; }
+    body.tb-compact #app-subtitle { display: none; }
+
+    /* --- 카테고리 제목 바가 2줄로 밀리지 않게 압축 --- */
+    #cat-header > div { padding: .5rem .75rem; gap: .375rem .5rem; }
+    #cat-header select { padding: .1rem .35rem; font-size: .78rem; }
+    #cat-header h2 { font-size: 1.05rem; }
+  }
+
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgb(var(--c-scrollbar)); border-radius: 999px; }
@@ -156,14 +216,19 @@
 
   <!-- 헤더 + 지수 티커 (스크롤해도 상단 고정) -->
   <div class="sticky top-0 z-40" id="top-bar">
-  <header class="border-b border-line bg-ink/90 backdrop-blur px-6 py-4 flex justify-between items-center">
-    <div class="flex items-center gap-3">
-      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-gold to-gold2 flex items-center justify-center shrink-0">
+  <header id="app-header" class="border-b border-line bg-ink/90 backdrop-blur px-4 py-3 lg:px-6 lg:py-4 flex justify-between items-center">
+    <div class="flex items-center gap-2 lg:gap-3 min-w-0">
+      <!-- [추가] 모바일 전용 : 좌측 SECTION 드로어 열기 -->
+      <button id="nav-toggle-btn" onclick="toggleNav()" aria-label="섹션 메뉴 열기" aria-expanded="false"
+        class="lg:hidden -ml-1 p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
+        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+      </button>
+      <div id="app-logo" class="w-9 h-9 rounded-lg bg-gradient-to-br from-gold to-gold2 flex items-center justify-center shrink-0">
         <svg class="w-5 h-5 text-ink" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8z"/></svg>
       </div>
-      <div class="leading-tight">
-        <h1 class="font-sans font-bold tracking-wide text-paper text-2xl sm:text-3xl">Beyond News</h1>
-        <p class="font-mono text-muted tracking-widest text-[0.65rem] sm:text-xs">REAL-TIME WIRE DESK</p>
+      <div class="leading-tight min-w-0">
+        <h1 id="app-title" class="font-sans font-bold tracking-wide text-paper text-2xl sm:text-3xl">Beyond News</h1>
+        <p id="app-subtitle" class="font-mono text-muted tracking-widest text-[0.65rem] sm:text-xs">REAL-TIME WIRE DESK</p>
       </div>
     </div>
     <div class="flex items-center gap-4">
@@ -186,15 +251,25 @@
   </div>
   </div>
 
-  <!-- 메인 -->
-  <main class="max-w-[1500px] mx-auto p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+  <!-- [추가] 모바일 드로어 뒷배경 (눌러서 닫기) -->
+  <div id="nav-scrim" onclick="closeNav()" aria-hidden="true"></div>
 
-    <!-- 좌측 사이드바 -->
-    <aside class="lg:col-span-1 side-scroll">
+  <!-- 메인 -->
+  <main class="max-w-[1500px] mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+
+    <!-- 좌측 사이드바 (모바일에서는 햄버거로 여는 슬라이드 드로어) -->
+    <aside id="sidebar" class="lg:col-span-1 side-scroll">
       <div class="bg-ink2/70 border border-line rounded-2xl p-5 space-y-3">
 
         <!-- 제목(영문) : 기존 1.18rem → 3pt(=4px) 크게 -->
-        <h2 class="font-semibold text-muted uppercase tracking-[0.2em] text-[1.45rem]">SECTION</h2>
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="font-semibold text-muted uppercase tracking-[0.2em] text-[1.45rem]">SECTION</h2>
+          <!-- [추가] 모바일 드로어 닫기 -->
+          <button onclick="closeNav()" aria-label="메뉴 닫기"
+            class="lg:hidden -mr-1 p-1.5 rounded-lg text-muted hover:text-gold hover:bg-ink3 transition shrink-0">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
 
         <!-- [추가] SECTION 제목 아래 구분선 -->
         <div class="border-t border-line"></div>
@@ -858,6 +933,17 @@
       window.addEventListener('resize', updateStickTop);
       window.addEventListener('resize', renderMobileSubnav);   // [추가] 회전/리사이즈 시 모바일 칩 갱신
 
+      // [추가] 모바일 드로어 / 상단바 축소
+      window.addEventListener('scroll', updateTopBarCompact, { passive: true });
+      window.addEventListener('resize', () => {
+        if (!isMobileLayout()) closeNav();   // 데스크톱 폭으로 넓히면 드로어 상태 해제
+        updateTopBarCompact();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && document.body.classList.contains('nav-open')) closeNav();
+      });
+      updateTopBarCompact();
+
       // [추가] 제목 바 틀고정 '유격' 방지 :
       //   웹폰트 로딩·레이아웃이 확정된 뒤 상단바 높이를 다시 재서 고정 위치를 정확히 맞춘다.
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(updateStickTop);
@@ -885,6 +971,53 @@
     }
 
     // ---------------------------------------------------------------
+    // [추가] 모바일 SECTION 드로어
+    //   - 데스크톱(≥1024px)에서는 사이드바가 항상 보이므로 아무 동작도 하지 않는다.
+    //   - 열림 상태는 <body class="nav-open"> 하나로만 관리하고 나머지는 CSS가 처리한다.
+    // ---------------------------------------------------------------
+    function isMobileLayout() { return window.innerWidth < 1024; }
+
+    function setNav(open) {
+      const on = open && isMobileLayout();
+      document.body.classList.toggle('nav-open', on);
+      const btn = document.getElementById('nav-toggle-btn');
+      if (btn) btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    }
+    function toggleNav() { setNav(!document.body.classList.contains('nav-open')); }
+    function closeNav() { setNav(false); }
+
+    // ---------------------------------------------------------------
+    // [추가] 모바일에서 스크롤을 내리면 상단 고정바(헤더+티커)를 축소한다.
+    //   임계값을 위/아래로 벌려(120 / 60) 경계에서 깜빡이지 않게 한다.
+    // ---------------------------------------------------------------
+    function updateTopBarCompact() {
+      const before = document.body.classList.contains('tb-compact');
+      if (!isMobileLayout()) {
+        document.body.classList.remove('tb-compact');
+      } else {
+        const y = window.scrollY || 0;
+        if (y > 120) document.body.classList.add('tb-compact');
+        else if (y < 60) document.body.classList.remove('tb-compact');
+      }
+      // 축소/복원이 실제로 일어났으면, 애니메이션(0.2s)이 끝날 때까지 상단바 높이를
+      // 계속 다시 재서 아래 제목 바(cat-header)가 뜨거나 겹치지 않게 맞춘다.
+      if (document.body.classList.contains('tb-compact') !== before) syncStickTopDuringTransition();
+    }
+
+    let stickSyncUntil = 0, stickSyncRunning = false;
+    function syncStickTopDuringTransition() {
+      stickSyncUntil = performance.now() + 300;
+      if (stickSyncRunning) return;
+      stickSyncRunning = true;
+      const step = () => {
+        updateStickTop();
+        if (performance.now() < stickSyncUntil) requestAnimationFrame(step);
+        else stickSyncRunning = false;
+      };
+      requestAnimationFrame(step);
+    }
+
+    // ---------------------------------------------------------------
     // 키워드 검색 토글 (카테고리 메뉴 항목)
     // ---------------------------------------------------------------
     function renderSearchToggle() {
@@ -901,6 +1034,7 @@
     // 사이드바 '키워드 검색' → 오른쪽 기사 영역 위에 검색 팝업을 연다/닫는다.
     function toggleSearchPanel() {
       expandedSearch = !expandedSearch;
+      closeNav();            // [추가] 모바일 : 드로어를 닫아야 기사 영역의 팝업이 보인다
       renderSearchToggle();
       if (expandedSearch) {
         window.scrollTo({ top: 0, behavior: 'smooth' });   // 팝업이 화면 상단에 보이도록
@@ -944,6 +1078,7 @@
 
     // [수정] 설정은 비밀번호로 잠겨 있다. 이미 확인한 세션이면 바로 열린다.
     function toggleSettingPanel() {
+      closeNav();            // [추가] 모바일 : 설정은 기사 영역에 열리므로 드로어를 닫는다
       if (settingMode) { closeSettingView(false); return; }
       if (isSettingUnlocked()) openSettingView();
       else openPasswordModal();
@@ -1322,12 +1457,23 @@
       } else {
         setExpanded(cat, true);
       }
+      // [추가] 모바일 : 여기서부터는 실제로 섹션을 이동하므로 드로어를 닫는다.
+      //   (위에서 return 되는 '목록 접기'만 한 경우에는 열어둔 채로 남긴다)
+      if (document.body.classList.contains('nav-open')) {
+        closeNav();
+        window.scrollTo({ top: 0 });
+      }
       currentCategory = cat;
       renderCategoryButtons();
       runSearch();
     }
 
     function selectCategory(cat) {
+      // [추가] 모바일 : 드로어를 닫고 기사 맨 위부터 보여준다
+      if (document.body.classList.contains('nav-open')) {
+        closeNav();
+        window.scrollTo({ top: 0 });
+      }
       exitKeywordSearch();   // 키워드 검색 결과를 보다가 섹션을 누르면 검색을 닫고 이동
       applyBriefingCountDefault(cat, currentCategory);
       currentCategory = cat;
