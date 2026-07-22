@@ -2159,12 +2159,27 @@ function warmTargets() {
   ];
 }
 
+// 프리워밍에 쓸 키워드. 반드시 '화면이 실제로 쓰는 값'과 같아야 한다.
+//   다르면 엉뚱한 기사로 캐시를 데우게 되어 프리워밍이 헛돈다.
+//   로컬 파일은 재배포 때 사라지고 기동 직후엔 비어 있으므로, 원본인
+//   Supabase를 먼저 읽고 실패했을 때만 파일 캐시로 물러선다.
+async function readWarmKeywords() {
+  if (SUPABASE_ENABLED) {
+    try {
+      return await readKeywordsFromSupabase();
+    } catch (e) {
+      console.error('[프리워밍] 키워드 조회 실패, 파일 캐시 사용:', e.message);
+    }
+  }
+  return readKeywordsFile();
+}
+
 async function warmCache() {
   if (warming) return;              // 이전 회차가 아직 안 끝났으면 건너뛴다
   warming = true;
   const t0 = Date.now();
   const before = articleTextCache.size;
-  const kwMap = readKeywordsFile();  // 사용자가 저장한 키워드로 데워야 실제 화면과 맞는다
+  const kwMap = await readWarmKeywords();
   try {
     const targets = warmTargets();
     for (let i = 0; i < targets.length; i++) {
