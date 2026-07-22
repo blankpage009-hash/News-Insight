@@ -349,10 +349,182 @@ function hitCount(text, words) {
 // -----------------------------------------------------------------
 const LEAD_CHARS = 700;      // 리드문으로 볼 본문 앞부분 길이
 const VERIFY_LIMIT = 20;     // 원문을 읽어볼 최대 후보 수(속도 보호)
-const VERIFY_CONCURRENCY = 6;
+// 원문 확인은 거의 전부 '네트워크 대기'다(측정: 대기 25.9초 / CPU 0.06초).
+// 동시성이 낮으면 느린 언론사 한 곳이 워커 하나를 붙잡아 그 줄 전체가 밀린다.
+// 6 → 20 으로 올려 느린 꼬리가 전체를 지연시키지 않게 한다.
+const VERIFY_CONCURRENCY = 20;
 
-const articleTextCache = new Map(); // url -> { ts, text }
-const ARTICLE_TTL = 1000 * 60 * 30;
+// url -> { ts, text, lead }   (Map = 삽입순 유지 → LRU 로 씀)
+//   lead=true 는 '리드문만 있는 항목'이라는 표시다. 정확도 검증에는 충분하지만
+//   딥브리핑처럼 본문 전체가 필요한 곳에서는 다시 읽어야 한다.
+const articleTextCache = new Map();
+// 기사 본문은 한 번 게재되면 바뀌지 않는다. TTL을 짧게 둘 이유가 없고,
+// 짧으면 같은 기사를 반복해서 다시 읽느라 느려진다. 6시간으로 둔다.
+const ARTICLE_TTL = 1000 * 60 * 60 * 6;
+
+// -----------------------------------------------------------------
+// [속도] 본문 캐시 영속화
+//   측정 결과 같은 요청이 캐시 미스일 때 6.4초, 히트일 때 0.13초였다(약 50배).
+//   기존 캐시는 프로세스 메모리에만 있어 재배포·재시작마다 전부 날아갔고,
+//   그래서 사용자는 늘 '콜드' 상태를 만났다. 디스크에 남겨 재시작을 견디게 한다.
+//
+//   - 저장은 성공한 본문만 (실패는 FAIL_TTL 2분짜리라 남길 가치가 없다)
+//   - 본문은 4000자까지만 저장한다. 소비처가 검증 700자 / 딥브리핑 3500자라 충분하다.
+//   - 항목 수 상한을 둬 무한 증식(메모리 누수)을 막는다.
+//
+//   [2단 저장]
+//     1단 로컬 파일  : 빠르고 자주(1분) 쓴다. 재시작을 견딘다.
+//     2단 Supabase  : 느리고 드물게(5분) 쓴다. '재배포'까지 견딘다.
+//   Render 같은 배포 환경은 재배포 때 컨테이너 디스크가 통째로 초기화되므로
+//   로컬 파일만으로는 부족하다. 키워드 설정과 같은 app_settings 테이블을 쓰므로
+//   추가 마이그레이션(테이블 생성)은 필요 없다.
+//
+//   Supabase 사본은 전송량을 줄이려고 '리드문 800자'만 담는다. 이게 정확도
+//   검증(700자)에 필요한 전부다. 본문 전체가 필요한 딥브리핑은 lead 표시를
+//   보고 그때 다시 읽는다.
+// -----------------------------------------------------------------
+const CACHE_DIR = path.join(__dirname, '.cache');
+const ARTICLE_CACHE_FILE = path.join(CACHE_DIR, 'article-text.json');
+const ARTICLE_CACHE_MAX = 5000;   // 보관할 최대 기사 수
+const ARTICLE_TEXT_MAX = 4000;    // 기사 1건당 저장할 최대 글자 수
+const ARTICLE_SAVE_INTERVAL = 60 * 1000;
+
+const ARTICLE_CACHE_ROW_KEY = 'article_cache';
+const ARTICLE_LEAD_STORE = 800;          // Supabase 사본에 담을 글자 수
+const SUPA_CACHE_MAX = 1500;             // Supabase 사본에 담을 최대 기사 수
+// Supabase 쓰기는 드물게 한다. 사본이 1500건이면 한 번에 1MB가 넘어가는데,
+// 프리워밍(30분)마다 쓰면 무료 티어 대역폭을 크게 잠식한다. 사본은 '재배포를
+// 견디기 위한 예비본'일 뿐이라 최대 2시간 뒤처져도 손해가 거의 없다.
+//   (재배포 직후 프리워밍이 60초 안에 최신분을 다시 채운다)
+const SUPA_MIN_SAVE_GAP = 2 * 60 * 60 * 1000;
+
+let articleCacheDirty = false;
+let supaCacheDirty = false;
+let supaLastSaved = 0;
+
+function loadArticleCache() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(ARTICLE_CACHE_FILE, 'utf8'));
+    if (!Array.isArray(raw)) return;
+    const now = Date.now();
+    let n = 0;
+    for (const [url, ts, text, lead] of raw) {
+      if (!url || !text) continue;
+      if (now - ts >= ARTICLE_TTL) continue;   // 이미 만료된 건 버린다
+      articleTextCache.set(url, { ts, text, lead: Boolean(lead) });
+      n++;
+    }
+    console.log(`[캐시] 로컬 파일에서 기사 본문 ${n}건을 불러왔습니다.`);
+  } catch {
+    /* 파일이 없거나 깨졌으면 빈 캐시로 시작 (정상 동작) */
+  }
+}
+
+function saveArticleCache() {
+  if (!articleCacheDirty) return;
+  articleCacheDirty = false;
+  try {
+    const now = Date.now();
+    const rows = [];
+    for (const [url, v] of articleTextCache) {
+      if (!v.text || now - v.ts >= ARTICLE_TTL) continue;
+      rows.push([url, v.ts, v.text, v.lead ? 1 : 0]);
+    }
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    // 키워드 파일과 같은 방식: 임시 파일에 쓰고 교체 → 저장 중 죽어도 안 깨진다
+    const tmp = ARTICLE_CACHE_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(rows), 'utf8');
+    fs.renameSync(tmp, ARTICLE_CACHE_FILE);
+  } catch (e) {
+    console.error('[캐시 저장 실패]', e.message);   // 캐시일 뿐이라 실패해도 서비스는 계속
+  }
+}
+
+// Supabase 사본 : 리드문만, 최근 것부터 SUPA_CACHE_MAX 건
+async function saveArticleCacheToSupabase() {
+  if (!SUPABASE_ENABLED || !supaCacheDirty) return;
+  const now = Date.now();
+  if (now - supaLastSaved < SUPA_MIN_SAVE_GAP) return;   // 너무 잦은 쓰기는 건너뛴다
+  const prevSaved = supaLastSaved;
+  supaCacheDirty = false;
+  supaLastSaved = now;
+  const rows = [];
+  // Map은 오래된 것이 앞이므로 뒤에서부터 채워 '최근 것'을 남긴다
+  const all = [...articleTextCache];
+  for (let i = all.length - 1; i >= 0 && rows.length < SUPA_CACHE_MAX; i--) {
+    const [url, v] = all[i];
+    if (!v.text || now - v.ts >= ARTICLE_TTL) continue;
+    rows.push([url, v.ts, v.text.slice(0, ARTICLE_LEAD_STORE)]);
+  }
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/${SETTINGS_TABLE}?on_conflict=key`;
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify([{
+        key: ARTICLE_CACHE_ROW_KEY,
+        value: rows,
+        updated_at: new Date().toISOString(),
+      }]),
+    }, 15000);
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
+  } catch (e) {
+    console.error('[캐시 Supabase 저장 실패]', e.message);   // 로컬 파일은 이미 있으므로 서비스는 계속
+    supaCacheDirty = true;      // 다음 회차에 다시 시도하되,
+    supaLastSaved = prevSaved;  //   간격 제한에 걸려 2시간 묶이지 않게 되돌린다
+  }
+}
+
+// 재배포 직후처럼 로컬 파일이 비었을 때 Supabase 사본으로 캐시를 채운다.
+//   이미 메모리에 있는 항목(=로컬 파일이 더 온전함)은 덮어쓰지 않는다.
+async function loadArticleCacheFromSupabase() {
+  if (!SUPABASE_ENABLED) return;
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/${SETTINGS_TABLE}`
+      + `?key=eq.${encodeURIComponent(ARTICLE_CACHE_ROW_KEY)}&select=value`;
+    const res = await fetchWithTimeout(url, { headers: supabaseHeaders() }, 15000);
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
+    const body = await res.json();
+    const rows = Array.isArray(body) && body.length ? body[0].value : null;
+    if (!Array.isArray(rows)) return;
+
+    const now = Date.now();
+    let n = 0;
+    for (const [u, ts, text] of rows) {
+      if (!u || !text || articleTextCache.has(u)) continue;
+      if (now - ts >= ARTICLE_TTL) continue;
+      articleTextCache.set(u, { ts, text, lead: true });   // 리드문만 있는 항목
+      n++;
+    }
+    if (n) console.log(`[캐시] Supabase에서 기사 리드문 ${n}건을 복원했습니다.`);
+  } catch (e) {
+    console.error('[캐시 Supabase 복원 실패]', e.message);   // 없으면 그냥 콜드로 시작
+  }
+}
+
+// 캐시에 넣으면서 LRU 상한을 지킨다
+function putArticleText(url, text) {
+  const trimmed = text ? String(text).slice(0, ARTICLE_TEXT_MAX) : '';
+  articleTextCache.delete(url);                      // 다시 넣어 '가장 최근'으로 이동
+  articleTextCache.set(url, { ts: Date.now(), text: trimmed, lead: false });
+  while (articleTextCache.size > ARTICLE_CACHE_MAX) {
+    articleTextCache.delete(articleTextCache.keys().next().value);   // 가장 오래된 것부터
+  }
+  if (trimmed) { articleCacheDirty = true; supaCacheDirty = true; }
+}
+
+loadArticleCache();
+loadArticleCacheFromSupabase();   // 비동기: 로컬 파일이 비어 있을 때를 메운다
+setInterval(saveArticleCache, ARTICLE_SAVE_INTERVAL).unref();
+// Supabase 사본은 프리워밍이 끝날 때 저장한다(SUPA_MIN_SAVE_GAP 으로 빈도 제한).
+//   별도 타이머를 두면 같은 일을 두 곳에서 하게 되므로 두지 않는다.
+['SIGINT', 'SIGTERM'].forEach((sig) =>
+  process.once(sig, async () => {
+    saveArticleCache();
+    await saveArticleCacheToSupabase();   // 재배포 직전 마지막 사본을 남긴다
+    process.exit(0);
+  })
+);
 
 // 지정한 밀리초만큼 잠깐 기다린다 (429 재시도·호출 간격 조절용)
 function sleep(ms) {
@@ -518,10 +690,13 @@ async function fetchHtml(url) {
 }
 
 // 원문 페이지 본문 텍스트 추출 (실패 시 빈 문자열)
-async function fetchArticleText(url) {
+//   full=true : 본문 전체가 필요하다는 뜻. Supabase에서 복원한 '리드문만' 항목은
+//               캐시 히트로 치지 않고 원문을 다시 읽는다. (딥브리핑 등)
+async function fetchArticleText(url, { full = false } = {}) {
   if (!url || /^https?:\/\//i.test(url) === false) return '';
   const c = articleTextCache.get(url);
-  if (c && Date.now() - c.ts < (c.text ? ARTICLE_TTL : FAIL_TTL)) return c.text;
+  const usable = c && !(full && c.lead);
+  if (usable && Date.now() - c.ts < (c.text ? ARTICLE_TTL : FAIL_TTL)) return c.text;
 
   let text = '';
   try {
@@ -530,8 +705,8 @@ async function fetchArticleText(url) {
   } catch {
     text = '';
   }
-  articleTextCache.set(url, { ts: Date.now(), text });
-  return text;
+  putArticleText(url, text);
+  return text.slice(0, ARTICLE_TEXT_MAX);
 }
 
 // [D] 같은 기사를 가리키는 '읽어볼 만한 주소' 목록을 만든다
@@ -549,10 +724,11 @@ function articleUrlCandidates(url, naverUrl) {
 }
 
 // 후보 주소를 차례로 읽어 '가장 긴 본문'을 고른다
+//   요약·브리핑용이라 본문 전체가 필요하다 → full:true 로 읽는다
 async function fetchArticleTextSmart(url, naverUrl, minLen = 200) {
   let best = '';
   for (const u of articleUrlCandidates(url, naverUrl)) {
-    const t = await fetchArticleText(u);
+    const t = await fetchArticleText(u, { full: true });
     if (t.length > best.length) best = t;
     if (best.length >= minLen) break;
   }
@@ -691,12 +867,20 @@ async function naverSearchRaw(query, display = 30, sort = 'date', start = 1) {
     sort: sort === 'sim' ? 'sim' : 'date',
   });
 
-  const res = await fetch(`https://naverapihub.apigw.ntruss.com/search/v1/news?${params.toString()}`, {
-    headers: {
-      'X-NCP-APIGW-API-KEY-ID': NAVER_CLIENT_ID,
-      'X-NCP-APIGW-API-KEY': NAVER_CLIENT_SECRET,
-    },
-  });
+  // 429(Rate Limited)는 잠깐 쉬면 대개 풀린다. 짧게 물러섰다가 두 번까지 다시 시도한다.
+  //   재시도하지 않으면 그 섹션이 통째로 빈 결과가 되어 화면이 비어 보인다.
+  const url = `https://naverapihub.apigw.ntruss.com/search/v1/news?${params.toString()}`;
+  const headers = {
+    'X-NCP-APIGW-API-KEY-ID': NAVER_CLIENT_ID,
+    'X-NCP-APIGW-API-KEY': NAVER_CLIENT_SECRET,
+  };
+
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetchWithTimeout(url, { headers }, 5000);
+    if (res.status !== 429 || attempt >= 2) break;
+    await sleep(400 * (attempt + 1));   // 400ms → 800ms
+  }
 
   if (!res.ok) {
     const text = await res.text();
@@ -1944,6 +2128,70 @@ app.get('/api/scfi', async (req, res) => {
   }
 });
 
+// -----------------------------------------------------------------
+// [속도] 백그라운드 프리워밍
+//   느림의 정체는 '원문 본문을 처음 읽는 시간'이다. 그 값을 사용자가 아니라
+//   서버가 미리 치르게 한다. 기동 직후 한 번, 이후 주기적으로 섹션을 훑어
+//   본문 캐시를 채워두면 사용자는 항상 캐시 히트 상태를 만난다.
+//
+//   섹션은 한 번에 하나씩(순차) 돌린다. 동시에 돌리면 프리워밍이 실사용
+//   요청과 외부 연결을 놓고 경쟁해 오히려 응답을 느리게 만든다.
+//
+//   [중요] 반드시 '천천히' 돌아야 한다. 섹션을 쉬지 않고 이어 돌리면 네이버
+//   검색 API가 429(Rate Limited)를 돌려주고, 그러면 프리워밍은 물론 같은
+//   시간대의 실사용 요청까지 빈 결과를 받는다. 섹션 사이에 간격을 둔다.
+// -----------------------------------------------------------------
+// 30분마다. 한 회차에 네이버 검색 API를 약 78회 쓰므로 하루 약 3,700회다.
+//   (무료 한도 25,000회/일의 약 15% — 나머지는 실사용 요청 몫으로 남긴다)
+// 본문 캐시 TTL이 6시간이라 이 주기로도 캐시는 계속 데워진 상태로 유지된다.
+const WARM_INTERVAL = 30 * 60 * 1000;
+const WARM_START_DELAY = 5 * 1000;      // 기동 직후 서버가 자리잡을 시간
+const WARM_GAP = 2500;                  // 섹션 사이 간격 (네이버 호출량 분산)
+let warming = false;
+
+function warmTargets() {
+  return [
+    ...ALL_SECTIONS,
+    ...LOGISTICS_SECTIONS,
+    ...STOCK_SECTIONS,
+    ...SPORTS_SECTIONS,
+    ...ECONOMY_SECTIONS,
+  ];
+}
+
+async function warmCache() {
+  if (warming) return;              // 이전 회차가 아직 안 끝났으면 건너뛴다
+  warming = true;
+  const t0 = Date.now();
+  const before = articleTextCache.size;
+  const kwMap = readKeywordsFile();  // 사용자가 저장한 키워드로 데워야 실제 화면과 맞는다
+  try {
+    const targets = warmTargets();
+    for (let i = 0; i < targets.length; i++) {
+      const sec = targets[i];
+      if (i > 0) await sleep(WARM_GAP);   // 네이버 API 429 방지
+      try {
+        const { terms, exclude } = resolveSectionKw(kwMap, sec);
+        if (sec.breaking) await fetchBreaking(30, terms, exclude);
+        else await searchByTerms(terms, { display: 30, hours: '24', domain: sec.domain, exclude });
+      } catch (e) {
+        console.error(`[프리워밍] ${sec.key} 실패:`, e.message);   // 한 섹션 실패가 전체를 멈추지 않게
+      }
+    }
+    // 캐시가 막 채워진 지금이 사본을 남기기 가장 좋은 시점이다.
+    //   종료 훅은 배포판이 프로세스를 즉시 죽이면 실행되지 않으므로 믿지 않는다.
+    saveArticleCache();
+    await saveArticleCacheToSupabase();
+    console.log(
+      `[프리워밍] 완료 ${Math.round((Date.now() - t0) / 1000)}초 · 본문 캐시 ${before} → ${articleTextCache.size}건`
+    );
+  } finally {
+    warming = false;
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`네이버 뉴스 프록시 서버 실행 중: http://localhost:${PORT}`);
+  setTimeout(warmCache, WARM_START_DELAY).unref();
+  setInterval(warmCache, WARM_INTERVAL).unref();
 });
