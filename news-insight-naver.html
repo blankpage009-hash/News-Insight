@@ -106,30 +106,32 @@
      각 조각의 폭은 자기 높이 × (조각폭/385) 로 계산한다.
      --------------------------------------------------------------- */
   #app-logo {
-    --logo-h: 1.5rem;                            /* 마크 높이(기존 h-6과 동일) */
-    --logo-word-h: calc(var(--logo-h) + 2.7px);  /* 글자만 2pt 크게 */
+    --logo-h: 1.5rem;                              /* 마크 높이(기존 h-6과 동일) */
+    --logo-word-h: calc(var(--logo-h) + 4.05px);   /* 글자만 3pt 크게 */
   }
   @media (min-width: 640px)  { #app-logo { --logo-h: 1.75rem; } }
   @media (min-width: 1024px) { #app-logo { --logo-h: 2rem; } }
 
-  .logo-mark, .logo-word {
+  /* 배경이미지 축소 대신 <img> 를 잘라 쓴다.
+     (브라우저의 이미지 전용 고품질 축소 경로를 타서 글자 가장자리가 매끄럽다) */
+  .logo-part { display: block; overflow: hidden; }
+  .logo-part img {
     display: block;
-    background-image: url('logo-mark.png');
-    background-repeat: no-repeat;
+    height: 100%;
+    width: auto;
+    max-width: none;
+    image-rendering: auto;
   }
   .logo-mark {
     height: var(--logo-h);
-    width: calc(var(--logo-h) * 1.4597);            /* 562/385 */
-    background-size: calc(var(--logo-h) * 6.0935) var(--logo-h);   /* 2346/385 */
-    background-position: 0 0;
+    width: calc(var(--logo-h) * 1.4597);              /* 562/385 */
   }
   .logo-word {
     height: var(--logo-word-h);
-    width: calc(var(--logo-word-h) * 4.3896);        /* 1690/385 */
-    background-size: calc(var(--logo-word-h) * 6.0935) var(--logo-word-h);
-    background-position: calc(var(--logo-word-h) * -1.7039) 0;     /* 656/385 */
-    margin-left: calc(var(--logo-h) * 0.244);        /* 원본의 마크~글자 간격(94px) */
+    width: calc(var(--logo-word-h) * 4.3896);         /* 1690/385 */
+    margin-left: calc(var(--logo-h) * 0.244);         /* 원본의 마크~글자 간격(94px) */
   }
+  .logo-word img { margin-left: calc(var(--logo-word-h) * -1.7039); }   /* 656/385 */
 
   html { font-size: 15px; }
   body { font-family: 'Pretendard Variable', Pretendard, sans-serif; }
@@ -288,8 +290,8 @@
           <!-- [수정] 로고 이미지(마크+워드마크)를 두 조각으로 잘라 각각 크기를 따로 준다.
                (마크는 그대로, 'Beyond News' 글자만 조금 크게) -->
           <span id="app-logo" role="img" aria-label="Beyond News" class="flex items-end">
-            <span class="logo-mark"></span>
-            <span class="logo-word"></span>
+            <span class="logo-part logo-mark"><img src="logo-mark.png" alt="" aria-hidden="true"></span>
+            <span class="logo-part logo-word"><img src="logo-mark.png" alt="" aria-hidden="true"></span>
           </span>
         </h1>
         <p id="app-subtitle" class="font-sans font-medium text-muted tracking-wide leading-none text-xs sm:text-sm whitespace-nowrap hidden sm:block">Real-Time Wire Desk</p>
