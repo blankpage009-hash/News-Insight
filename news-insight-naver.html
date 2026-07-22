@@ -99,8 +99,53 @@
   /* 로고 원본은 흰색 → 화이트 테마에서는 반전시켜 어둡게 */
   :root[data-theme="light"] #app-logo { filter: invert(1) brightness(.18); }
 
+  /* ---------------------------------------------------------------
+     로고 : 한 장의 이미지(logo-mark.png, 2346x385)를 두 조각으로 잘라 쓴다.
+       - 마크(아크)  : x 0~561
+       - 워드마크    : x 656~2345  ('Beyond News' 글자만 조금 크게)
+     각 조각의 폭은 자기 높이 × (조각폭/385) 로 계산한다.
+     --------------------------------------------------------------- */
+  #app-logo {
+    --logo-h: 1.5rem;                            /* 마크 높이(기존 h-6과 동일) */
+    --logo-word-h: calc(var(--logo-h) + 2.7px);  /* 글자만 2pt 크게 */
+  }
+  @media (min-width: 640px)  { #app-logo { --logo-h: 1.75rem; } }
+  @media (min-width: 1024px) { #app-logo { --logo-h: 2rem; } }
+
+  .logo-mark, .logo-word {
+    display: block;
+    background-image: url('logo-mark.png');
+    background-repeat: no-repeat;
+  }
+  .logo-mark {
+    height: var(--logo-h);
+    width: calc(var(--logo-h) * 1.4597);            /* 562/385 */
+    background-size: calc(var(--logo-h) * 6.0935) var(--logo-h);   /* 2346/385 */
+    background-position: 0 0;
+  }
+  .logo-word {
+    height: var(--logo-word-h);
+    width: calc(var(--logo-word-h) * 4.3896);        /* 1690/385 */
+    background-size: calc(var(--logo-word-h) * 6.0935) var(--logo-word-h);
+    background-position: calc(var(--logo-word-h) * -1.7039) 0;     /* 656/385 */
+    margin-left: calc(var(--logo-h) * 0.244);        /* 원본의 마크~글자 간격(94px) */
+  }
+
   html { font-size: 15px; }
   body { font-family: 'Pretendard Variable', Pretendard, sans-serif; }
+
+  /* [추가] 모바일에서 확대/축소·스크롤 중 화면이 좌우로 흔들리는 문제 방지
+     - 가로 스크롤 자체를 없애고(가로로 밀 여지를 제거)
+     - 가로 방향 고무줄(오버스크롤) 반동을 끈다
+     - 확대할 때 브라우저가 글자 크기를 임의로 키워 레이아웃이 튀는 것도 막는다 */
+  html, body {
+    max-width: 100%;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+  }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  /* 가로로 넘칠 수 있는 요소(티커·긴 표)가 페이지 폭을 밀지 않도록 */
+  #top-bar, main { max-width: 100%; }
   ::selection { background: rgb(var(--c-gold) / .33); }
 
   /* 지수 티커 : 5개 지수가 끊김 없이 반복 순환 */
@@ -194,13 +239,25 @@
       overflow: hidden;
     }
     body.tb-compact #app-header { padding-top: .4rem; padding-bottom: .4rem; }
-    body.tb-compact #app-logo { height: 1.6rem; }
+    body.tb-compact #app-logo { --logo-h: 1.3rem; }
     body.tb-compact #app-subtitle { display: none; }
 
-    /* --- 카테고리 제목 바가 2줄로 밀리지 않게 압축 --- */
+    /* --- 카테고리 제목 바 --- */
     #cat-header > div { padding: .5rem .75rem; gap: .375rem .5rem; }
     #cat-header select { padding: .1rem .35rem; font-size: .78rem; }
     #cat-header h2 { font-size: 1.05rem; }
+
+    /* [추가] 제목이 필터에 밀려 잘리지 않도록, 필터는 '필터' 버튼으로 여닫고
+       열리면 제목 아래 줄에 가득 채워 보여준다. */
+    #cat-header-filters { display: none; }
+    body.hf-open #cat-header-filters {
+      display: flex;
+      width: 100%;
+      margin-left: 0;
+      padding-top: .375rem;
+      border-top: 1px solid rgb(var(--c-line));
+    }
+    body.hf-open #cat-header-filter-btn { color: rgb(var(--c-gold)); border-color: rgb(var(--c-gold) / .5); }
   }
 
   ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -228,8 +285,12 @@
       <!-- 로고(아크 마크 + Beyond News 워드마크) + 오른쪽에 밑선 맞춰 붙는 문구 -->
       <div class="flex items-end gap-2 lg:gap-3 min-w-0">
         <h1 class="min-w-0 shrink">
-          <img id="app-logo" src="logo-mark.png" alt="Beyond News"
-               class="h-8 sm:h-9 lg:h-10 w-auto max-w-full object-contain object-left align-bottom">
+          <!-- [수정] 로고 이미지(마크+워드마크)를 두 조각으로 잘라 각각 크기를 따로 준다.
+               (마크는 그대로, 'Beyond News' 글자만 조금 크게) -->
+          <span id="app-logo" role="img" aria-label="Beyond News" class="flex items-end">
+            <span class="logo-mark"></span>
+            <span class="logo-word"></span>
+          </span>
         </h1>
         <p id="app-subtitle" class="font-sans font-medium text-muted tracking-wide leading-none text-xs sm:text-sm whitespace-nowrap hidden sm:block">Real-Time Wire Desk</p>
       </div>
@@ -428,11 +489,19 @@
       <div id="cat-header" class="hidden sticky z-30 pt-2 pb-3 bg-ink" style="top: calc(var(--stick-top, 121px) - 1px)">
         <div class="flex items-center gap-x-3 gap-y-2 flex-wrap px-5 py-3.5 bg-panel border border-gold/40 rounded-xl shadow-lg shadow-black/40">
           <span id="cat-header-icon" class="text-gold2 shrink-0"></span>
-          <h2 id="cat-header-title" class="font-sans font-bold text-gold2 text-xl truncate"></h2>
+          <h2 id="cat-header-title" class="font-sans font-bold text-gold2 text-xl break-keep min-w-0"></h2>
           <span id="cat-header-count" class="text-paper/70 font-mono whitespace-nowrap"></span>
 
+          <!-- [추가] 모바일 전용 : 필터 열기/닫기 (제목이 필터에 밀려 잘리지 않도록 기본은 숨김) -->
+          <button id="cat-header-filter-btn" onclick="toggleHeaderFilters()" aria-expanded="false"
+            aria-controls="cat-header-filters" title="필터"
+            class="lg:hidden ml-auto shrink-0 flex items-center gap-1 text-muted hover:text-gold border border-line rounded-lg px-2 py-1 text-[0.8rem] transition">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
+            필터
+          </button>
+
           <!-- 제목 바 오른쪽 필터 (노출 건수 / 게재 기간 / 정렬) -->
-          <div class="flex items-center gap-1.5 ml-auto flex-wrap">
+          <div id="cat-header-filters" class="flex items-center gap-1.5 ml-auto flex-wrap">
             <select id="header-count-select" onchange="onHeaderFilterChange()" title="노출 건수"
               class="bg-ink/70 border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
               <option value="5">5개</option>
@@ -588,7 +657,7 @@
     </div>
   </div>
 
-  <!-- 관련 기사 팝업 모달 ([수정] 주요 내용 팝업(z-60) 위에 뜨도록 z-70) -->
+  <!-- 관련 기사 팝업 모달 ([수정] 나중에 연 팝업이 위로 오도록 z-index는 bringModalToFront()가 정한다) -->
   <div id="related-modal" class="hidden fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeRelatedOnBackdrop(event)">
     <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
       <div class="flex justify-between items-start gap-4 p-6 pb-3 shrink-0">
@@ -988,6 +1057,16 @@
     }
     function toggleNav() { setNav(!document.body.classList.contains('nav-open')); }
     function closeNav() { setNav(false); }
+
+    // [추가] 모바일 : 제목 바 오른쪽 필터(노출건수/기간/정렬) 접기·펴기
+    //   기본은 접힘 → 제목(예: '물류 > 경쟁사')이 잘리지 않고 온전히 보인다.
+    function toggleHeaderFilters() {
+      const on = !document.body.classList.contains('hf-open');
+      document.body.classList.toggle('hf-open', on);
+      const btn = document.getElementById('cat-header-filter-btn');
+      if (btn) btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+      updateStickTop();   // 제목 바 높이가 바뀌므로 고정 위치 기준값을 다시 잰다
+    }
 
     // ---------------------------------------------------------------
     // [추가] 모바일에서 스크롤을 내리면 상단 고정바(헤더+티커)를 축소한다.
@@ -1460,12 +1539,9 @@
       } else {
         setExpanded(cat, true);
       }
-      // [추가] 모바일 : 여기서부터는 실제로 섹션을 이동하므로 드로어를 닫는다.
-      //   (위에서 return 되는 '목록 접기'만 한 경우에는 열어둔 채로 남긴다)
-      if (document.body.classList.contains('nav-open')) {
-        closeNav();
-        window.scrollTo({ top: 0 });
-      }
+      // [수정] 모바일 : 하위 섹션이 있는 항목은 드로어를 닫지 않는다.
+      //   (예: '물류'를 누르면 하위 목록만 펼쳐 두고, '경쟁사' 같은 하위 섹션을
+      //    실제로 고를 때 selectCategory()에서 닫는다)
       currentCategory = cat;
       renderCategoryButtons();
       runSearch();
@@ -2017,14 +2093,10 @@
       const wrap = document.getElementById('news-list');
       if (!list.length) { wrap.innerHTML = emptyBoxHtml('브리핑에 표시할 뉴스가 없습니다.'); return; }
 
+      // [수정] 위쪽 섹션 바에 이미 'Today's Briefing / 건수'가 있으므로
+      //   중복되는 바깥 박스와 헤더를 없애고 기사 목록만 그린다.
       wrap.innerHTML = `
-        <section class="bg-ink2/40 border border-gold/30 rounded-2xl overflow-hidden">
-          <header class="flex items-center gap-2.5 px-5 py-3 bg-gradient-to-r from-gold/15 to-transparent border-b border-line">
-            ${icon('sparkles', 'w-5 h-5 text-gold')}
-            <h2 class="font-sans font-bold text-gold text-xl">Today's Briefing</h2>
-            <span class="text-muted font-mono ml-auto">${list.length}건 · ${new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false })} KST 기준</span>
-          </header>
-          <div class="p-4 space-y-3">
+          <div class="space-y-3">
             ${list.map((it, i) => `
               <article class="news-row bg-ink2/60 border border-line rounded-xl p-4 hover:border-gold/40 transition">
                 <div class="flex gap-4">
@@ -2041,9 +2113,7 @@
                   </div>
                 </div>
               </article>`).join('')}
-          </div>
-        </section>`;
-
+          </div>`;
     }
 
     function renderNews(list) {
@@ -2271,7 +2341,34 @@
       return currentResults.find(n => n.id === id) || relatedItems.find(n => n.id === id);
     }
 
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeBrief(); closeRelated(); closePasswordModal(); } });
+    // [추가] 팝업 겹침 처리
+    //   '주요 내용'(z-60)과 '관련 기사'(z-70)의 z-index가 고정이라
+    //   관련 기사 팝업 안에서 '주요 내용'을 누르면 브리프 팝업이 뒤에 열려 아무 반응이 없어 보였다.
+    //   → 팝업을 열 때마다 카운터를 올려 '마지막에 연 팝업'이 항상 위로 오게 한다.
+    let modalZ = 60;
+    function bringModalToFront(el) {
+      if (!el) return;
+      modalZ += 10;
+      el.style.zIndex = String(modalZ);
+    }
+
+    // Esc 는 맨 위에 떠 있는 팝업 하나만 닫는다.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const open = [
+        ['brief-modal', closeBrief],
+        ['related-modal', closeRelated],
+      ].filter(([id]) => {
+        const el = document.getElementById(id);
+        return el && !el.classList.contains('hidden');
+      });
+      if (!open.length) { closePasswordModal(); return; }
+      open.sort((a, b) => {
+        const z = (id) => parseInt(document.getElementById(id).style.zIndex || '0', 10);
+        return z(b[0]) - z(a[0]);
+      });
+      open[0][1]();
+    });
 
     // ---------------------------------------------------------------
     // 주요 내용 모달 (AI 정리)
@@ -2331,7 +2428,9 @@
       document.getElementById('brief-link').href = link;
       document.getElementById('brief-note').textContent = '';
       document.getElementById('brief-body').innerHTML = briefLoadingHtml();
-      document.getElementById('brief-modal').classList.remove('hidden');
+      const briefModal = document.getElementById('brief-modal');
+      briefModal.classList.remove('hidden');
+      bringModalToFront(briefModal);   // [추가] 관련 기사 팝업 위로 올린다
 
       try {
         const params = new URLSearchParams({ url: link, title: item.title });
@@ -2386,7 +2485,9 @@
 
       document.getElementById('related-source-title').textContent = item.title;
       document.getElementById('related-body').innerHTML = relatedLoadingHtml();
-      document.getElementById('related-modal').classList.remove('hidden');
+      const relatedModal = document.getElementById('related-modal');
+      relatedModal.classList.remove('hidden');
+      bringModalToFront(relatedModal);   // [추가] 주요 내용 팝업 위로 올린다
 
       try {
         const p = new URLSearchParams({ title: item.title, url: articleLink(item), display: '5' });
