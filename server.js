@@ -19,6 +19,7 @@ const cors = require('cors');
 const fetch = require('node-fetch'); // v2
 const path = require('path');
 const fs = require('fs');
+const { AsyncLocalStorage } = require('async_hooks');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -865,25 +866,55 @@ function isRestrictedItem(item) {
 //   재시도가 또 429를 부르는 악순환이 생긴다.
 //   동시에 나가는 요청 수를 묶어두면 429 자체가 거의 사라져 전체적으로 더 빠르다.
 const NAVER_MAX_CONCURRENT = 6;
-let naverActive = 0;
-const naverQueue = [];
 
-function naverSlotAcquire() {
-  if (naverActive < NAVER_MAX_CONCURRENT) {
+// [속도] 사용자 요청을 프리워밍보다 먼저 처리한다
+//   프리워밍과 사용자 요청이 위 6슬롯을 똑같이 나눠 쓰면, 재배포 직후처럼
+//   프리워밍이 한창 도는 중에 접속한 사람이 대기열 끝에 서게 된다. (실측 19초)
+//   규칙은 하나다 : "사용자가 기다리고 있으면 프리워밍은 새 슬롯을 잡지 않는다."
+//     - 기다리는 사용자가 없으면 프리워밍이 6슬롯을 다 쓴다 → 프리워밍도 안 느려진다.
+//     - 사용자가 오면 프리워밍이 새로 잡는 것을 멈추고, 끝나는 순서대로
+//       슬롯이 사용자에게 넘어간다 → 진행 중인 호출 하나(0.2초 남짓)만 기다리면 된다.
+//   프리워밍이 계속 밀릴 수는 있지만, 프리워밍은 30분 주기의 '여유 작업'이라
+//   사람이 기다리는 화면보다 뒤로 미뤄지는 게 맞다.
+const warmFlag = new AsyncLocalStorage();
+// 지금 돌고 있는 코드가 '프리워밍인지' 알아내기 위한 표식.
+//   naverSearchRaw 까지 함수를 여러 단계 거치는데, 단계마다 인자를 하나씩 더
+//   넘기지 않아도 되게 AsyncLocalStorage 를 쓴다. warmCache 가 이 안에서
+//   작업을 실행하면 그 안의 모든 네이버 호출이 자동으로 프리워밍으로 인식된다.
+const isWarming = () => warmFlag.getStore() === true;
+
+let naverActive = 0;                // 지금 쓰고 있는 슬롯 수
+const naverQueueUser = [];          // 사용자 대기열 (먼저 처리)
+const naverQueueWarm = [];          // 프리워밍 대기열 (사용자 대기열이 빌 때만 처리)
+
+function naverSlotAcquire(forWarm) {
+  const yieldToUser = forWarm && naverQueueUser.length > 0;
+  if (naverActive < NAVER_MAX_CONCURRENT && !yieldToUser) {
     naverActive++;
     return Promise.resolve();
   }
-  return new Promise((resolve) => naverQueue.push(resolve));
+  return new Promise((resolve) => (forWarm ? naverQueueWarm : naverQueueUser).push(resolve));
 }
 
 function naverSlotRelease() {
-  const next = naverQueue.shift();
-  if (next) next();   // 대기 중인 요청에 자리를 넘겨준다 (naverActive 는 그대로 유지)
-  else naverActive--;
+  naverActive--;
+  naverSlotPump();
+}
+
+// 슬롯이 비면 사용자 대기열부터 채우고, 사용자가 다 빠진 뒤에 프리워밍을 채운다.
+function naverSlotPump() {
+  while (naverActive < NAVER_MAX_CONCURRENT && naverQueueUser.length) {
+    naverActive++;
+    naverQueueUser.shift()();       // resolve 는 마이크로태스크로 미뤄지므로 카운터를 먼저 올린다
+  }
+  while (naverActive < NAVER_MAX_CONCURRENT && !naverQueueUser.length && naverQueueWarm.length) {
+    naverActive++;
+    naverQueueWarm.shift()();
+  }
 }
 
 async function naverSearchRaw(query, display = 30, sort = 'date', start = 1) {
-  await naverSlotAcquire();
+  await naverSlotAcquire(isWarming());
   try {
     return await naverSearchOnce(query, display, sort, start);
   } finally {
@@ -2363,6 +2394,12 @@ const WARM_INTERVAL = 30 * 60 * 1000;
 //   먼저 복원된 캐시로 그 사람을 처리하고, 그다음에 프리워밍이 보충한다.
 const WARM_START_DELAY = 30 * 1000;
 const WARM_GAP = 2500;                  // 섹션 사이 간격 (네이버 호출량 분산)
+// 이 시간 안에 이미 갱신된 칸은 프리워밍이 건너뛴다.
+//   재배포 직후엔 접속한 사람의 요청이 프리워밍보다 먼저 캐시를 채운다.
+//   그걸 또 채우면 네이버 호출만 두 번 쓰고 사용자 요청과 경쟁만 한다.
+//   건너뛰어도 30분 뒤 다음 회차가 갱신하므로 캐시가 상하지 않는다.
+//   (섹션 stale 이 60분이라 최악의 경우 35분 → 여유 있음)
+const WARM_SKIP_IF_YOUNGER = 5 * 60 * 1000;
 let warming = false;
 
 // 프리워밍은 '완성된 응답'을 미리 만들어 캐시에 넣어 둔다.
@@ -2457,14 +2494,23 @@ async function warmCache() {
   try {
     warnUncoveredSections(kwMap);
     const jobs = warmJobs(kwMap);
+    let skipped = 0;
     for (let i = 0; i < jobs.length; i++) {
       const job = jobs[i];
+      // 방금 사용자 요청이 채워 둔 칸을 또 채우면 네이버 호출만 두 번 쓴다.
+      //   재배포 직후엔 접속한 사람의 요청이 먼저 캐시를 채우므로 특히 겹친다.
+      //   최근에 갱신된 칸은 건너뛴다 (다음 회차에 정상적으로 갱신된다).
+      const hit = respCache.get(job.key);
+      if (hit && Date.now() - hit.ts < WARM_SKIP_IF_YOUNGER) { skipped++; continue; }
+
       if (i > 0) await sleep(WARM_GAP);   // 네이버 API 429 방지
       try {
         // cachedResponse 가 아니라 runProducer 를 직접 부른다.
         //   cachedResponse 는 '아직 쓸 만하면 그냥 돌려주는' 함수라 갱신이 안 될 수 있다.
         //   프리워밍은 무조건 새로 받아 캐시를 채우는 게 목적이다.
-        await runProducer(job.key, job.run);
+        //   warmFlag.run 으로 감싸 이 안의 네이버 호출을 '프리워밍'으로 표시한다.
+        //   → 사용자 요청이 슬롯을 먼저 쓰게 된다 (naverSlotAcquire 참고).
+        await warmFlag.run(true, () => runProducer(job.key, job.run));
       } catch (e) {
         console.error(`[프리워밍] ${job.name} 실패:`, e.message);   // 하나 실패가 전체를 멈추지 않게
       }
@@ -2475,7 +2521,8 @@ async function warmCache() {
     await saveArticleCacheToSupabase();
     console.log(
       `[프리워밍] 완료 ${Math.round((Date.now() - t0) / 1000)}초 · ` +
-      `본문 캐시 ${before} → ${articleTextCache.size}건 · 응답 캐시 ${respCache.size}건`
+      `본문 캐시 ${before} → ${articleTextCache.size}건 · 응답 캐시 ${respCache.size}건` +
+      (skipped ? ` · 최근 갱신돼 건너뜀 ${skipped}건` : '')
     );
   } finally {
     warming = false;
