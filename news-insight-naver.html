@@ -256,9 +256,9 @@
     body.tb-compact #app-subtitle { display: none; }
 
     /* --- 카테고리 제목 바 --- */
-    #cat-header > div { padding: .5rem .75rem; gap: .375rem .5rem; }
+    #cat-header > div { padding: .25rem .25rem .5rem; gap: .375rem .5rem; }
     #cat-header select { padding: .1rem .35rem; font-size: .78rem; }
-    #cat-header h2 { font-size: 1.05rem; }
+    #cat-header h2 { font-size: 1.22rem; }   /* [수정] 2pt 확대 (1.05rem → 1.22rem) */
 
     /* [수정] 모바일 : 필터를 펼치면 '필터' 버튼 바로 아래에 오른쪽 정렬된 드롭다운으로 뜬다.
        (제목 바 높이는 그대로 두고, 목록만 기사 위에 겹쳐 보여준다) */
@@ -291,7 +291,7 @@
       box-shadow: 0 14px 30px rgb(0 0 0 / .35);
     }
     /* 각 제목 바의 좌우 여백에 맞춰 '필터' 버튼 오른쪽 끝과 나란히 놓는다 */
-    body.hf-open #cat-header-filters { right: .75rem; }
+    body.hf-open #cat-header-filters { right: .25rem; }
     header .sec-filters.is-open { right: 1.25rem; }
 
     body.hf-open #cat-header-filters > select,
@@ -638,6 +638,11 @@
         </div>
       </div>
 
+      <!-- [수정] 상태 바 + 안내 배너 + 카테고리 제목 바를 한 덩어리로 묶어 상단에 틀고정한다.
+           (아래로 스크롤해도 '노출 뉴스 N건' 줄과 제목 바가 계속 붙어 있는다) -->
+      <div id="top-stick" class="sticky z-30 pt-2 pb-3 bg-ink space-y-2"
+        style="top: calc(var(--stick-top, 121px) - 1px + var(--search-stick, 0px))">
+
       <!-- 상태 바 -->
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-1">
         <p class="text-muted" id="status-line">주요 뉴스를 불러오는 중입니다...</p>
@@ -650,11 +655,13 @@
         <span id="fallback-message"></span>
       </div>
 
-      <!-- 카테고리 제목 고정 바 -->
-      <div id="cat-header" class="hidden sticky z-30 pt-2 pb-3 bg-ink" style="top: calc(var(--stick-top, 121px) - 1px + var(--search-stick, 0px))">
-        <div class="flex items-center gap-x-3 gap-y-2 flex-wrap px-5 py-3.5 bg-panel border border-gold/40 rounded-xl shadow-lg shadow-black/40">
+      <!-- 카테고리 제목 바 (틀고정은 위 #top-stick 이 담당한다) -->
+      <div id="cat-header" class="hidden">
+        <!-- [수정] 박스(배경·테두리·그림자) 제거 → 제목 줄 아래 구분선 하나로만 아래 영역과 나눈다 -->
+        <div class="flex items-center gap-x-3 gap-y-2 flex-wrap px-1 pt-1 pb-2.5 border-b border-gold/30">
           <span id="cat-header-icon" class="text-gold2 shrink-0"></span>
-          <h2 id="cat-header-title" class="font-sans font-bold text-gold2 text-xl break-keep min-w-0"></h2>
+          <!-- [수정] 제목 글자 크기 2pt 확대 (1.25rem → 1.42rem) -->
+          <h2 id="cat-header-title" class="font-sans font-bold text-gold2 text-[1.42rem] leading-tight break-keep min-w-0"></h2>
           <span id="cat-header-count" class="text-paper/70 font-mono whitespace-nowrap"></span>
 
           <!-- [추가] 모바일 전용 : 필터 열기/닫기 (제목이 필터에 밀려 잘리지 않도록 기본은 숨김) -->
@@ -694,6 +701,8 @@
           </div>
         </div>
       </div>
+
+      </div><!-- /#top-stick -->
 
       <!-- [추가] 운임지수 섹션 전용 SCFI 지수 패널 (제목 바 바로 아래) -->
       <div id="scfi-panel" class="hidden !mt-0"></div>
