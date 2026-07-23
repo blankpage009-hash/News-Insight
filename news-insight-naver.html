@@ -249,27 +249,41 @@
     #cat-header select { padding: .1rem .35rem; font-size: .78rem; }
     #cat-header h2 { font-size: 1.05rem; }
 
-    /* [추가] 제목이 필터에 밀려 잘리지 않도록, 필터는 '필터' 버튼으로 여닫고
-       열리면 제목 아래 줄에 가득 채워 보여준다. */
-    #cat-header-filters { display: none; }
+    /* [수정] 모바일 : 필터를 펼치면 '필터' 토글 버튼 바로 아래 줄에 가득 채워 보여준다. */
     body.hf-open #cat-header-filters {
-      display: flex;
       width: 100%;
       margin-left: 0;
       padding-top: .375rem;
       border-top: 1px solid rgb(var(--c-line));
     }
-    body.hf-open #cat-header-filter-btn { color: rgb(var(--c-gold)); border-color: rgb(var(--c-gold) / .5); }
-
-    /* [추가] 섹션 박스 제목 바의 필터도 같은 방식으로 '필터' 버튼에 넣어 기본은 접어둔다. */
-    header .sec-filters { display: none; }
     header .sec-filters.is-open {
-      display: flex;
       width: 100%;
       padding-top: .375rem;
       border-top: 1px solid rgb(var(--c-line));
     }
-    .sec-filter-btn.is-open { color: rgb(var(--c-gold)); border-color: rgb(var(--c-gold) / .5); }
+  }
+
+  /* [수정] 제목 바 필터(노출건수/게재기간/정렬)는 데스크톱/모바일 모두 기본은 접어두고
+     '필터' 버튼으로 여닫는다. */
+  #cat-header-filters { display: none; }
+  body.hf-open #cat-header-filters { display: flex; }
+  body.hf-open #cat-header-filter-btn { color: rgb(var(--c-gold)); border-color: rgb(var(--c-gold) / .5); }
+
+  /* [수정] 섹션 박스 제목 바의 필터도 같은 방식으로 '필터' 버튼에 넣어 기본은 접어둔다. */
+  header .sec-filters { display: none; }
+  header .sec-filters.is-open { display: flex; }
+  .sec-filter-btn.is-open { color: rgb(var(--c-gold)); border-color: rgb(var(--c-gold) / .5); }
+
+  /* [추가] 데스크톱(≥1024px) : 필터를 펼치면 '필터' 토글 버튼 왼쪽에 나란히 펼쳐진다.
+     (토글 버튼의 순서를 뒤로 밀어, 같은 줄에서 필터 묶음이 버튼보다 앞에 오게 한다) */
+  @media (min-width: 1024px) {
+    #cat-header-filter-btn { order: 1; }
+    .sec-filter-btn { order: 1; }
+
+    /* [수정] 제목 바 : 접혀 있을 땐 토글 버튼이(ml-auto로) 오른쪽 끝에 붙고,
+       펼치면 오른쪽으로 밀리는 역할을 필터 묶음이 넘겨받아 버튼 바로 왼쪽에 붙는다. */
+    body.hf-open #cat-header-filter-btn { margin-left: 0; }
+    body.hf-open #cat-header-filters { margin-left: auto; }
   }
 
   ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -507,13 +521,13 @@
           <!-- [추가] 모바일 전용 : 필터 열기/닫기 (제목이 필터에 밀려 잘리지 않도록 기본은 숨김) -->
           <button id="cat-header-filter-btn" onclick="toggleHeaderFilters()" aria-expanded="false"
             aria-controls="cat-header-filters" title="필터"
-            class="lg:hidden ml-auto shrink-0 flex items-center gap-1 text-muted hover:text-gold border border-line rounded-lg px-2 py-1 text-[0.8rem] transition">
+            class="ml-auto shrink-0 flex items-center gap-1 text-muted hover:text-gold border border-line rounded-lg px-2 py-1 text-[0.8rem] transition">
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
             필터
           </button>
 
           <!-- 제목 바 오른쪽 필터 (노출 건수 / 게재 기간 / 정렬) -->
-          <div id="cat-header-filters" class="flex items-center gap-1.5 ml-auto flex-wrap">
+          <div id="cat-header-filters" class="flex items-center gap-1.5 flex-wrap">
             <select id="header-count-select" onchange="onHeaderFilterChange()" title="노출 건수"
               class="bg-ink/70 border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
               <option value="5">5개</option>
@@ -1946,7 +1960,7 @@
           mergeCatsAcrossSections(sectionState);
           currentResults = sectionState.flatMap((s) => s.items);
           document.getElementById('status-line').textContent =
-            `${currentCategory === 'all' ? '전체' : categoryLabels[currentCategory]} 카테고리 뉴스입니다. (최근 ${hoursLabel()} 이내 · 제목을 누르면 접기/펼치기)`;
+            `${currentCategory === 'all' ? '전체' : categoryLabels[currentCategory]} 카테고리 뉴스입니다. (최근 ${hoursLabel()} 이내)`;
           renderSectionsFromState();
           if (!currentResults.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 기간을 조정해보세요.');
 
@@ -2259,10 +2273,10 @@
             </button>
             <span class="text-muted font-mono whitespace-nowrap">${sec._loading ? icon('loader-2', 'w-4 h-4 animate-spin') : shown.length + '건'}</span>
 
-            <!-- [추가] 모바일 전용 : 필터 열기/닫기 (제목이 필터에 밀리지 않도록 기본은 접힘) -->
+            <!-- 필터 열기/닫기 (제목이 필터에 밀리지 않도록 기본은 접힘) -->
             <button data-sec-filter-btn="${sec.key}" onclick="toggleSectionFilters('${sec.key}')"
               aria-expanded="${filtersOpen ? 'true' : 'false'}" title="필터"
-              class="sec-filter-btn lg:hidden ml-auto shrink-0 flex items-center gap-1 text-muted hover:text-gold border border-line rounded-lg px-2 py-1 text-[0.8rem] transition ${filtersOpen ? 'is-open' : ''}">
+              class="sec-filter-btn ml-auto shrink-0 flex items-center gap-1 text-muted hover:text-gold border border-line rounded-lg px-2 py-1 text-[0.8rem] transition ${filtersOpen ? 'is-open' : ''}">
               ${icon('sliders', 'w-3.5 h-3.5')}
               필터
             </button>
