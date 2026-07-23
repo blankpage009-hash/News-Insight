@@ -260,6 +260,16 @@
       border-top: 1px solid rgb(var(--c-line));
     }
     body.hf-open #cat-header-filter-btn { color: rgb(var(--c-gold)); border-color: rgb(var(--c-gold) / .5); }
+
+    /* [추가] 섹션 박스 제목 바의 필터도 같은 방식으로 '필터' 버튼에 넣어 기본은 접어둔다. */
+    header .sec-filters { display: none; }
+    header .sec-filters.is-open {
+      display: flex;
+      width: 100%;
+      padding-top: .375rem;
+      border-top: 1px solid rgb(var(--c-line));
+    }
+    .sec-filter-btn.is-open { color: rgb(var(--c-gold)); border-color: rgb(var(--c-gold) / .5); }
   }
 
   ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -1472,6 +1482,14 @@
 
         if (exp && exp.isOpen()) {
           html += `<div class="ml-3 mt-1 flex flex-col gap-1 border-l border-line pl-3">`;
+          // [추가] 모바일 전용 : 하위 목록 맨 위 '전체 보기'
+          //   모바일에서 상위 버튼은 펼치기/접기 역할만 하게 되는 경우가 있어(하위 섹션을 보는 중),
+          //   상위 전체 기사로 바로 가는 항목을 따로 둔다.
+          html += `
+            <button onclick="selectCategory('${cat}')"
+              class="cat-btn lg:hidden text-[1.1rem] text-left px-3 py-2.5 rounded-lg transition ${isActive ? 'bg-gold/90 text-ink font-semibold' : 'text-muted hover:bg-ink3'}">
+              전체 보기
+            </button>`;
           exp.subs.forEach((sub) => {
             const subActive = currentCategory === sub.key;
             html += `
@@ -2124,6 +2142,22 @@
       wrap.innerHTML = list.map((it) => newsCardHtml(it)).join('');
     }
 
+    // [추가] 모바일 : 섹션 박스 제목 바의 필터(노출건수/게재기간/정렬) 접기·펴기
+    //   기본은 접힘 → 섹션 제목이 필터에 밀려 잘리지 않는다. (데스크톱은 늘 펼쳐진 상태)
+    //   다시 그릴 때 상태가 사라지지 않도록 섹션 키를 따로 보관한다.
+    const openSectionFilters = new Set();
+    function toggleSectionFilters(key) {
+      const on = !openSectionFilters.has(key);
+      if (on) openSectionFilters.add(key); else openSectionFilters.delete(key);
+      const box = document.querySelector(`[data-sec-filters="${key}"]`);
+      const btn = document.querySelector(`[data-sec-filter-btn="${key}"]`);
+      if (box) box.classList.toggle('is-open', on);
+      if (btn) {
+        btn.classList.toggle('is-open', on);
+        btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+      }
+    }
+
     // ---- 카테고리 박스: 접기/펼치기 + 개수 필터 ----
     function toggleSection(key) {
       const s = sectionState.find(x => x.key === key);
@@ -2214,6 +2248,7 @@
 
       wrap.innerHTML = sectionState.map((sec) => {
         const shown = sec.items.slice(0, sec.count);
+        const filtersOpen = openSectionFilters.has(sec.key);   // [추가] 모바일 필터 펼침 상태 (기본 접힘)
         return `
         <section class="bg-ink2/40 border border-line rounded-2xl overflow-hidden">
           <header class="flex items-center gap-3 flex-wrap px-5 py-3 bg-ink3/60 border-b border-line">
@@ -2223,7 +2258,16 @@
               ${icon(sec.collapsed ? 'chevron-down' : 'chevron-up', 'w-4 h-4 text-muted shrink-0')}
             </button>
             <span class="text-muted font-mono whitespace-nowrap">${sec._loading ? icon('loader-2', 'w-4 h-4 animate-spin') : shown.length + '건'}</span>
-            <div class="flex items-center gap-1.5 flex-wrap">
+
+            <!-- [추가] 모바일 전용 : 필터 열기/닫기 (제목이 필터에 밀리지 않도록 기본은 접힘) -->
+            <button data-sec-filter-btn="${sec.key}" onclick="toggleSectionFilters('${sec.key}')"
+              aria-expanded="${filtersOpen ? 'true' : 'false'}" title="필터"
+              class="sec-filter-btn lg:hidden ml-auto shrink-0 flex items-center gap-1 text-muted hover:text-gold border border-line rounded-lg px-2 py-1 text-[0.8rem] transition ${filtersOpen ? 'is-open' : ''}">
+              ${icon('sliders', 'w-3.5 h-3.5')}
+              필터
+            </button>
+
+            <div data-sec-filters="${sec.key}" class="sec-filters flex items-center gap-1.5 flex-wrap ${filtersOpen ? 'is-open' : ''}">
               <select onchange="changeSectionCount('${sec.key}', this.value)" title="노출 건수"
                 class="bg-ink border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
                 ${[3, 5, 10, 15, 20, 30].map(n => `<option value="${n}" ${sec.count === n ? 'selected' : ''}>${n}개</option>`).join('')}
