@@ -3079,7 +3079,14 @@
       document.getElementById('fallback-banner').classList.remove('hidden');
     }
 
-    window.onload = init;
+    // [속도] window.onload 는 '이미지까지 전부 받은 뒤'에 실행된다.
+    //   그래서 로고 그림 하나 때문에 기사 요청이 0.6초 넘게 늦게 시작됐다.
+    //   init() 은 이미지가 필요 없으므로 화면 구조(DOM)만 준비되면 바로 시작한다.
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();   // 스크립트가 늦게 실행돼 이미 준비가 끝난 경우
+    }
   </script>
 </body>
 </html>
