@@ -96,42 +96,39 @@
   /* 화이트 테마에서 어두운 배경을 전제로 한 amber 계열 배너 색 보정 */
   :root[data-theme="light"] .text-amber-200 { color: #92400e; }
 
-  /* 로고 원본은 흰색 → 화이트 테마에서는 반전시켜 어둡게 */
-  :root[data-theme="light"] #app-logo { filter: invert(1) brightness(.18); }
-
   /* ---------------------------------------------------------------
-     로고 : 한 장의 이미지(logo-mark.png, 2346x385)를 두 조각으로 잘라 쓴다.
-       - 마크(아크)  : x 0~561
-       - 워드마크    : x 656~2345  ('Beyond News' 글자만 조금 크게)
-     각 조각의 폭은 자기 높이 × (조각폭/385) 로 계산한다.
+     [수정] 로고 : 노란 뉴스피드(RSS) 마크 + 'Beyond News' 워드마크(텍스트)
+       - 마크는 인라인 SVG라 어느 크기에서도 또렷하고, 테마와 무관하게 노란색 그대로다.
+       - 글자는 이미지가 아니라 텍스트라 화이트 테마에서 자동으로 어두워진다.
      --------------------------------------------------------------- */
   #app-logo {
-    --logo-h: 1.5rem;                              /* 마크 높이(기존 h-6과 동일) */
-    --logo-word-h: calc(var(--logo-h) + 4.05px);   /* 글자만 3pt 크게 */
+    --logo-h: 1.5rem;                    /* 마크 한 변의 길이(기존 h-6과 동일) */
   }
   @media (min-width: 640px)  { #app-logo { --logo-h: 1.75rem; } }
   @media (min-width: 1024px) { #app-logo { --logo-h: 2rem; } }
 
-  /* 배경이미지 축소 대신 <img> 를 잘라 쓴다.
-     (브라우저의 이미지 전용 고품질 축소 경로를 타서 글자 가장자리가 매끄럽다) */
-  .logo-part { display: block; overflow: hidden; }
-  .logo-part img {
+  .logo-mark {
     display: block;
-    height: 100%;
+    flex: none;
+    width:  var(--logo-h);
+    height: var(--logo-h);
+  }
+  /* [추가] 원본 이미지(rss-3d.png)를 쓸 때는 세로만 맞추고 가로는 비율대로 둔다.
+     (억지로 정사각형에 맞추면 그림이 찌그러진다) */
+  img.logo-mark {
     width: auto;
     max-width: none;
-    image-rendering: auto;
-  }
-  .logo-mark {
-    height: var(--logo-h);
-    width: calc(var(--logo-h) * 1.4597);              /* 562/385 */
+    object-fit: contain;
   }
   .logo-word {
-    height: var(--logo-word-h);
-    width: calc(var(--logo-word-h) * 4.3896);         /* 1690/385 */
-    margin-left: calc(var(--logo-h) * 0.244);         /* 원본의 마크~글자 간격(94px) */
+    font-size: calc(var(--logo-h) * 0.95);
+    font-weight: 800;
+    letter-spacing: -0.015em;
+    line-height: 1;
+    color: rgb(var(--c-paper));
+    margin-left: calc(var(--logo-h) * 0.34);
+    white-space: nowrap;
   }
-  .logo-word img { margin-left: calc(var(--logo-word-h) * -1.7039); }   /* 656/385 */
 
   html { font-size: 15px; }
   body { font-family: 'Pretendard Variable', Pretendard, sans-serif; }
@@ -348,14 +345,52 @@
         class="lg:hidden -ml-1 p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
         <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
       </button>
-      <!-- 로고(아크 마크 + Beyond News 워드마크) + 오른쪽에 밑선 맞춰 붙는 문구 -->
+      <!-- 로고(오렌지 뉴스피드 마크 + Beyond News 워드마크) + 오른쪽에 밑선 맞춰 붙는 문구 -->
       <div class="flex items-end gap-2 lg:gap-3 min-w-0">
         <h1 class="min-w-0 shrink">
-          <!-- [수정] 로고 이미지(마크+워드마크)를 두 조각으로 잘라 각각 크기를 따로 준다.
-               (마크는 그대로, 'Beyond News' 글자만 조금 크게) -->
-          <span id="app-logo" role="img" aria-label="Beyond News" class="flex items-end">
-            <span class="logo-part logo-mark"><img src="logo-mark.png" alt="" aria-hidden="true"></span>
-            <span class="logo-part logo-word"><img src="logo-mark.png" alt="" aria-hidden="true"></span>
+          <!-- [수정] 업로드된 오렌지 3D RSS 아이콘을 벡터로 재현.
+               PNG가 아니라 SVG라 어떤 배율(레티나·확대)에서도 계단현상 없이 선명하다.
+                 · 뒷판(두께) → 앞판(그라디언트) → 유리 반사 → 전파 무늬 순으로 겹친다.
+                 · 전체를 skewY 로 살짝 기울여 원본의 입체 각도를 맞춘다. -->
+          <span id="app-logo" class="flex items-center">
+            <!-- [수정] 업로드한 3D 아이콘 원본(rss-3d.png)에서 흰 배경과 바닥 반사만 지운 rss-icon.png.
+                 그림 자체는 원본 픽셀 그대로이고, 파일이 없으면 아래 SVG 재현본으로 자동 대체된다. -->
+            <img id="logo-mark-img" class="logo-mark" src="rss-icon.png" alt="" aria-hidden="true"
+              onerror="this.style.display='none'; document.getElementById('logo-mark-svg').style.display='block';">
+            <svg id="logo-mark-svg" class="logo-mark" style="display:none" viewBox="0 0 64 64" aria-hidden="true">
+              <defs>
+                <!-- 앞면 : 왼쪽 위가 밝고 오른쪽 아래로 갈수록 진한 오렌지 -->
+                <linearGradient id="logo-mark-face" x1="0.05" y1="0" x2="0.85" y2="1">
+                  <stop offset="0" stop-color="#FBA24A"/>
+                  <stop offset="0.45" stop-color="#E9762B"/>
+                  <stop offset="1" stop-color="#C2510A"/>
+                </linearGradient>
+                <!-- 옆면(두께) : 앞면보다 어둡게 -->
+                <linearGradient id="logo-mark-side" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#B84A08"/>
+                  <stop offset="1" stop-color="#8E3403"/>
+                </linearGradient>
+                <!-- 위쪽 유리 반사 -->
+                <linearGradient id="logo-mark-gloss" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#ffffff" stop-opacity="0.42"/>
+                  <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+                </linearGradient>
+                <clipPath id="logo-mark-clip">
+                  <rect x="12" y="7" width="44" height="42" rx="9"/>
+                </clipPath>
+              </defs>
+              <g transform="translate(0,2) skewY(4)">
+                <rect x="4" y="3" width="44" height="42" rx="9" fill="url(#logo-mark-side)"/>
+                <rect x="12" y="7" width="44" height="42" rx="9" fill="url(#logo-mark-face)"/>
+                <g fill="none" stroke="#DFE1E4" stroke-width="5.6">
+                  <path d="M22.5 27.5A11.5 11.5 0 0 1 34 39"/>
+                  <path d="M22.5 16.5A22.5 22.5 0 0 1 45 39"/>
+                </g>
+                <circle cx="25.3" cy="36.2" r="4.1" fill="#DFE1E4"/>
+                <path d="M12 7H56V22C43 29 25 29 12 21Z" fill="url(#logo-mark-gloss)" clip-path="url(#logo-mark-clip)"/>
+              </g>
+            </svg>
+            <span class="logo-word">Beyond News</span>
           </span>
         </h1>
         <p id="app-subtitle" class="font-sans font-medium text-muted tracking-wide leading-none text-xs sm:text-sm whitespace-nowrap hidden sm:block">Real-Time Wire Desk</p>
@@ -468,16 +503,22 @@
            이 기사 영역 맨 위에 바로 펼쳐지고, 검색 결과를 보는 동안 상단에 틀고정된다. -->
       <div id="search-popup" class="hidden sticky z-40 pt-1 pb-2 bg-ink !mt-0" style="top: calc(var(--stick-top, 121px) - 1px)">
         <div class="w-full bg-ink2 border border-gold/40 rounded-2xl shadow-lg shadow-black/40 max-h-[calc(100vh-var(--stick-top,121px)-1.5rem)] overflow-y-auto">
+          <!-- [수정] 헤더 전체가 접기/펼치기 토글이다. (검색을 실행하면 자동으로 접힌다) -->
           <header class="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-3.5 border-b border-line bg-gradient-to-r from-gold/15 via-ink2 to-ink2 rounded-t-2xl">
-            <div class="flex items-center gap-2.5">
-              <svg class="w-5 h-5 text-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-              <h2 class="font-sans font-bold text-gold text-xl">키워드 검색</h2>
-            </div>
-            <button onclick="closeSearchPopup()" title="닫기" class="text-muted hover:text-paper transition">
+            <button onclick="toggleSearchCollapse()" id="search-collapse-btn" aria-expanded="true" aria-controls="search-body"
+              title="검색 조건 접기/펼치기"
+              class="flex items-center gap-2.5 min-w-0 flex-1 text-left group">
+              <svg class="w-5 h-5 text-gold shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+              <h2 class="font-sans font-bold text-gold text-xl shrink-0">키워드 검색</h2>
+              <!-- 접혔을 때 현재 검색어를 헤더에 요약해 보여준다 -->
+              <span id="search-collapsed-query" class="hidden text-muted font-mono text-[0.85rem] truncate min-w-0"></span>
+              <span id="search-collapse-chev" class="ml-auto shrink-0 text-muted group-hover:text-gold transition"></span>
+            </button>
+            <button onclick="closeSearchPopup()" title="닫기" class="shrink-0 text-muted hover:text-paper transition">
               <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </header>
-          <div class="p-5 space-y-3">
+          <div id="search-body" class="p-5 space-y-3">
             <div class="relative">
               <input type="text" id="search-input" placeholder="예: 롯데글로벌로지스, 반도체 수출..."
                 class="w-full bg-ink border border-line rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-gold/70 transition">
@@ -830,6 +871,7 @@
     let expandedSports = false;         // [추가] 스포츠 펼침 상태
     let expandedEconomy = false;        // [추가] 경제 펼침 상태
     let expandedSearch = false;         // 키워드 검색 토글 상태
+    let searchCollapsed = false;        // [추가] 검색 패널 본문(입력·필터) 접힘 상태 · 검색 실행 시 자동으로 접힌다
     let settingMode = false;            // Setting(기사 가져오기 키워드) 화면 열림 여부 · 오른쪽 기사 영역에 표시
     let settingCollapsed = {};          // [추가] 설정 화면의 각 섹션 토글 접힘 상태 (기본: 접힘)
     let currentResults = [];
@@ -1200,7 +1242,34 @@
       btn.classList.toggle('text-gold2', expandedSearch);
       btn.classList.toggle('bg-ink3', expandedSearch);
       btn.classList.toggle('text-muted', !expandedSearch);
+      renderSearchCollapse();
       updateSearchStick();
+    }
+
+    // [추가] 검색 패널 본문(입력·안내·필터·버튼)의 접힘/펼침 반영
+    //   접히면 헤더만 남아 상단에 얇게 틀고정되고, 그 아래로 검색 결과가 바로 보인다.
+    function renderSearchCollapse() {
+      const body = document.getElementById('search-body');
+      const chev = document.getElementById('search-collapse-chev');
+      const btn  = document.getElementById('search-collapse-btn');
+      const q    = document.getElementById('search-collapsed-query');
+      if (!body) return;
+      body.classList.toggle('hidden', searchCollapsed);
+      if (chev) chev.innerHTML = icon(searchCollapsed ? 'chevron-down' : 'chevron-up', 'w-5 h-5');
+      if (btn) btn.setAttribute('aria-expanded', String(!searchCollapsed));
+      if (q) {
+        const kw = (document.getElementById('search-input')?.value || '').trim();
+        q.textContent = kw ? '“' + kw + '”' : '';
+        q.classList.toggle('hidden', !(searchCollapsed && kw));
+      }
+    }
+
+    // [추가] 헤더를 눌러 검색 조건을 접었다 폈다 한다.
+    function toggleSearchCollapse() {
+      searchCollapsed = !searchCollapsed;
+      renderSearchCollapse();
+      updateSearchStick();
+      if (!searchCollapsed) setTimeout(() => document.getElementById('search-input')?.focus(), 50);
     }
 
     // [추가] 검색 패널이 상단에 틀고정되어 있는 만큼 그 아래 제목 바를 더 내려 붙인다.
@@ -1215,6 +1284,7 @@
     // 사이드바 '키워드 검색' → 오른쪽 기사 영역 맨 위에 검색 패널을 펼친다/접는다.
     function toggleSearchPanel() {
       expandedSearch = !expandedSearch;
+      if (expandedSearch) searchCollapsed = false;   // [추가] 사이드바로 열 때는 항상 펼친 상태로
       closeNav();            // [추가] 모바일 : 드로어를 닫아야 기사 영역의 패널이 보인다
       renderSearchToggle();
       if (expandedSearch) {
@@ -1225,12 +1295,18 @@
 
     function closeSearchPopup() {
       expandedSearch = false;
+      searchCollapsed = false;   // [추가] 다시 열 때는 조건이 펼쳐진 상태로
       renderSearchToggle();
     }
 
-    // [수정] '검색' 버튼/엔터 → 패널은 상단에 그대로 둔 채(틀고정) 결과만 갱신한다.
+    // [수정] '검색' 버튼/엔터 → 검색 조건은 위로 접고(헤더만 남김) 아래 결과를 바로 보여준다.
+    //   접힌 헤더를 다시 누르면 조건을 펼칠 수 있다.
     function submitSearch() {
       document.getElementById('search-input').blur();   // 모바일 키보드를 내려 결과가 바로 보이게
+      searchCollapsed = true;
+      renderSearchCollapse();
+      updateSearchStick();
+      window.scrollTo({ top: 0, behavior: 'smooth' });  // 접힌 헤더 바로 아래부터 결과가 보이도록
       runSearch();
     }
 
@@ -1240,6 +1316,7 @@
       const inp = document.getElementById('search-input');
       if (inp) inp.value = '';
       expandedSearch = false;
+      searchCollapsed = false;   // [추가] 다음에 열 때는 조건이 펼쳐진 상태로
       renderSearchToggle();
     }
 
