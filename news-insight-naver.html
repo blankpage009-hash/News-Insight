@@ -32,7 +32,12 @@
         fontFamily: {
           sans: ['"Pretendard Variable"', 'Pretendard', 'sans-serif'],
           serif: ['"Pretendard Variable"', 'Pretendard', 'sans-serif'], // 폰트 통일
-          mono: ['"JetBrains Mono"', 'monospace'],
+          // JetBrains Mono 에는 한글 글리프가 없어서, 한글이 섞인 문구
+          // (예: '12건', '포함 3 · 제외 1')의 한글만 OS 기본 monospace(굴림 등)로
+          // 떨어져 한 줄 안에서 폰트가 갈렸다.
+          // 폰트 폴백은 글리프 단위로 동작하므로 중간에 Pretendard 를 끼우면
+          // 영문·숫자는 그대로 JetBrains Mono, 한글만 Pretendard 로 나온다.
+          mono: ['"JetBrains Mono"', '"Pretendard Variable"', 'Pretendard', 'monospace'],
         }
       }
     }
