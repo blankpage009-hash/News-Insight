@@ -23,6 +23,7 @@
 | `/api/all/sections` | 3,630ms | 254ms |
 | `/api/indices` | 650ms | 133ms |
 | `/api/market-extra` | 8,200ms | 1ms 내외 (캐시 히트) |
+| 재배포 직후 첫 요청 (`all/sections`) | 19초대 | 로컬 재현 기준 1,366ms → 28ms |
 
 ---
 
@@ -72,28 +73,30 @@
 - `WARM_SKIP_IF_YOUNGER`(5분) : 최근 갱신된 칸은 프리워밍이 건너뛴다
 - 실측 : 사용자 대기 987ms → 357ms, 프리워밍 전체 완료는 1047 → 1022ms (변화 없음)
 
+### 응답 캐시를 재배포 너머로 잇기 (3-1 이었음)
+- 재배포 직후 19초의 진짜 원인은 프리워밍 경쟁이 아니라 `respCache` 가 텅 비는 것이었다.
+  프리워밍은 기동 30초 뒤에 시작하는데 첫 접속자는 t=0에 온다(접속이 있어야 서버가 깨어나므로).
+- 기사 본문 캐시와 같은 방식으로 **완성된 응답**도 Supabase(`RESP_CACHE_ROW_KEY = 'resp_cache'`)에
+  사본을 남기고, 기동할 때 되살린다. 핵심 함수 :
+  `saveRespCacheToSupabase()` / `loadRespCacheFromSupabase()` / `respRestoreReady`
+- 담는 대상 : 프리워밍이 데우는 칸만 (지표 + 브리핑 + 전체/물류/증시/스포츠 섹션).
+  `RESP_SUPA_MAX_BYTES`(800KB) 예산 안에서 **앞에 있는 것부터** 담는다 → 중요한 칸이 먼저 산다
+- 저장 시점 : 프리워밍이 끝날 때(`RESP_SUPA_MIN_SAVE_GAP` 25분 간격) + 종료 신호를 받을 때(간격 무시)
+- **저장 간격은 반드시 `TTL_SECTION.stale`(60분)보다 짧아야 한다.**
+  사본이 stale 보다 낡으면 되살려도 '너무 낡음' 판정이라 아무 소용이 없다
+- 복원할 때 `respCacheSet()` 을 쓰면 안 된다. ts 를 '지금'으로 새로 찍어서
+  낡은 값이 갓 만든 값처럼 보이게 되고 stale 판정이 어긋난다. `respCache.set()` 으로 직접 넣는다
+- 첫 손님은 `cachedResponse` 안에서 복원이 끝날 때까지 잠깐 기다린다(`RESP_RESTORE_MAX_WAIT` 3초 상한).
+  안 기다리면 캐시가 빈 것으로 보고 전부 새로 만들어 버려서 복원이 헛일이 된다
+- 실측(로컬, 가짜 Supabase로 재배포 재현 · 아래 '조심할 것' 참고) :
+  재배포 직후 첫 요청 `all/sections` 1,366ms → **28ms**, `briefing` 152ms → **3ms**.
+  로컬은 네이버 API 지연이 짧아 '개선 전' 값이 작게 나온다. Render 에서는 차이가 더 크다
+
 ---
 
 ## 3. 남은 작업
 
-### 3-1. 응답 캐시를 재배포 넘어 살리기  ← **다음에 할 일**
-
-**왜** : 재배포 직후 19초가 걸리는 진짜 이유는 프리워밍 경쟁이 아니라
-`respCache` 가 텅 비어서 전체를 처음부터 만들어야 하기 때문이다.
-프리워밍은 기동 **30초 뒤** 시작하는데, 재배포 직후 접속자는 대개 t=0에 온다
-(접속이 있어야 서버가 깨어나므로). 즉 그 시점엔 경쟁 상대가 아예 없다.
-`f1d9b94` 의 슬롯 우선권은 **기동 30초~1분 사이 접속자**에게만 효과가 있다.
-
-**어떻게** : 기사 본문 캐시가 이미 같은 일을 하고 있으니 그 패턴을 그대로 쓴다.
-- 참고할 기존 코드 : `saveArticleCacheToSupabase()` / `loadArticleCacheFromSupabase()`
-- 저장 위치 : `SETTINGS_TABLE` 에 key/value 행 하나 추가 (`ARTICLE_CACHE_ROW_KEY` 방식)
-- 부팅 시 복원 → t=0 접속자가 stale 값을 즉시 받고, 갱신은 뒤에서 (`cachedResponse` 가 이미 그렇게 동작)
-- 주의 : `respCache` 는 섹션 응답 전체라 용량이 크다(1~3MB 추정).
-  `SUPA_MIN_SAVE_GAP`(2시간) 처럼 쓰기 간격을 두고, 담을 키를 골라야 한다
-  (briefing / all-sections 정도만 담아도 t=0 접속자는 커버된다)
-- 복원한 값의 나이(`ts`)를 그대로 살려야 stale 판정이 맞는다
-
-### 3-2. 언론사 원문 긁기 축소
+### 3-2. 언론사 원문 긁기 축소  ← **다음에 할 일**
 `filterByCore`(`VERIFY_LIMIT` 20) + `refineByDomain`(`DOMAIN_VERIFY_LIMIT` 12) = 섹션당 최대 32건.
 `fetchHtml` 이 UA 2개로 재시도, 타임아웃 9초, `VERIFY_CONCURRENCY` 20.
 캐시 미스 시 여전히 느리다. 값을 줄이거나, 응답을 먼저 보내고 검증은 백그라운드로.
@@ -122,6 +125,15 @@
   그때는 `server.js` 에서 슬롯 관리 코드 블록만 떼어내 부하를 재현하는 방식이 잘 통했다
   (`const NAVER_MAX_CONCURRENT` ~ `naverSearchRaw` 까지 잘라서 `new Function` 으로 실행).
 - 로컬에 `SUPABASE_*` 환경변수 없음 → 파일 폴백으로 동작.
+  **Supabase 관련 기능은 로컬에서 아예 꺼진 채로 돈다.** 확인하려면 가짜 Supabase를 띄우는 게 잘 통했다 :
+  `app_settings` 의 GET(`?key=eq.X&select=value` → `[{value}]`) / POST(upsert) 만 흉내내는
+  Node 서버 40줄이면 충분하고, `SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SERVICE_KEY=test` 로 실행한다.
+  - 재배포 재현 = 앱 프로세스 kill + `.cache/article-text.json` 삭제 + 다시 실행.
+    이때 **가짜 Supabase도 같이 재시작해야 한다** (메모리에 값을 들고 있어서 store 파일만 고치면 반영이 안 된다)
+  - '개선 전' 상태는 저장된 `resp_cache` 행을 지우고 재현한다
+- 측정용 요청은 파라미터 이름을 정확히 맞춰야 한다. 하나라도 다르면 프리워밍과 **다른 칸**을 재게 된다.
+  `/api/all/sections` 는 `limit` 이 아니라 **`perSection`** 이다
+  (`?perSection=30&hours=24&sort=sim`, 브리핑은 `?limit=10&hours=24`).
 - 로컬 포트 3000이 이미 쓰이는 경우가 있어 `.claude/launch.json` 에 `"autoPort": true` 를 넣어 뒀다
   (`.claude/` 는 `.gitignore` 대상이라 커밋되지 않음).
 - **줄바꿈** : `server.js` CRLF, `news-insight-naver.html` LF. 편집 후 확인할 것.
