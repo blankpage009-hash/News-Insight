@@ -189,12 +189,16 @@
 
   select { background-image: none; }
 
-  /* 좌측 카테고리바 : 화면에 고정 + 사이드바 안에서만 따로 스크롤 */
+  /* 좌측 카테고리바 : 화면에 고정 + 사이드바 안에서만 따로 스크롤
+     [수정] 위 여백을 main 의 padding 이 아니라 사이드바 자신의 margin 으로 준다.
+            그래야 '가만히 있을 때 위치(margin)' 와 '틀고정 위치(top)' 가 같은 값이 되어
+            스크롤을 시작해도 상단바와의 간격이 변하지 않는다. */
   @media (min-width: 1024px) {
     .side-scroll {
       position: sticky;
-      top: calc(var(--stick-top, 121px) + 12px);
-      max-height: calc(100vh - var(--stick-top, 121px) - 24px);
+      margin-top: 1.5rem;
+      top: calc(var(--stick-top, 121px) + 1.5rem);
+      max-height: calc(100vh - var(--stick-top, 121px) - 3rem);
       overflow-y: auto;
       overscroll-behavior: contain;   /* 사이드바 끝에 닿아도 본문이 따라 움직이지 않음 */
       scrollbar-gutter: stable;
@@ -472,7 +476,9 @@
   </button>
 
   <!-- 메인 -->
-  <main id="main-grid" class="max-w-[1500px] mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+  <!-- [수정] 위쪽 padding 제거 : 상단바와 본문 사이 여백은 안쪽의 '틀고정 요소' 들이
+       각자 자기 padding/margin 으로 만든다. (그래야 스크롤해도 그 간격이 변하지 않는다) -->
+  <main id="main-grid" class="max-w-[1500px] mx-auto px-4 pb-4 lg:px-6 lg:pb-6 grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
 
     <!-- 좌측 사이드바 (모바일에서는 햄버거로 여는 슬라이드 드로어) -->
     <aside id="sidebar" class="lg:col-span-1 side-scroll">
@@ -559,7 +565,7 @@
 
       <!-- [수정] 키워드 검색 패널 : 사이드바 '키워드 검색'을 누르면 팝업이 아니라
            이 기사 영역 맨 위에 바로 펼쳐지고, 검색 결과를 보는 동안 상단에 틀고정된다. -->
-      <div id="search-popup" class="hidden sticky z-40 pt-1 pb-2 bg-ink !mt-0" style="top: calc(var(--stick-top, 121px) - 1px)">
+      <div id="search-popup" class="hidden sticky z-40 pt-6 pb-2 bg-ink !mt-0" style="top: calc(var(--stick-top, 121px) - 1px)">
         <div class="w-full bg-ink2 border border-gold/40 rounded-2xl shadow-lg shadow-black/40 max-h-[calc(100vh-var(--stick-top,121px)-1.5rem)] overflow-y-auto">
           <!-- [수정] 헤더 전체가 접기/펼치기 토글이다. (검색을 실행하면 자동으로 접힌다) -->
           <header class="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-3.5 border-b border-line bg-gradient-to-r from-gold/15 via-ink2 to-ink2 rounded-t-2xl">
@@ -640,7 +646,7 @@
 
       <!-- [수정] 상태 바 + 안내 배너 + 카테고리 제목 바를 한 덩어리로 묶어 상단에 틀고정한다.
            (아래로 스크롤해도 '노출 뉴스 N건' 줄과 제목 바가 계속 붙어 있는다) -->
-      <div id="top-stick" class="sticky z-30 pt-2 pb-3 bg-ink space-y-2"
+      <div id="top-stick" class="sticky z-30 !mt-0 pt-6 pb-3 bg-ink space-y-2"
         style="top: calc(var(--stick-top, 121px) - 1px + var(--search-stick, 0px))">
 
       <!-- 상태 바 -->
@@ -1200,6 +1206,13 @@
       restoreSidebarCollapsed();    // [추가] 지난번 사이드바 접힘 상태 복원
       updateStickTop();
       window.addEventListener('resize', updateStickTop);
+      // [수정] 로고 이미지·웹폰트가 늦게 로드되면 상단바가 그만큼 높아지는데,
+      //   그때 다시 재지 않으면 --stick-top 이 실제 높이보다 작게 남아(107px → 100px)
+      //   아래 틀고정 요소들이 상단바에 파묻힌다. 높이 변화를 계속 지켜보고 즉시 다시 잰다.
+      const topBarEl = document.getElementById('top-bar');
+      if (topBarEl && window.ResizeObserver) new ResizeObserver(updateStickTop).observe(topBarEl);
+      if (topBarEl) topBarEl.addEventListener('transitionend', updateStickTop);   // 모바일 상단바 축소가 끝났을 때
+      window.addEventListener('load', updateStickTop);
       window.addEventListener('resize', renderMobileSubnav);   // [추가] 회전/리사이즈 시 모바일 칩 갱신
 
       // [추가] 모바일 드로어 / 상단바 축소
