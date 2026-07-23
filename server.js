@@ -1244,6 +1244,9 @@ async function cachedResponse(key, ttl, producer) {
 const TTL_BREAKING = { fresh: 30 * 1000, stale: 5 * 60 * 1000 };
 const TTL_SECTION = { fresh: 2 * 60 * 1000, stale: 60 * 60 * 1000 };
 const TTL_INDICES = { fresh: 25 * 1000, stale: 5 * 60 * 1000 };
+//   기준금리는 몇 달에 한 번, 환율은 초 단위로 움직인다. 티커 표시용이라
+//   1분 정도 지난 값이면 충분하고, 그 뒤로는 화면에 바로 주면서 뒤에서 갱신한다.
+const TTL_MARKET_EXTRA = { fresh: 60 * 1000, stale: 30 * 60 * 1000 };
 
 // /api/breaking : 프런트 '속보' 카테고리 전용
 const BREAKING_SEC = { key: 'breaking', terms: ['속보'] };
@@ -2160,12 +2163,20 @@ async function fetchUsdKrw() {
 // 오래됐다면 그 사이 회의에서 동결된 것으로 간주한다. (FOMC 정례회의 간격은 약 6~8주)
 const FOMC_RECENT_DAYS = 56;
 
+// FRED 는 막힌 환경에서 응답이 오지 않고 그대로 매달린다.
+//   기본 8초를 다 기다릴 이유가 없어 짧게 끊고, 한 번 실패하면 한동안 아예 부르지 않는다.
+//   (부를 때마다 2.5초씩 헛되이 잡아먹는 걸 막는다. 접속 가능한 환경에서는
+//    쿨다운이 끝날 때 다시 시도하므로 자동으로 복구된다.)
+const FRED_TIMEOUT_MS = 2500;
+const FRED_COOLDOWN_MS = 30 * 60 * 1000;
+let fredBlockedUntil = 0;
+
 // FRED(세인트루이스 연은) 공개 CSV. API 키 불필요.
 // 최신값과, 마지막으로 값이 바뀐 시점(직전 값·변경일)을 반환한다.
 async function fetchFredSeries(seriesId) {
   const res = await fetchWithTimeout(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}`, {
     headers: { 'User-Agent': 'Mozilla/5.0' },
-  });
+  }, FRED_TIMEOUT_MS);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const csv = await res.text();
   const lines = csv.trim().split('\n').filter(Boolean);
@@ -2190,11 +2201,13 @@ async function fetchFredSeries(seriesId) {
 }
 
 async function fetchUsBaseRate() {
+  if (Date.now() < fredBlockedUntil) return FALLBACK_US_BASE_RATE;
   try {
     const [upper, lower] = await Promise.all([
       fetchFredSeries('DFEDTARU'),
       fetchFredSeries('DFEDTARL'),
     ]);
+    fredBlockedUntil = 0;
     const daysSinceChange = upper.changedAt
       ? (Date.now() - new Date(`${upper.changedAt}T00:00:00Z`).getTime()) / 86400000
       : Infinity;
@@ -2207,7 +2220,8 @@ async function fetchUsBaseRate() {
       live: true,
     };
   } catch (e) {
-    console.error('[미국 기준금리 조회 실패, 폴백값 사용]', e.message);
+    fredBlockedUntil = Date.now() + FRED_COOLDOWN_MS;
+    console.error(`[미국 기준금리 조회 실패, 폴백값 사용 · ${FRED_COOLDOWN_MS / 60000}분간 FRED 호출 중단]`, e.message);
     return FALLBACK_US_BASE_RATE;
   }
 }
@@ -2252,7 +2266,9 @@ async function fetchKrBaseRate() {
   };
 }
 
-app.get('/api/market-extra', async (req, res) => {
+const MARKET_EXTRA_KEY = 'market-extra';
+
+async function buildMarketExtra() {
   const settled = await Promise.allSettled([fetchKrBaseRate(), fetchUsBaseRate(), fetchUsdKrw()]);
   const labels = ['한국 기준금리', '미국 기준금리', '원/달러 환율'];
   const items = settled.map((result, i) => {
@@ -2260,7 +2276,16 @@ app.get('/api/market-extra', async (req, res) => {
     console.error(`[market-extra 조회 실패] ${labels[i]}:`, result.reason?.message || result.reason);
     return null;
   }).filter(Boolean);
-  res.json({ items });
+  return { items };
+}
+
+app.get('/api/market-extra', async (req, res) => {
+  try {
+    res.json(await cachedResponse(MARKET_EXTRA_KEY, TTL_MARKET_EXTRA, buildMarketExtra));
+  } catch (err) {
+    console.error('[market-extra 실패]', err.message);
+    res.json({ items: [] });
+  }
 });
 
 // -----------------------------------------------------------------
@@ -2425,6 +2450,10 @@ async function warmCache() {
   const t0 = Date.now();
   const before = articleTextCache.size;
   const kwMap = await readWarmKeywords();
+  // 지표 티커(market-extra)는 네이버 API를 쓰지 않아 429 걱정이 없다.
+  //   기사 프리워밍을 기다리게 하지 말고 옆에서 같이 데운다.
+  runProducer(MARKET_EXTRA_KEY, buildMarketExtra)
+    .catch((e) => console.error('[프리워밍] market-extra 실패:', e.message));
   try {
     warnUncoveredSections(kwMap);
     const jobs = warmJobs(kwMap);
