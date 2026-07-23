@@ -1113,6 +1113,23 @@
       }
     }
 
+    // [속도] 접속 직후엔 localStorage 캐시로 즉시 시작한다.
+    //   서버 조회(loadKeywords)를 await 로 기다리면 그동안 기사 요청을 시작조차
+    //   못 해서 첫 화면이 1초 이상 그냥 비어 있었다.
+    //   캐시로 먼저 그리고, 서버 값이 다를 때만 다시 그린다.
+    function seedKeywordsFromCache() {
+      userKeywords = mergeKeywords(readLocalKeywords());
+    }
+
+    async function syncKeywordsInBackground() {
+      const before = JSON.stringify(userKeywords);
+      try { await loadKeywords(); } catch { return; }
+      if (JSON.stringify(userKeywords) === before) return;   // 캐시가 최신이었다 → 할 일 없음
+      renderKeywordSettings();
+      await searchDone.catch(() => {});   // 먼저 시작한 검색이 끝난 뒤에 (실패했어도 진행)
+      runSearch();                        // 새 설정으로 다시 불러온다
+    }
+
     // 서버 요청에 붙일 kw 파라미터에 현재 설정을 담는다.
     function setKwParam(params) {
       params.set('kw', JSON.stringify(userKeywords));
@@ -1161,7 +1178,11 @@
     // 초기화
     // ---------------------------------------------------------------
     async function init() {
-      await loadKeywords();         // [추가] 서버에 저장된 '기사 가져오기 키워드' 불러오기 (기기 간 동기화)
+      // [속도] 예전에는 여기서 loadKeywords() 를 await 로 기다렸다.
+      //   그래서 HTML → 키워드 조회 → 기사 조회가 한 줄로 이어져
+      //   서로 상관없는 일인데도 앞의 것이 끝나야 뒤가 시작됐다.
+      //   이제 캐시로 바로 시작하고, 서버 조회는 뒤에서 따로 돌린다.
+      seedKeywordsFromCache();
       renderCategoryButtons();
       renderSearchToggle();
       renderSettingToggle();        // [추가]
@@ -1229,6 +1250,10 @@
       });
 
       runSearch();
+
+      // [속도] 서버에 저장된 키워드 조회는 기사 로딩과 '동시에' 진행한다.
+      //   캐시와 값이 같으면 아무 일도 일어나지 않고, 다를 때만 다시 불러온다.
+      syncKeywordsInBackground();
     }
 
     // ---------------------------------------------------------------
@@ -2235,8 +2260,17 @@
     // ---------------------------------------------------------------
     // 검색 실행
     // ---------------------------------------------------------------
-    async function runSearch() {
-      if (isLoading) return;
+    // 지금 돌고 있는 검색. 없으면 이미 끝난 상태(resolved).
+    //   '검색이 끝나면 이걸 하고 싶다'는 곳에서 await 로 쓴다.
+    let searchDone = Promise.resolve();
+
+    function runSearch() {
+      if (isLoading) return searchDone;   // 이미 돌고 있으면 그게 끝나는 걸 알려준다
+      searchDone = runSearchInner();
+      return searchDone;
+    }
+
+    async function runSearchInner() {
       if (settingMode) closeSettingView(false);   // [추가] 설정 화면이 열려 있으면 닫고 기사 화면으로
       isLoading = true;
       hideFallbackBanner();
