@@ -644,16 +644,15 @@
         </div>
       </div>
 
-      <!-- [수정] 상태 바 + 안내 배너 + 카테고리 제목 바를 한 덩어리로 묶어 상단에 틀고정한다.
-           (아래로 스크롤해도 '노출 뉴스 N건' 줄과 제목 바가 계속 붙어 있는다) -->
-      <div id="top-stick" class="sticky z-30 !mt-0 pt-6 pb-3 bg-ink space-y-2"
-        style="top: calc(var(--stick-top, 121px) - 1px + var(--search-stick, 0px))">
-
-      <!-- 상태 바 -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-1">
+      <!-- [수정] 상태 줄(안내 문구)은 스크롤하면 위로 같이 사라지고,
+           카테고리 제목 바만 상단에 틀고정된다. -->
+      <!-- 상태 바 (틀고정 아님 · 스크롤하면 같이 숨겨짐) -->
+      <div class="pt-6 px-1">
         <p class="text-muted" id="status-line">주요 뉴스를 불러오는 중입니다...</p>
-        <p class="text-muted whitespace-nowrap">노출 뉴스: <span id="news-count" class="text-gold font-bold">0</span>건</p>
       </div>
+
+      <div id="top-stick" class="sticky z-30 !mt-0 pt-3 pb-3 bg-ink space-y-2"
+        style="top: calc(var(--stick-top, 121px) - 1px + var(--search-stick, 0px))">
 
       <!-- 안내 배너 -->
       <div id="fallback-banner" class="hidden text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3 flex items-center gap-2">
@@ -2390,13 +2389,11 @@
           if (!list.length) showFallbackBanner(`최근 ${hoursLabel()} 이내 기사를 찾지 못했습니다. 게재 기간을 늘려보세요.`);
         }
 
-        document.getElementById('news-count').textContent = visibleCount();
         updateCatHeader();
       } catch (err) {
         console.error(err);
         renderError(err.message || '뉴스를 불러오는 중 오류가 발생했습니다.');
         document.getElementById('status-line').textContent = '검색 중 오류가 발생했습니다.';
-        document.getElementById('news-count').textContent = 0;
       } finally {
         isLoading = false;
         setSearchButtonLoading(false);
@@ -2426,7 +2423,6 @@
           <p>${message}</p>
           <button onclick="runSearch()" class="mt-4 text-gold hover:text-gold2 border border-gold/40 rounded-lg px-4 py-2 transition">다시 시도</button>
         </div>`;
-      document.getElementById('news-count').textContent = 0;
     }
 
     // 이 기사가 걸린 카테고리 목록 (원본 그대로 · 하위 섹션 포함)
@@ -2501,7 +2497,7 @@
         <article class="news-row bg-ink2/60 border border-line rounded-xl p-4 hover:border-gold/40 transition-all duration-300">
           <div class="flex items-center gap-2 flex-wrap mb-2">
             ${badges}
-            <span class="text-muted font-mono text-[0.72rem]">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
+            <span class="text-muted font-mono text-[0.8rem]">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
           </div>
           <div class="flex flex-col sm:flex-row sm:items-start gap-3">
             <h3 class="row-title flex-1 min-w-0 font-sans text-[1.46rem] font-bold text-paper transition leading-snug break-keep">${item.title}</h3>
@@ -2701,15 +2697,24 @@
         </section>`;
       }).join('');
 
-      document.getElementById('news-count').textContent = visibleCount();
       updateCatHeader();
     }
 
     function formatDate(iso) {
       const d = new Date(iso);
       if (isNaN(d.getTime())) return iso;
-      return d.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }) + ' ' +
-             d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const diffSec = Math.floor((Date.now() - d.getTime()) / 1000);
+      if (diffSec < 60)        return '방금 전';
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60)        return diffMin + '분 전';
+      const diffHour = Math.floor(diffMin / 60);
+      if (diffHour < 24)       return diffHour + '시간 전';
+      const diffDay = Math.floor(diffHour / 24);
+      if (diffDay < 7)         return diffDay + '일 전';
+      const diffWeek = Math.floor(diffDay / 7);
+      if (diffWeek < 5)        return diffWeek + '주 전';
+      // 한 달을 넘어가면 그냥 날짜로 표시
+      return d.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
     }
 
     // ---------------------------------------------------------------
