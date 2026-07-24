@@ -3102,18 +3102,18 @@
     function insightSectionHtml(iconName, label, accent, sec) {
       if (!sec) return '';
       const points = (sec.points || []).length ? `
-        <ul class="space-y-2 mt-3">${sec.points.map(p => `
-          <li class="flex gap-2 text-paper/90 leading-relaxed break-keep">
+        <ul class="space-y-3 mt-3">${sec.points.map(p => `
+          <li class="flex gap-2 text-paper/90 leading-loose break-keep">
             <span class="${accent.dot} shrink-0">ㆍ</span><span>${esc(p)}</span>
           </li>`).join('')}</ul>` : '';
       return `
         <div class="rounded-xl border ${accent.border} ${accent.bg} p-5">
-          <div class="flex items-center gap-2 mb-1">
+          <div class="flex items-center gap-2 mb-3">
             <span class="flex items-center gap-1.5 font-bold ${accent.text} text-[0.95rem] uppercase tracking-widest">
               ${icon(iconName, 'w-4 h-4')} ${label}
             </span>
           </div>
-          ${sec.summary ? `<p class="font-sans text-[1.15rem] font-bold text-paper leading-snug break-keep">${esc(sec.summary)}</p>` : ''}
+          ${sec.summary ? `<p class="font-sans text-[1.15rem] font-bold text-paper leading-loose break-keep">${esc(sec.summary)}</p>` : ''}
           ${points}
         </div>`;
     }
