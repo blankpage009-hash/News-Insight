@@ -2478,24 +2478,28 @@
     // 주요 내용 / 원문보기 / 관련기사 버튼 묶음 (기사 제목 오른쪽에 배치)
     //  showRelated=false 이면 '관련기사' 버튼을 뺀다. (관련기사 팝업 안의 기사에는 넣지 않음)
     function actionsHtml(item, showRelated = true) {
+      // 모바일에서 4개 버튼이 한 줄에 들어가도록 아이콘·글자·여백을 줄인다.
+      //  - 기본(모바일) : 작게    /    sm: 이상(데스크톱) : 기존 크기 복원
+      const sz = 'text-[0.68rem] sm:text-[0.8rem] px-1.5 sm:px-2 py-1 gap-1';
+      const ic = 'w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0';
       const relatedBtn = showRelated ? `
           <button onclick="openRelated(${item.id})" title="관련 기사"
-            class="flex items-center gap-1 bg-ink3 hover:bg-line text-paper text-[0.8rem] px-2 py-1 rounded-md transition border border-line whitespace-nowrap">
-            ${icon('link', 'w-3 h-3')} 관련 기사
+            class="flex items-center ${sz} bg-ink3 hover:bg-line text-paper rounded-md transition border border-line whitespace-nowrap">
+            ${icon('link', ic)} 관련 기사
           </button>` : '';
       return `
-        <div class="shrink-0 flex items-center gap-1.5 flex-wrap sm:justify-end">
+        <div class="shrink-0 flex items-center gap-1 sm:gap-1.5 flex-wrap sm:justify-end">
           <button onclick="openBrief(${item.id})" title="주요 내용"
-            class="flex items-center gap-1 bg-gold/15 hover:bg-gold/25 text-gold2 text-[0.8rem] px-2 py-1 rounded-md transition border border-gold/30 whitespace-nowrap">
-            ${icon('sparkles', 'w-3 h-3')} 주요 내용
+            class="flex items-center ${sz} bg-gold/15 hover:bg-gold/25 text-gold2 rounded-md transition border border-gold/30 whitespace-nowrap">
+            ${icon('sparkles', ic)} 주요 내용
           </button>
           <a href="${esc(articleLink(item))}" target="_blank" rel="noopener noreferrer" title="원문 보기"
-            class="flex items-center gap-1 text-wire hover:text-blue-300 text-[0.8rem] px-2 py-1 rounded-md transition border border-wire/30 bg-wire/10 whitespace-nowrap">
-            원문 보기 ${icon('external-link', 'w-3 h-3')}
+            class="flex items-center ${sz} text-wire hover:text-blue-300 rounded-md transition border border-wire/30 bg-wire/10 whitespace-nowrap">
+            원문 보기 ${icon('external-link', ic)}
           </a>
           <button onclick="openInsight(${item.id})" title="Insight"
-            class="flex items-center gap-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-[0.8rem] px-2 py-1 rounded-md transition border border-emerald-500/40 whitespace-nowrap">
-            ${icon('lightbulb', 'w-3 h-3')} Insight
+            class="flex items-center ${sz} bg-green-500/20 hover:bg-green-500/30 text-green-300 rounded-md transition border border-green-500/50 whitespace-nowrap">
+            ${icon('lightbulb', ic)} Insight
           </button>
           ${relatedBtn}
         </div>`;
@@ -3105,7 +3109,7 @@
 
     function insightHtml(d) {
       return `
-        ${insightSectionHtml('package', '물류 관점 Insight',
+        ${insightSectionHtml('package', '롯데글로벌로지스 사업기회',
           { border: 'border-gold/30', bg: 'bg-gold/5', text: 'text-gold2', dot: 'text-gold' }, d.logistics)}
         ${insightSectionHtml('globe', 'General Insight',
           { border: 'border-wire/30', bg: 'bg-wire/5', text: 'text-wire', dot: 'text-wire' }, d.general)}`;
