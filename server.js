@@ -2179,6 +2179,87 @@ app.get('/api/deep-brief', async (req, res) => {
 });
 
 // -----------------------------------------------------------------
+// [K] /api/insight : 원문을 Gemini에게 읽혀 '두 가지 관점의 인사이트'로 정리
+//  - deep-brief와 같은 구조(본문 확보 → Gemini → JSON). 캐시/호출 큐도 재사용.
+//  - ① 물류 관점 Insight  ② General Insight
+// -----------------------------------------------------------------
+const insightCache = new Map();          // url -> { ts, insight }
+const INSIGHT_TTL = 1000 * 60 * 60 * 6;  // 6시간 (deep-brief와 동일)
+
+const INSIGHT_PROMPT = `너는 물류·공급망 전문 애널리스트이자 시사 해설가다. 아래 [기사 본문]만 근거로, 이 기사가 갖는 의미를 두 가지 관점으로 짚어라.
+
+[절대 규칙]
+- 본문에 없는 구체적 사실·숫자·날짜·이름을 지어내지 마라.
+- 다만 본문 사실에서 자연스럽게 이어지는 해석·전망은 '인사이트'로 제시해도 된다.
+- 해석·추정인 문장은 '~로 보입니다', '~할 가능성이 있습니다' 처럼 추정 표현으로 써라.
+- 모든 문장은 한국어 존댓말('~습니다')로 끝내라.
+
+[① 물류 관점 (logistics)]
+- 이 기사가 물류·공급망·운송·유통·재고·무역 흐름·비용에 어떤 영향을 주는지 분석하라.
+- 기사가 물류와 직접 관련이 없어 보여도, 파급 경로를 찾아 물류·공급망 관점으로 연결하라.
+
+[② 일반 관점 (general)]
+- 물류를 떠나, 이 기사가 갖는 더 큰 의미·배경·파급효과를 폭넓게 짚어라.
+
+[작성 분량]
+- 각 관점은 summary(한 문장 핵심) 1개 + points(근거 있는 인사이트 문장) 2~3개로 구성하라.
+
+[출력 형식] 아래 JSON만 출력. 다른 말 금지.
+{
+  "logistics": { "summary": "물류 관점 한 문장 핵심", "points": ["인사이트 문장", "인사이트 문장"] },
+  "general":   { "summary": "일반 관점 한 문장 핵심", "points": ["인사이트 문장", "인사이트 문장"] }
+}`;
+
+app.get('/api/insight', async (req, res) => {
+  const url = req.query.url;
+  const title = String(req.query.title || '').slice(0, 200);
+
+  if (!GEMINI_API_KEY) return res.json({ error: '.env 에 GEMINI_API_KEY 가 없습니다.' });
+  if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'url이 필요합니다.' });
+
+  const cached = insightCache.get(url);
+  if (cached && Date.now() - cached.ts < INSIGHT_TTL) return res.json(cached.insight);
+
+  try {
+    // deep-brief와 동일하게: 언론사 원문 → 네이버 뉴스 → 네이버 모바일 순으로 자동 재시도
+    let body = await fetchArticleTextSmart(url, req.query.naver, 300);
+    let partial = false;
+
+    // 본문이 짧으면 네이버 요약문이라도 근거로 사용
+    if (!body || body.length < 200) {
+      const desc = String(req.query.desc || '').slice(0, 1200).trim();
+      if (desc.length >= 60) {
+        body = desc;
+        partial = true;
+      }
+    }
+
+    if (!body || body.length < 60) {
+      return res.json({ error: '원문 본문을 읽지 못했습니다. 해당 언론사가 자동 수집을 막았을 수 있습니다. (원문 보기로 확인해 주세요)' });
+    }
+
+    const bodyForAI = body.slice(0, 3500);   // 토큰 절약 (deep-brief와 동일)
+
+    const raw = await callGemini(`${INSIGHT_PROMPT}\n\n[기사 제목]\n${title}\n\n[기사 본문]\n${bodyForAI}`);
+
+    let insight;
+    try {
+      insight = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    } catch {
+      return res.json({ error: 'AI 응답을 해석하지 못했습니다. 다시 시도해 주세요.' });
+    }
+
+    insight.model = ACTIVE_MODEL || 'Gemini';
+    if (partial) insight.partial = true;
+    insightCache.set(url, { ts: Date.now(), insight });
+    res.json(insight);
+  } catch (err) {
+    console.error('[insight]', err.message);
+    res.json({ error: err.message });
+  }
+});
+
+// -----------------------------------------------------------------
 // /api/indices : KOSPI / KOSDAQ / NASDAQ / S&P 500 / DOW JONES
 // -----------------------------------------------------------------
 const INDEX_TARGETS = [

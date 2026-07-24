@@ -836,6 +836,30 @@
     </div>
   </div>
 
+  <!-- Insight(AI 두 관점 인사이트) 팝업 모달 -->
+  <div id="insight-modal" class="hidden fixed inset-0 z-[65] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeInsightOnBackdrop(event)">
+    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-4xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center gap-4 p-6 pb-3 shrink-0">
+        <span class="flex items-center gap-1.5 font-bold uppercase tracking-widest px-2.5 py-1 bg-emerald-500/15 text-emerald-300 rounded-md border border-emerald-500/40">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+          Insight
+        </span>
+        <button onclick="closeInsight()" class="text-muted hover:text-paper transition">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div id="insight-body" class="px-6 overflow-y-auto grow space-y-5 pb-4"></div>
+      <div class="flex flex-wrap justify-between items-center gap-3 p-6 pt-4 border-t border-line shrink-0">
+        <span id="insight-note" class="text-muted font-mono text-[0.75rem]"></span>
+        <a id="insight-link" href="#" target="_blank" rel="noopener noreferrer"
+          class="flex items-center gap-1 text-wire hover:text-blue-300 px-2.5 py-1 rounded-md transition border border-wire/30 bg-wire/10 font-semibold text-[0.8rem]">
+          원문 보기
+          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+
   <!-- 관련 기사 팝업 모달 ([수정] 나중에 연 팝업이 위로 오도록 z-index는 bringModalToFront()가 정한다) -->
   <div id="related-modal" class="hidden fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeRelatedOnBackdrop(event)">
     <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
@@ -976,6 +1000,7 @@
       monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
       lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
       link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+      lightbulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
       'chevron-down': '<path d="m6 9 6 6 6-6"/>',
       'chevron-up': '<path d="m18 15-6-6-6 6"/>',
       sliders: '<line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/>',
@@ -2468,6 +2493,10 @@
             class="flex items-center gap-1 text-wire hover:text-blue-300 text-[0.8rem] px-2 py-1 rounded-md transition border border-wire/30 bg-wire/10 whitespace-nowrap">
             원문 보기 ${icon('external-link', 'w-3 h-3')}
           </a>
+          <button onclick="openInsight(${item.id})" title="Insight"
+            class="flex items-center gap-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-[0.8rem] px-2 py-1 rounded-md transition border border-emerald-500/40 whitespace-nowrap">
+            ${icon('lightbulb', 'w-3 h-3')} Insight
+          </button>
           ${relatedBtn}
         </div>`;
     }
@@ -3042,6 +3071,83 @@
 
     function closeBrief() { document.getElementById('brief-modal').classList.add('hidden'); }
     function closeBriefOnBackdrop(e) { if (e.target.id === 'brief-modal') closeBrief(); }
+
+    // ---------------------------------------------------------------
+    // Insight 모달 (AI 두 관점 인사이트) : ① 물류 관점  ② General
+    //  - deep-brief와 똑같은 방식으로 /api/insight 를 호출한다.
+    // ---------------------------------------------------------------
+    function insightLoadingHtml() {
+      return `<div class="space-y-3">
+        ${[70, 95, 55].map(w => `<div class="skeleton bg-ink3/70 rounded h-4" style="width:${w}%"></div>`).join('')}
+        <p class="text-muted font-mono text-sm pt-2">원문을 읽고 두 관점의 인사이트를 뽑는 중... (5~15초)</p>
+      </div>`;
+    }
+
+    // 관점 하나(물류/일반)를 카드로 그린다
+    function insightSectionHtml(iconName, label, accent, sec) {
+      if (!sec) return '';
+      const points = (sec.points || []).length ? `
+        <ul class="space-y-2 mt-3">${sec.points.map(p => `
+          <li class="flex gap-2 text-paper/90 leading-relaxed break-keep">
+            <span class="${accent.dot} shrink-0">ㆍ</span><span>${esc(p)}</span>
+          </li>`).join('')}</ul>` : '';
+      return `
+        <div class="rounded-xl border ${accent.border} ${accent.bg} p-5">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="flex items-center gap-1.5 font-bold ${accent.text} text-[0.78rem] uppercase tracking-widest">
+              ${icon(iconName, 'w-4 h-4')} ${label}
+            </span>
+          </div>
+          ${sec.summary ? `<p class="font-sans text-[1.15rem] font-bold text-paper leading-snug break-keep">${esc(sec.summary)}</p>` : ''}
+          ${points}
+        </div>`;
+    }
+
+    function insightHtml(d) {
+      return `
+        ${insightSectionHtml('package', '물류 관점 Insight',
+          { border: 'border-gold/30', bg: 'bg-gold/5', text: 'text-gold2', dot: 'text-gold' }, d.logistics)}
+        ${insightSectionHtml('globe', 'General Insight',
+          { border: 'border-wire/30', bg: 'bg-wire/5', text: 'text-wire', dot: 'text-wire' }, d.general)}`;
+    }
+
+    async function openInsight(id) {
+      const item = findItem(id);
+      if (!item) return;
+
+      const link = articleLink(item);   // 원문 보기와 똑같은 주소 사용
+      document.getElementById('insight-link').href = link;
+      document.getElementById('insight-note').textContent = '';
+      document.getElementById('insight-body').innerHTML = insightLoadingHtml();
+      const insightModal = document.getElementById('insight-modal');
+      insightModal.classList.remove('hidden');
+      bringModalToFront(insightModal);
+
+      try {
+        const params = new URLSearchParams({ url: link, title: item.title });
+        if (item.naverUrl) params.set('naver', item.naverUrl);
+        if (Array.isArray(item.summary)) params.set('desc', item.summary.join(' ').slice(0, 1000));
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/insight?${params.toString()}`);
+        const data = await res.json();
+
+        if (data.error) {
+          document.getElementById('insight-body').innerHTML =
+            `<div class="text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3">${esc(data.error)}</div>`;
+          return;
+        }
+        document.getElementById('insight-body').innerHTML = insightHtml(data);
+        document.getElementById('insight-note').textContent = data.partial
+          ? `원문 본문을 읽지 못해 네이버 요약문만으로 분석했습니다 · 자세한 내용은 원문 보기를 이용하세요`
+          : `AI(${data.model || 'Gemini'})가 원문을 읽고 두 관점으로 분석했습니다 · 해석·전망은 참고용입니다`;
+      } catch (e) {
+        console.error(e);
+        document.getElementById('insight-body').innerHTML =
+          `<div class="text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3">인사이트를 불러오지 못했습니다.</div>`;
+      }
+    }
+
+    function closeInsight() { document.getElementById('insight-modal').classList.add('hidden'); }
+    function closeInsightOnBackdrop(e) { if (e.target.id === 'insight-modal') closeInsight(); }
 
     // ---------------------------------------------------------------
     // 관련기사 팝업
