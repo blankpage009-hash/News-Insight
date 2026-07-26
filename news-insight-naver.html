@@ -381,6 +381,51 @@
     .skeleton, .modal-pop { animation: none; }
     /* 티커 자동 흐름은 JS에서 멈춘다(드래그는 그대로 동작) */
   }
+
+  /* ---------------------------------------------------------------
+     [추가] PDF 저장 (인쇄) 전용 스타일
+       - '주요 내용' / 'Insight' 팝업의 'PDF 저장' 버튼을 누르면
+         팝업 내용을 #print-area 에 복사한 뒤 브라우저 인쇄창을 연다.
+         (인쇄창에서 대상 = 'PDF로 저장' 을 고르면 파일로 저장된다)
+       - 화면에서는 #print-area 를 항상 숨기고, 인쇄할 때만 이것만 보인다.
+     --------------------------------------------------------------- */
+  #print-area { display: none; }
+
+  @media print {
+    /* 인쇄는 흰 종이 기준이라, 테마 색 변수만 밝은 값으로 바꿔치기한다.
+       (본문은 Tailwind 의 rgb(var(--c-*)) 를 쓰므로 이것만으로 전부 따라온다) */
+    :root,
+    :root[data-theme="light"],
+    :root[data-theme="dark"] {
+      --c-ink: 255 255 255;   --c-ink2: 255 255 255; --c-ink3: 244 245 247;
+      --c-line: 199 205 214;  --c-gold: 150 105 25;  --c-gold2: 120 82 15;
+      --c-wire: 30 78 190;    --c-paper: 20 22 27;   --c-muted: 92 99 112;
+      --c-panel: 240 242 246;
+    }
+    :root .text-amber-200 { color: #92400e; }
+
+    html { font-size: 13px; }              /* rem 기반 글자·여백을 A4 에 맞게 축소 */
+    body { background: #fff !important; }
+
+    /* 팝업·상단바 등 화면 요소는 모두 감추고 인쇄용 영역만 남긴다 */
+    body > *:not(#print-area) { display: none !important; }
+    #print-area { display: block !important; color: #111; }
+    #print-area * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    @page { size: A4; margin: 14mm 12mm; }
+
+    .print-head { border-bottom: 1.5px solid #999; padding-bottom: 8px; margin-bottom: 16px; }
+    .print-kind { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #8a5e12; }
+    .print-title { font-size: 19px; font-weight: 700; line-height: 1.35; margin: 6px 0 5px; color: #111; }
+    .print-meta { font-size: 10.5px; color: #555; }
+    .print-link { font-size: 10px; color: #555; word-break: break-all; margin-top: 2px; }
+    .print-foot { margin-top: 18px; padding-top: 8px; border-top: 1px solid #ccc; font-size: 9.5px; color: #666; }
+
+    /* 카드·표·문장이 페이지 경계에서 잘리지 않게 */
+    #print-area li, #print-area tr, #print-area .rounded-xl { break-inside: avoid; }
+    #print-area h3, #print-area h4 { break-after: avoid; }
+    #print-area .skeleton { display: none; }
+  }
 </style>
 </head>
 
@@ -817,10 +862,16 @@
         </button>
       </div>
       <div id="brief-body" class="px-6 overflow-y-auto grow space-y-5 pb-4"></div>
-      <div class="flex flex-wrap justify-between items-center gap-3 p-6 pt-4 border-t border-line shrink-0">
-        <span id="brief-note" class="text-muted font-mono text-[0.75rem]"></span>
-        <!-- [수정] 원문 보기 옆에 '관련 기사' 링크 추가 -->
-        <div class="flex items-center gap-2 flex-wrap">
+      <!-- [수정] 안내 문구(윗줄) + 버튼들(아랫줄, 오른쪽 정렬) 로 두 줄 배치 -->
+      <div class="flex flex-col items-end gap-2 p-6 pt-4 border-t border-line shrink-0">
+        <span id="brief-note" class="text-muted font-mono text-[0.75rem] self-start"></span>
+        <div class="flex items-center gap-2 flex-wrap justify-end">
+          <!-- [추가] 'PDF 저장' : 팝업 내용을 인쇄창(→ PDF로 저장)으로 넘긴다 -->
+          <button onclick="savePopupAsPdf('brief')" title="PDF 저장"
+            class="flex items-center gap-1 text-paper bg-ink3 hover:bg-line px-2.5 py-1 rounded-md transition border border-line font-semibold text-[0.8rem]">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            PDF 저장
+          </button>
           <a id="brief-link" href="#" target="_blank" rel="noopener noreferrer"
             class="flex items-center gap-1 text-wire hover:text-blue-300 px-2.5 py-1 rounded-md transition border border-wire/30 bg-wire/10 font-semibold text-[0.8rem]">
             원문 보기
@@ -854,13 +905,22 @@
         </button>
       </div>
       <div id="insight-body" class="px-6 overflow-y-auto grow space-y-5 pb-4"></div>
-      <div class="flex flex-wrap justify-between items-center gap-3 p-6 pt-4 border-t border-line shrink-0">
-        <span id="insight-note" class="text-muted font-mono text-[0.75rem]"></span>
-        <a id="insight-link" href="#" target="_blank" rel="noopener noreferrer"
-          class="flex items-center gap-1 text-wire hover:text-blue-300 px-2.5 py-1 rounded-md transition border border-wire/30 bg-wire/10 font-semibold text-[0.8rem]">
-          원문 보기
-          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-        </a>
+      <!-- [수정] 안내 문구(윗줄) + 버튼들(아랫줄, 오른쪽 정렬) 로 두 줄 배치 -->
+      <div class="flex flex-col items-end gap-2 p-6 pt-4 border-t border-line shrink-0">
+        <span id="insight-note" class="text-muted font-mono text-[0.75rem] self-start"></span>
+        <div class="flex items-center gap-2 flex-wrap justify-end">
+          <!-- [추가] 'PDF 저장' -->
+          <button onclick="savePopupAsPdf('insight')" title="PDF 저장"
+            class="flex items-center gap-1 text-paper bg-ink3 hover:bg-line px-2.5 py-1 rounded-md transition border border-line font-semibold text-[0.8rem]">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            PDF 저장
+          </button>
+          <a id="insight-link" href="#" target="_blank" rel="noopener noreferrer"
+            class="flex items-center gap-1 text-wire hover:text-blue-300 px-2.5 py-1 rounded-md transition border border-wire/30 bg-wire/10 font-semibold text-[0.8rem]">
+            원문 보기
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+          </a>
+        </div>
       </div>
     </div>
   </div>
@@ -978,6 +1038,7 @@
     let currentResults = [];
     let relatedItems = [];   // [추가] 관련 기사 팝업에 뜬 기사들 (요약/주요내용 버튼이 id로 찾도록 보관)
     let currentBriefId = null;   // [추가] 지금 '주요 내용' 팝업에 떠 있는 기사 id
+    let currentInsightId = null; // [추가] 지금 'Insight' 팝업에 떠 있는 기사 id (PDF 저장에 사용)
     let sectionState = [];   // 카테고리 박스 상태(펼침/개수) 저장
     let isLoading = false;
     let nextId = 0;
@@ -3131,6 +3192,7 @@
       if (!item) return;
 
       const link = articleLink(item);   // 원문 보기와 똑같은 주소 사용
+      currentInsightId = id;            // [추가] 'PDF 저장' 이 쓸 기준 기사
       document.getElementById('insight-link').href = link;
       document.getElementById('insight-note').textContent = '';
       document.getElementById('insight-body').innerHTML = insightLoadingHtml();
@@ -3221,6 +3283,78 @@
     function closeRelated() { document.getElementById('related-modal').classList.add('hidden'); }
     function closeRelatedOnBackdrop(e) { if (e.target.id === 'related-modal') closeRelated(); }
 
+    // ---------------------------------------------------------------
+    // [추가] PDF 저장 ('주요 내용' / 'Insight' 팝업 좌측 하단 버튼)
+    //   별도 라이브러리 없이 브라우저 인쇄 기능을 쓴다.
+    //     ① 팝업 본문을 화면 밖 영역(#print-area)에 제목/출처와 함께 복사하고
+    //     ② window.print() 로 인쇄창을 연다 → 대상에서 'PDF로 저장' 선택
+    //   장점 : 글자가 그림이 아니라 텍스트로 남고(복사·검색 가능), 긴 내용은 자동으로 여러 장이 된다.
+    // ---------------------------------------------------------------
+
+    // 인쇄물에는 '3시간 전' 같은 상대 시간 대신 실제 날짜를 적는다
+    function printStamp(iso) {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      const p = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    // 제목에 섞여 오는 <b> 같은 태그를 지우고 순수 글자만 남긴다
+    function plainText(html) {
+      const d = document.createElement('div');
+      d.innerHTML = String(html ?? '');
+      return (d.textContent || '').trim();
+    }
+
+    function savePopupAsPdf(kind) {
+      const isBrief = kind === 'brief';
+      const bodyEl = document.getElementById(isBrief ? 'brief-body' : 'insight-body');
+      const noteEl = document.getElementById(isBrief ? 'brief-note' : 'insight-note');
+      if (!bodyEl) return;
+
+      // 아직 AI 응답을 기다리는 중(스켈레톤만 있는 상태)이면 저장할 내용이 없다
+      if (bodyEl.querySelector('.skeleton')) {
+        alert('아직 내용을 불러오는 중입니다. 잠시 후 다시 눌러 주세요.');
+        return;
+      }
+
+      const id = isBrief ? currentBriefId : currentInsightId;
+      const item = id == null ? null : findItem(id);
+      const label = isBrief ? '주요 내용' : 'Insight';
+      const title = item ? plainText(item.title) : '';
+      const link = item ? articleLink(item) : '';
+      const meta = [
+        item && item.source ? item.source : '',
+        item && item.datetime ? printStamp(item.datetime) : '',
+        `저장 ${printStamp(new Date())}`,
+      ].filter(Boolean).join('  ·  ');
+
+      const printArea = document.getElementById('print-area');
+      printArea.innerHTML = `
+        <div class="print-head">
+          <div class="print-kind">${esc(label)}</div>
+          ${title ? `<h1 class="print-title">${esc(title)}</h1>` : ''}
+          <div class="print-meta">${esc(meta)}</div>
+          ${link && link !== '#' ? `<div class="print-link">원문 : ${esc(link)}</div>` : ''}
+        </div>
+        <div class="space-y-5">${bodyEl.innerHTML}</div>
+        ${noteEl && noteEl.textContent ? `<div class="print-foot">${esc(noteEl.textContent)}</div>` : ''}`;
+
+      // 인쇄창이 제안하는 파일 이름은 문서 제목(document.title)에서 온다.
+      // 잠깐 바꿨다가 인쇄가 끝나면(afterprint) 원래대로 되돌린다.
+      const prevTitle = document.title;
+      const fileName = `${label}_${title || 'Beyond News'}`.replace(/[\\/:*?"<>|]/g, ' ').slice(0, 80);
+      document.title = fileName;
+      const restore = () => {
+        document.title = prevTitle;
+        printArea.innerHTML = '';
+        window.removeEventListener('afterprint', restore);
+      };
+      window.addEventListener('afterprint', restore);
+      setTimeout(restore, 60000);   // afterprint 를 안 쏘는 브라우저 대비 안전장치
+      window.print();
+    }
+
     function hideFallbackBanner() { document.getElementById('fallback-banner').classList.add('hidden'); }
     function showFallbackBanner(msg) {
       document.getElementById('fallback-message').textContent = msg;
@@ -3236,5 +3370,8 @@
       init();   // 스크립트가 늦게 실행돼 이미 준비가 끝난 경우
     }
   </script>
+
+  <!-- [추가] PDF 저장용 영역 : 화면에는 절대 보이지 않고, 인쇄할 때만 이 안의 내용이 출력된다 -->
+  <div id="print-area"></div>
 </body>
 </html>
