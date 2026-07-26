@@ -1926,15 +1926,16 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 // [수정] 모델을 하나로 고정하지 않는다.
 //   구글이 구형 모델을 신규 API 키에 막으면서 404가 나기 때문에,
 //   후보를 순서대로 시도하고 성공한 모델을 기억해서 재사용한다.
-// [429 대응] 무료 한도가 가장 넉넉한 Flash-Lite 계열을 앞쪽에 둔다.
-//   (분당 요청 한도가 커서 429가 훨씬 덜 난다.)
+// [모델 선택] 최신 Flash를 최우선으로 쓰고, 막히면 한도가 넉넉한
+//   Flash-Lite 계열로 자동으로 내려간다. (Lite 는 분당 한도가 커서 429가 덜 난다.)
 const MODEL_CANDIDATES = [
   process.env.GEMINI_MODEL, // .env 에 지정했다면 1순위
-  'gemini-2.5-flash-lite',  // 무료 한도 가장 넉넉 → 최우선
+  'gemini-3.6-flash',       // 최신 Flash → 최우선
+  'gemini-3.5-flash-lite',  // 최신 경량 모델
+  'gemini-2.5-flash-lite',  // 무료 한도 가장 넉넉
   'gemini-flash-lite-latest',
   'gemini-flash-latest',
   'gemini-2.5-flash',
-  'gemini-3-flash',
 ].filter(Boolean);
 
 let ACTIVE_MODEL = null; // 실제로 성공한 모델 이름
