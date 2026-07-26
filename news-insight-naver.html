@@ -3103,7 +3103,7 @@
       if (!sec) return '';
       const points = (sec.points || []).length ? `
         <ul class="space-y-3 mt-3">${sec.points.map(p => `
-          <li class="flex gap-2 text-paper/90 leading-loose break-keep">
+          <li class="flex gap-2 text-paper/90 leading-snug break-keep">
             <span class="${accent.dot} shrink-0">ㆍ</span><span>${esc(p)}</span>
           </li>`).join('')}</ul>` : '';
       return `
@@ -3113,7 +3113,7 @@
               ${icon(iconName, 'w-4 h-4')} ${label}
             </span>
           </div>
-          ${sec.summary ? `<p class="font-sans text-[1.15rem] font-bold text-paper leading-loose break-keep">${esc(sec.summary)}</p>` : ''}
+          ${sec.summary ? `<p class="font-sans text-[1.15rem] font-bold text-paper leading-snug break-keep">${esc(sec.summary)}</p>` : ''}
           ${points}
         </div>`;
     }
