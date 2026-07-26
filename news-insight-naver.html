@@ -30,14 +30,19 @@
           panel: 'rgb(var(--c-panel) / <alpha-value>)',
         },
         fontFamily: {
-          sans: ['"Pretendard Variable"', 'Pretendard', 'sans-serif'],
-          serif: ['"Pretendard Variable"', 'Pretendard', 'sans-serif'], // 폰트 통일
+          // [수정] Pretendard 는 이 PC에 설치돼 있을 때만 쓰인다. 없으면 그냥
+          // 'sans-serif'(브라우저 기본)로 떨어지는데, 그 기본값이 OS·브라우저마다
+          // 달라서 PDF로 저장했을 때 한글 모양이 들쭉날쭉했다.
+          // → OS별 한글 기본 폰트를 명시적으로 끼워 넣어 어디서 저장해도 같게 만든다.
+          //    (Malgun Gothic = 윈도우 / Apple SD Gothic Neo = 맥·아이폰 / Noto Sans KR = 안드로이드·리눅스)
+          sans: ['"Pretendard Variable"', 'Pretendard', '"Malgun Gothic"', '"Apple SD Gothic Neo"', '"Noto Sans KR"', 'sans-serif'],
+          serif: ['"Pretendard Variable"', 'Pretendard', '"Malgun Gothic"', '"Apple SD Gothic Neo"', '"Noto Sans KR"', 'sans-serif'], // 폰트 통일
           // JetBrains Mono 에는 한글 글리프가 없어서, 한글이 섞인 문구
           // (예: '12건', '포함 3 · 제외 1')의 한글만 OS 기본 monospace(굴림 등)로
           // 떨어져 한 줄 안에서 폰트가 갈렸다.
           // 폰트 폴백은 글리프 단위로 동작하므로 중간에 Pretendard 를 끼우면
           // 영문·숫자는 그대로 JetBrains Mono, 한글만 Pretendard 로 나온다.
-          mono: ['"JetBrains Mono"', '"Pretendard Variable"', 'Pretendard', 'monospace'],
+          mono: ['"JetBrains Mono"', '"Pretendard Variable"', 'Pretendard', '"Malgun Gothic"', '"Apple SD Gothic Neo"', '"Noto Sans KR"', 'monospace'],
         }
       }
     }
@@ -136,7 +141,7 @@
   }
 
   html { font-size: 15px; }
-  body { font-family: 'Pretendard Variable', Pretendard, sans-serif; }
+  body { font-family: 'Pretendard Variable', Pretendard, 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; }
 
   /* [추가] 모바일에서 확대/축소·스크롤 중 화면이 좌우로 흔들리는 문제 방지
      - 가로 스크롤 자체를 없애고(가로로 밀 여지를 제거)
@@ -383,6 +388,42 @@
   }
 
   /* ---------------------------------------------------------------
+     [추가] 모바일에서 팝업 하단 버튼 줄이 두 줄로 밀리는 문제
+       - '주요 내용' 팝업 아래에는 버튼이 4개(PDF 저장 · 원문 보기 · Insight · 관련 기사)
+         있는데, 폰 화면 폭에서는 다 못 들어가 두 줄로 접혔다.
+       - 좁은 화면(640px 미만)에서만 글자·아이콘·여백·간격을 한 단계씩 줄여
+         한 줄에 들어가게 한다. 태블릿·PC 는 지금 크기 그대로다.
+       - Tailwind 유틸리티(px-2.5, text-[0.8rem] 등)와 우선순위가 같아서
+         확실히 이기도록 !important 를 붙였다.
+     --------------------------------------------------------------- */
+  @media (max-width: 639.98px) {
+    /* 버튼이 쓸 수 있는 가로 폭 자체를 넓혀준다 (좌우 여백 24px → 12px) */
+    .popup-foot { padding-left: .75rem !important; padding-right: .75rem !important; }
+
+    .popup-actions { gap: .25rem !important; }
+    .popup-actions > * {
+      font-size: .72rem !important;      /* 0.8rem → 0.72rem */
+      padding-left: .5rem !important;    /* px-2.5(0.625rem) → 0.5rem */
+      padding-right: .5rem !important;
+      gap: .2rem !important;             /* 아이콘과 글자 사이 */
+      white-space: nowrap;               /* 버튼 안에서 글자가 접히지 않게 */
+    }
+    .popup-actions svg { width: .6875rem !important; height: .6875rem !important; }
+  }
+
+  /* 아주 좁은 화면(360px 미만, 예전 소형 폰)에서는 한 단계 더 줄여야 겨우 들어간다 */
+  @media (max-width: 359.98px) {
+    .popup-foot { padding-left: .5rem !important; padding-right: .5rem !important; }
+    .popup-actions { gap: .15rem !important; }
+    .popup-actions > * {
+      font-size: .66rem !important;
+      padding-left: .375rem !important;
+      padding-right: .375rem !important;
+    }
+    .popup-actions svg { width: .625rem !important; height: .625rem !important; }
+  }
+
+  /* ---------------------------------------------------------------
      [추가] PDF 저장 (인쇄) 전용 스타일
        - '주요 내용' / 'Insight' 팝업의 'PDF 저장' 버튼을 누르면
          팝업 내용을 #print-area 에 복사한 뒤 브라우저 인쇄창을 연다.
@@ -411,6 +452,21 @@
     body > *:not(#print-area) { display: none !important; }
     #print-area { display: block !important; color: #111; }
     #print-area * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    /* [추가] 인쇄(PDF 저장)용 한글 폰트 고정
+       - 화면과 달리 인쇄는 '이 PC에 무슨 폰트가 깔려 있나'에 훨씬 민감하다.
+       - Pretendard 가 없어도 한글이 반드시 제대로 된 폰트로 찍히도록 못 박는다.
+       - 등폭(숫자·시각 표기)은 따로 지정해 원래 모양을 유지한다. */
+    #print-area,
+    #print-area * {
+      font-family: 'Pretendard Variable', Pretendard, 'Malgun Gothic', '맑은 고딕',
+                   'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+    }
+    #print-area .font-mono,
+    #print-area .font-mono * {
+      font-family: 'JetBrains Mono', 'Pretendard Variable', Pretendard, 'Malgun Gothic', '맑은 고딕',
+                   'Apple SD Gothic Neo', 'Noto Sans KR', monospace;
+    }
 
     @page { size: A4; margin: 14mm 12mm; }
 
@@ -863,9 +919,9 @@
       </div>
       <div id="brief-body" class="px-6 overflow-y-auto grow space-y-5 pb-4"></div>
       <!-- [수정] 안내 문구(윗줄) + 버튼들(아랫줄, 오른쪽 정렬) 로 두 줄 배치 -->
-      <div class="flex flex-col items-end gap-2 p-6 pt-4 border-t border-line shrink-0">
+      <div class="popup-foot flex flex-col items-end gap-2 p-6 pt-4 border-t border-line shrink-0">
         <span id="brief-note" class="text-muted font-mono text-[0.75rem] self-start"></span>
-        <div class="flex items-center gap-2 flex-wrap justify-end">
+        <div class="popup-actions flex items-center gap-2 flex-wrap justify-end">
           <!-- [추가] 'PDF 저장' : 팝업 내용을 인쇄창(→ PDF로 저장)으로 넘긴다 -->
           <button onclick="savePopupAsPdf('brief')" title="PDF 저장"
             class="flex items-center gap-1 text-paper bg-ink3 hover:bg-line px-2.5 py-1 rounded-md transition border border-line font-semibold text-[0.8rem]">
@@ -906,9 +962,9 @@
       </div>
       <div id="insight-body" class="px-6 overflow-y-auto grow space-y-5 pb-4"></div>
       <!-- [수정] 안내 문구(윗줄) + 버튼들(아랫줄, 오른쪽 정렬) 로 두 줄 배치 -->
-      <div class="flex flex-col items-end gap-2 p-6 pt-4 border-t border-line shrink-0">
+      <div class="popup-foot flex flex-col items-end gap-2 p-6 pt-4 border-t border-line shrink-0">
         <span id="insight-note" class="text-muted font-mono text-[0.75rem] self-start"></span>
-        <div class="flex items-center gap-2 flex-wrap justify-end">
+        <div class="popup-actions flex items-center gap-2 flex-wrap justify-end">
           <!-- [추가] 'PDF 저장' -->
           <button onclick="savePopupAsPdf('insight')" title="PDF 저장"
             class="flex items-center gap-1 text-paper bg-ink3 hover:bg-line px-2.5 py-1 rounded-md transition border border-line font-semibold text-[0.8rem]">
