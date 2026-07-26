@@ -79,8 +79,8 @@ Render 로그에서 이 두 줄을 확인하면 정상 :
 
 ### market-extra (`9a2e1bc`) ← 1순위였음
 - 응답 캐시 적용 (`MARKET_EXTRA_KEY`, `buildMarketExtra()`)
-- FRED 타임아웃 8초 → 2.5초 (`FRED_TIMEOUT_MS`)
-- **FRED 차단 감지** : 한 번 실패하면 30분간 호출 안 함 (`fredBlockedUntil`, `FRED_COOLDOWN_MS`).
+- 금리 조회 타임아웃 8초 → 2.5초 (`US_RATE_TIMEOUT_MS`)
+- **차단 감지** : 한 번 실패한 경로는 30분간 호출 안 함 (`US_RATE_SOURCES[].blockedUntil`, `US_RATE_COOLDOWN_MS`).
   성공하면 자동 복구
 - 프리워밍도 market-extra 를 데움 (네이버 API를 안 쓰므로 기사 프리워밍과 동시 실행)
 
@@ -202,9 +202,10 @@ Render 로그에서 이 두 줄을 확인하면 정상 :
   PowerShell `System.Drawing` 으로 축소 + Node 내장 `zlib` 로 무손실 재압축으로 처리했다.
 - 화면 기본값 : `hours=24`, `sort=sim`, `perSection=30`, 브리핑 `limit=10`.
   브리핑 외 카테고리로 이동하면 count가 5로 바뀐다(`applyBriefingCountDefault`).
-- FRED가 막혀 있는 동안 미국 기준금리는 코드에 박아둔 폴백값
-  `FALLBACK_US_BASE_RATE`(3.50~3.75%, `live:false`)로 표시된다.
-  FOMC가 금리를 바꾸면 자동으로 안 바뀌므로, 나중에 다른 경로(예: ECOS의 미국 금리 통계)를 검토.
+- 미국 기준금리는 **뉴욕 연은 → FRED → 마지막 성공값 → 폴백 상수** 순으로 조회한다(`US_RATE_SOURCES`).
+  1순위인 뉴욕 연은(`markets.newyorkfed.org/api/rates/unsecured/effr/last/200.json`)은
+  FOMC 목표범위를 `targetRateFrom`/`targetRateTo` 로 그대로 주고, Render에서 막히지 않는다.
+  네 경로가 전부 실패할 때만 `FALLBACK_US_BASE_RATE`(`live:false`)가 보인다.
 
 ---
 

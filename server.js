@@ -2362,8 +2362,8 @@ app.get('/api/indices', async (req, res) => {
 // /api/market-extra : 한국 기준금리 / 미국 기준금리 / 원-달러 환율
 // -----------------------------------------------------------------
 const FALLBACK_KR_BASE_RATE = { name: '한국 기준금리', priceStr: '2.75%', change: 0, live: false };
-// FRED(fred.stlouisfed.org)가 일부 배포 환경(Render 등)의 아웃바운드 네트워크에서 막혀 있어
-// 매번 타임아웃되는 경우를 대비한 폴백값. FRED 접속이 가능한 환경에서는 사용되지 않는다.
+// 아래 조회 경로(뉴욕 연은 → FRED)가 모두 막히고, 이번 프로세스에서 한 번도 조회에
+// 성공한 적이 없을 때만 쓰이는 최후의 폴백값. 자동으로 갱신되지 않으므로 live:false 다.
 const FALLBACK_US_BASE_RATE = { name: '미국 기준금리', priceStr: '3.50~3.75%', change: 0, live: false };
 
 async function fetchUsdKrw() {
@@ -2394,24 +2394,72 @@ async function fetchUsdKrw() {
 }
 
 // 직전 FOMC 대비 변동으로 볼 최대 경과일수.
-// FRED 시리즈에는 FOMC 일정이 없으므로, 마지막으로 금리가 바뀐 날이 이 기간보다
+// 금리 시계열에는 FOMC 일정이 없으므로, 마지막으로 금리가 바뀐 날이 이 기간보다
 // 오래됐다면 그 사이 회의에서 동결된 것으로 간주한다. (FOMC 정례회의 간격은 약 6~8주)
 const FOMC_RECENT_DAYS = 56;
 
-// FRED 는 막힌 환경에서 응답이 오지 않고 그대로 매달린다.
-//   기본 8초를 다 기다릴 이유가 없어 짧게 끊고, 한 번 실패하면 한동안 아예 부르지 않는다.
+// 외부망이 막힌 환경에서는 응답이 오지 않고 그대로 매달린다.
+//   기본 8초를 다 기다릴 이유가 없어 짧게 끊고, 한 번 실패한 경로는 한동안 아예 부르지 않는다.
 //   (부를 때마다 2.5초씩 헛되이 잡아먹는 걸 막는다. 접속 가능한 환경에서는
 //    쿨다운이 끝날 때 다시 시도하므로 자동으로 복구된다.)
-const FRED_TIMEOUT_MS = 2500;
-const FRED_COOLDOWN_MS = 30 * 60 * 1000;
-let fredBlockedUntil = 0;
+const US_RATE_TIMEOUT_MS = 2500;
+const US_RATE_COOLDOWN_MS = 30 * 60 * 1000;
 
-// FRED(세인트루이스 연은) 공개 CSV. API 키 불필요.
-// 최신값과, 마지막으로 값이 바뀐 시점(직전 값·변경일)을 반환한다.
+// 목표범위(하단·상단)와 '마지막으로 바뀐 시점'을 티커 항목 형태로 만든다.
+//   prevUpper = 직전 목표범위 상단, changedAt = 새 범위가 처음 적용된 날(YYYY-MM-DD)
+function makeUsBaseRateItem(lower, upper, prevUpper, changedAt) {
+  const daysSinceChange = changedAt
+    ? (Date.now() - new Date(`${changedAt}T00:00:00Z`).getTime()) / 86400000
+    : Infinity;
+  // 마지막 인상·인하가 직전 FOMC보다 이전이면 최근 회의에서는 동결된 것이므로 0으로 표시한다.
+  const diff = daysSinceChange <= FOMC_RECENT_DAYS ? upper - prevUpper : 0;
+  return {
+    name: '미국 기준금리',
+    priceStr: `${lower.toFixed(2)}~${upper.toFixed(2)}%`,
+    change: diff,
+    live: true,
+  };
+}
+
+// [1순위] 뉴욕 연은(markets.newyorkfed.org) 기준금리 API. 키 불필요.
+//   FOMC 목표범위(targetRateFrom~targetRateTo)를 응답에 그대로 담고 있어 가공이 거의 없고,
+//   FRED와 달리 Render 아웃바운드에서 막히지 않는다.
+//   영업일 200일치(약 9개월)면 직전 변경 시점을 찾기에 충분하다.
+const NYFED_RATE_URL = 'https://markets.newyorkfed.org/api/rates/unsecured/effr/last/200.json';
+
+async function fetchUsBaseRateFromNyFed() {
+  const res = await fetchWithTimeout(NYFED_RATE_URL, {
+    headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
+  }, US_RATE_TIMEOUT_MS);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  // 응답은 최신순으로 온다 → 날짜 오름차순으로 돌려놓고 뒤에서부터 훑는다.
+  const rows = (Array.isArray(data?.refRates) ? data.refRates : [])
+    .filter((r) => Number.isFinite(r?.targetRateFrom) && Number.isFinite(r?.targetRateTo))
+    .sort((a, b) => String(a.effectiveDate).localeCompare(String(b.effectiveDate)));
+  if (!rows.length) throw new Error('뉴욕 연은 응답에 목표범위가 없음');
+  const latest = rows[rows.length - 1];
+  let prevUpper = latest.targetRateTo;
+  let changedAt = null;
+  for (let i = rows.length - 2; i >= 0; i--) {
+    if (rows[i].targetRateTo !== latest.targetRateTo) {
+      prevUpper = rows[i].targetRateTo;
+      changedAt = rows[i + 1].effectiveDate; // 새 범위가 처음 적용된 날
+      break;
+    }
+  }
+  return makeUsBaseRateItem(latest.targetRateFrom, latest.targetRateTo, prevUpper, changedAt);
+}
+
+// [2순위] FRED(세인트루이스 연은) 공개 CSV. API 키 불필요.
+//   전체 기간(2008년~)을 받으면 200KB가 넘어가므로 최근 2년치만 요청한다.
+//   그보다 오래전 변동은 어차피 '동결(0)'로 표시되므로 잘라도 결과가 같다.
 async function fetchFredSeries(seriesId) {
-  const res = await fetchWithTimeout(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}`, {
+  const from = new Date(Date.now() - 730 * 86400000).toISOString().slice(0, 10);
+  const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}&cosd=${from}`;
+  const res = await fetchWithTimeout(url, {
     headers: { 'User-Agent': 'Mozilla/5.0' },
-  }, FRED_TIMEOUT_MS);
+  }, US_RATE_TIMEOUT_MS);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const csv = await res.text();
   const lines = csv.trim().split('\n').filter(Boolean);
@@ -2435,30 +2483,39 @@ async function fetchFredSeries(seriesId) {
   return { latest, prev, changedAt };
 }
 
+async function fetchUsBaseRateFromFred() {
+  const [upper, lower] = await Promise.all([
+    fetchFredSeries('DFEDTARU'),
+    fetchFredSeries('DFEDTARL'),
+  ]);
+  return makeUsBaseRateItem(lower.latest, upper.latest, upper.prev, upper.changedAt);
+}
+
+// 조회 경로를 앞에서부터 시도한다. 실패한 경로는 쿨다운 동안 건너뛴다.
+const US_RATE_SOURCES = [
+  { label: '뉴욕 연은', run: fetchUsBaseRateFromNyFed, blockedUntil: 0 },
+  { label: 'FRED', run: fetchUsBaseRateFromFred, blockedUntil: 0 },
+];
+// 마지막으로 조회에 성공한 값. 모든 경로가 잠깐 막혀도 코드에 박아둔 값 대신 이걸 쓴다.
+let lastGoodUsBaseRate = null;
+
 async function fetchUsBaseRate() {
-  if (Date.now() < fredBlockedUntil) return FALLBACK_US_BASE_RATE;
-  try {
-    const [upper, lower] = await Promise.all([
-      fetchFredSeries('DFEDTARU'),
-      fetchFredSeries('DFEDTARL'),
-    ]);
-    fredBlockedUntil = 0;
-    const daysSinceChange = upper.changedAt
-      ? (Date.now() - new Date(`${upper.changedAt}T00:00:00Z`).getTime()) / 86400000
-      : Infinity;
-    // 마지막 인상·인하가 직전 FOMC보다 이전이면 최근 회의에서는 동결된 것이므로 0으로 표시한다.
-    const diff = daysSinceChange <= FOMC_RECENT_DAYS ? upper.latest - upper.prev : 0;
-    return {
-      name: '미국 기준금리',
-      priceStr: `${lower.latest.toFixed(2)}~${upper.latest.toFixed(2)}%`,
-      change: diff,
-      live: true,
-    };
-  } catch (e) {
-    fredBlockedUntil = Date.now() + FRED_COOLDOWN_MS;
-    console.error(`[미국 기준금리 조회 실패, 폴백값 사용 · ${FRED_COOLDOWN_MS / 60000}분간 FRED 호출 중단]`, e.message);
-    return FALLBACK_US_BASE_RATE;
+  for (const src of US_RATE_SOURCES) {
+    if (Date.now() < src.blockedUntil) continue;
+    try {
+      const item = await src.run();
+      src.blockedUntil = 0;
+      lastGoodUsBaseRate = item;
+      return item;
+    } catch (e) {
+      src.blockedUntil = Date.now() + US_RATE_COOLDOWN_MS;
+      console.error(
+        `[미국 기준금리] ${src.label} 조회 실패 · ${US_RATE_COOLDOWN_MS / 60000}분간 이 경로 호출 중단:`,
+        e.message
+      );
+    }
   }
+  return lastGoodUsBaseRate || FALLBACK_US_BASE_RATE;
 }
 
 function ymd(d) {
