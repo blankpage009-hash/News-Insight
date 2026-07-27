@@ -1926,15 +1926,19 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 // [수정] 모델을 하나로 고정하지 않는다.
 //   구글이 구형 모델을 신규 API 키에 막으면서 404가 나기 때문에,
 //   후보를 순서대로 시도하고 성공한 모델을 기억해서 재사용한다.
-// [모델 선택] 최신 Flash를 최우선으로 쓰고, 막히면 한도가 넉넉한
-//   Flash-Lite 계열로 자동으로 내려간다. (Lite 는 분당 한도가 커서 429가 덜 난다.)
+// [모델 선택] Flash-Lite 계열을 최우선으로 쓴다. (2026-07-27 실측 근거)
+//   - gemini-3.5-flash-lite : 2.6초. 하루 한도 넉넉.
+//   - gemini-3.6-flash      : 13.4초. '생각(thinking)'이 기본 ON이라 매 호출 2,700토큰을 더 쓴다.
+//                             게다가 무료 한도가 '모델별 하루 20회'라 금방 429가 난다.
+//   그래서 3.6-flash 는 최우선이 아니라 폴백 자리에 둔다.
+//   순서를 바꿀 땐 GEMINI_MODEL 환경변수(아래 1순위)가 이 목록보다 우선한다는 점에 주의.
 const MODEL_CANDIDATES = [
-  process.env.GEMINI_MODEL, // .env 에 지정했다면 1순위
-  'gemini-3.6-flash',       // 최신 Flash → 최우선
-  'gemini-3.5-flash-lite',  // 최신 경량 모델
-  'gemini-2.5-flash-lite',  // 무료 한도 가장 넉넉
-  'gemini-flash-lite-latest',
+  process.env.GEMINI_MODEL, // .env / Render 환경변수에 지정했다면 1순위
+  'gemini-3.5-flash-lite',  // 빠르고 한도 넉넉 → 최우선
+  'gemini-flash-lite-latest', // 위 모델의 별칭(구글이 최신 Lite로 연결해 준다)
+  'gemini-3.6-flash',       // 느리고 하루 20회 한도 → 폴백
   'gemini-flash-latest',
+  'gemini-2.5-flash-lite',  // 현재 키에서는 404(신규 키 차단). 다른 키를 대비해 남겨 둔다
   'gemini-2.5-flash',
 ].filter(Boolean);
 
@@ -2013,11 +2017,34 @@ async function callGeminiOnce(model, prompt) {
 const GEMINI_TRANSIENT_STATUS = [500, 502, 503, 504];
 function isTransientGeminiError(e) { return GEMINI_TRANSIENT_STATUS.includes(e?.status); }
 
+// -----------------------------------------------------------------
+// [429 대응 ⓪] 한도가 떨어진 모델은 잠시 쉬게 하고 '다른 모델'로 넘어간다
+//   구글의 무료 한도는 '모델별'이다. 예) gemini-3.6-flash 는 하루 20회.
+//   한 모델이 429여도 다른 모델은 멀쩡한 경우가 많은데,
+//   예전 코드는 429를 그대로 위로 던져서 30초씩 두 번 기다렸다 실패했다(실측 59초).
+//   이제는 429가 나면 그 모델만 쿨다운에 넣고 곧바로 다음 후보로 넘어간다.
+//   쿨다운 중인 모델은 아예 호출하지 않아 헛된 왕복을 줄인다.
+// -----------------------------------------------------------------
+const GEMINI_COOLDOWN_MS = 1000 * 60 * 10;   // 429 맞은 모델을 쉬게 할 기본 시간 (10분)
+const geminiCooldown = new Map();            // model -> 언제까지 쉴지(ms 시각)
+
+function isGeminiCooling(model) {
+  const until = geminiCooldown.get(model);
+  if (!until) return false;
+  if (Date.now() >= until) { geminiCooldown.delete(model); return false; }
+  return true;
+}
+
 // 후보 목록을 돌면서 '되는 모델'을 찾아 한 번 호출한다
-//  - 404(모델 없음)  → 다음 후보로
-//  - 503 등 일시 장애 → 그 모델이 붐비는 것이므로 역시 다음 후보로 우회
+//  - 404(모델 없음)   → 다음 후보로
+//  - 503 등 일시 장애  → 그 모델이 붐비는 것이므로 역시 다음 후보로 우회
+//  - 429(한도 초과)   → 그 모델을 쿨다운에 넣고 다음 후보로 우회
 async function callGeminiModels(prompt) {
-  const list = ACTIVE_MODEL ? [ACTIVE_MODEL] : MODEL_CANDIDATES;
+  const base = ACTIVE_MODEL ? [ACTIVE_MODEL] : MODEL_CANDIDATES;
+  // 쉬고 있는 모델은 건너뛴다. 다만 전부 쉬는 중이면 그냥 원래 목록대로 부딪쳐 본다
+  //   (쿨다운이 실제보다 길게 잡혔을 수 있으므로 아예 못 부르는 상태는 만들지 않는다)
+  const awake = base.filter((m) => !isGeminiCooling(m));
+  const list = awake.length ? awake : base;
   let lastErr;
 
   for (const model of list) {
@@ -2025,6 +2052,7 @@ async function callGeminiModels(prompt) {
       const out = await callGeminiOnce(model, prompt);
       if (ACTIVE_MODEL !== model) console.log(`[Gemini] 사용 모델 확정: ${model}`);
       ACTIVE_MODEL = model;
+      geminiCooldown.delete(model);   // 성공했으면 쿨다운 해제
       return out;
     } catch (e) {
       lastErr = e;
@@ -2040,28 +2068,58 @@ async function callGeminiModels(prompt) {
         if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt); }
         continue;
       }
-      throw e; // 400 / 429 등은 모델 문제가 아니므로 위로 던진다
+      if (e.status === 429) {
+        // 구글이 알려준 대기 시간이 있으면 그만큼, 없으면 10분간 이 모델을 쉬게 한다.
+        //   (하루 한도가 떨어진 경우라면 어차피 다음 후보로 계속 넘어가게 된다)
+        const cool = Math.max(e.retryAfterMs || 0, GEMINI_COOLDOWN_MS);
+        geminiCooldown.set(model, Date.now() + cool);
+        console.warn(`[Gemini] ${model} 한도 초과(429) → ${Math.round(cool / 60000)}분간 쉬고 다음 후보 시도`);
+        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt); }
+        continue;
+      }
+      throw e; // 400 등은 모델을 바꿔도 소용없으므로 위로 던진다
     }
   }
-  // 모든 후보가 일시 장애였다면 그 상태(503 등)를 그대로 위로 올려 재시도 대상이 되게 한다
-  if (isTransientGeminiError(lastErr)) throw lastErr;
+  // 모든 후보가 일시 장애/한도 초과였다면 그 상태(503·429)를 그대로 위로 올려
+  //   아래 callGemini 의 재시도·안내문 처리가 받게 한다
+  if (isTransientGeminiError(lastErr) || lastErr?.status === 429) throw lastErr;
   throw new Error(`쓸 수 있는 Gemini 모델을 찾지 못했습니다. /api/gemini-models 로 확인해 보세요. (${lastErr?.message || ''})`);
 }
 
 // -----------------------------------------------------------------
-// [429 대응 ①] 호출 큐 : 한 번에 하나씩 + 최소 간격을 강제한다.
-//   여러 사람이 동시에 '주요 내용'을 눌러도 순서대로 내보내
-//   분당 한도를 넘지 않게 한다. (= 대기열 + "N초에 1회")
+// [429 대응 ①] 호출 큐 : 한 번에 하나씩 + 분당 횟수 제한
+//   여러 사람이 동시에 '주요 내용'을 눌러도 순서대로 내보내 분당 한도를 넘지 않게 한다.
+//
+//   [2026-07-27 변경] 예전에는 '무조건 6초씩 띄우기'였다.
+//   그런데 구글이 실제로 막는 것은 간격이 아니라 '1분에 몇 번'이다.
+//   (실측: gemini-3.5-flash-lite = GenerateRequestsPerMinutePerProjectPerModel-FreeTier = 15)
+//   고정 간격 방식은 주요 내용을 본 뒤 곧바로 Insight를 누르는 흐름에서
+//   두 번째 호출에 6초를 통째로 물리는 게 가장 큰 손해였다.
+//   그래서 '최근 1분간 몇 번 불렀는지'만 세고, 여유가 있으면 곧바로 내보낸다.
+//   → 연달아 눌러도 대기 0초. 한도에 가까워질 때만 기다린다.
 // -----------------------------------------------------------------
-const GEMINI_MIN_INTERVAL = 6000; // ms. 호출 사이 최소 6초 간격 (분당 한도 아래로 유지)
+const GEMINI_RPM_LIMIT = 13;      // 분당 허용 횟수. 실측 한도 15보다 2회 낮게 잡아 여유를 둔다
+const GEMINI_WINDOW_MS = 60000;   // '분당'을 재는 창 = 60초
 let geminiChain = Promise.resolve();
-let lastGeminiAt = 0;
+let geminiCallTimes = [];         // 최근 1분간의 호출 시각들
+
+// 지금 바로 불러도 되는지 확인해서, 기다려야 하면 그 시간(ms)을 돌려준다
+function geminiWaitMs() {
+  const now = Date.now();
+  geminiCallTimes = geminiCallTimes.filter((t) => now - t < GEMINI_WINDOW_MS);
+  if (geminiCallTimes.length < GEMINI_RPM_LIMIT) return 0;   // 여유 있음 → 즉시
+  // 꽉 찼다면 가장 오래된 호출이 1분 창을 벗어날 때까지만 기다리면 된다
+  return GEMINI_WINDOW_MS - (now - geminiCallTimes[0]) + 50;
+}
 
 function enqueueGemini(task) {
   const run = geminiChain.then(async () => {
-    const wait = GEMINI_MIN_INTERVAL - (Date.now() - lastGeminiAt);
-    if (wait > 0) await sleep(wait);     // 직전 호출과 간격 벌리기
-    lastGeminiAt = Date.now();
+    // 기다린 뒤에도 다른 호출이 자리를 채웠을 수 있으니 다시 확인한다
+    for (let wait = geminiWaitMs(); wait > 0; wait = geminiWaitMs()) {
+      console.log(`[Gemini] 분당 한도(${GEMINI_RPM_LIMIT}회)에 도달 → ${Math.ceil(wait / 1000)}초 대기`);
+      await sleep(wait);
+    }
+    geminiCallTimes.push(Date.now());
     return task();
   });
   geminiChain = run.then(() => {}, () => {}); // 에러가 나도 대기열이 끊기지 않게

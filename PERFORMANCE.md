@@ -113,6 +113,36 @@ Render 로그에서 이 두 줄을 확인하면 정상 :
   재배포 직후 첫 요청 `all/sections` 1,366ms → **28ms**, `briefing` 152ms → **3ms**.
   로컬은 네이버 API 지연이 짧아 '개선 전' 값이 작게 나온다. Render 에서는 차이가 더 크다
 
+### 주요 내용 / Insight 응답 (2026-07-27)
+
+`주요 내용`이 느려졌다는 신고에서 출발. 원인은 커밋 `f8468a7`(gemini-3.6-flash 최우선)이었다.
+
+- **Gemini 3.x는 '생각(thinking)'이 기본 ON.** 매 호출 약 2,700 생각토큰을 더 써서
+  같은 작업이 2.1초 → **13.4초**가 됐다. 요약해서 JSON으로 뱉는 일엔 필요 없는 추론이다.
+- **무료 한도는 '모델별 하루 N회'다.** `gemini-3.6-flash` = **하루 20회**
+  (`GenerateRequestsPerDayPerProjectPerModel-FreeTier = 20`). 금방 소진된다.
+- 게다가 `callGeminiModels`가 404·503만 다음 후보로 넘기고 **429는 그대로 던져서**,
+  멀쩡한 lite 모델을 두고도 30초씩 2번 기다렸다 실패했다. 실측 **59.2초 후 에러**.
+
+고친 것 :
+- `MODEL_CANDIDATES` 순서를 되돌려 `gemini-3.5-flash-lite`를 최우선으로.
+  `gemini-3.6-flash`는 폴백 자리로 내렸다 → 13.4초 → **2.0~2.9초**
+- **429도 다음 후보로 넘어간다.** 429 난 모델만 `geminiCooldown`에 10분 넣고 즉시 우회.
+  쉬는 중인 모델은 호출조차 안 한다(전부 쉬는 중이면 그냥 부딪쳐 본다).
+  실측 : 한도 소진 상태에서 59.2초 에러 → **2.9초 정상 응답**
+- 호출 큐를 '고정 6초 간격' → **'1분에 13회'** 방식으로 (`GEMINI_RPM_LIMIT`).
+  실측 한도는 분당 15회(`GenerateRequestsPerMinutePerProjectPerModel-FreeTier = 15`).
+  주요 내용 → 곧바로 Insight 흐름에서 두 번째 호출이 6초 → **2.0초**
+
+주의할 것 :
+- **`GEMINI_MODEL` 환경변수가 `MODEL_CANDIDATES`보다 우선한다.** Render 대시보드에 이 값이
+  걸려 있으면 코드 순서를 바꿔도 프로덕션은 안 바뀐다. 로컬 `.env`는 주석 처리해 뒀다.
+- `gemini-2.5-flash-lite` · `gemini-2.5-flash`는 현재 키에서 **404**(구글이 신규 키에 차단).
+  후보 목록 앞쪽에 두면 매번 헛돈다. 지금은 목록 뒤로 옮겨 뒀다.
+- `thinkingBudget: 0`은 3.x에서 **400 INVALID_ARGUMENT**. 3.x는 `thinkingLevel: 'low'`를 쓴다
+  (3.6-flash를 굳이 써야 할 때만. 그래도 3.1초로 lite보다 느리고 하루 20회 한도는 그대로다).
+- 원문 긁어오는 단계(`fetchArticleTextSmart`)는 평균 **329ms** — 여기 병목 아니다.
+
 ---
 
 ## 3. 남은 작업
