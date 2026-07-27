@@ -2264,14 +2264,26 @@ const GEMINI_PROBE_EXTRA = [
   'gemini-2.0-flash',
 ];
 const PROBE_TIMEOUT_MS = 15000;   // 실제 호출 상한(9초)보다 길게 줘서 '느린 것'과 '아예 안 오는 것'을 구분한다
+const PROBE_LONG_TIMEOUT_MS = 30000; // long=1(실제 크기 프롬프트)일 때. '생각'하는 모델은 원래 오래 걸린다
 const PROBE_CONCURRENCY = 3;      // 한꺼번에 다 쏘면 서로 영향을 줄 수 있어 3개씩만
 let probeRunning = false;         // 동시에 두 번 돌리지 않게 (한도를 헛되이 쓰지 않으려고)
 
-// 모델 하나에 짧은 요청을 보내 본다. 실제 호출과 같은 형태(JSON 응답 요구)로 보낸다.
-async function probeGeminiModel(model) {
+// [long=1] 실제 '주요 내용' 호출과 비슷한 크기(본문 3,500자)의 프롬프트.
+//   짧은 인사만으로 재면 '생각'하는 모델의 진짜 비용이 안 드러나서, 1순위를 고를 근거가 못 된다.
+function probeLongPrompt() {
+  const body = ('정부는 이날 물류 인프라 확충 계획을 발표했다. 관계 부처는 내년 상반기까지 '
+    + '수도권 물류센터 세 곳을 추가로 짓고, 항만 배후단지 임대료를 한시적으로 낮추기로 했다. '
+    + '업계는 운송비 부담이 줄어들 것으로 보면서도 인력 수급 문제가 남아 있다고 지적했다. ')
+    .repeat(20).slice(0, 3500);
+  return `${BRIEF_PROMPT}\n\n[기사 제목] 정부, 물류 인프라 확충 계획 발표\n[기사 본문]\n${body}`;
+}
+
+// 모델 하나에 요청을 보내 본다. 실제 호출과 같은 형태(JSON 응답 요구)로 보낸다.
+async function probeGeminiModel(model, long = false) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+  const limitMs = long ? PROBE_LONG_TIMEOUT_MS : PROBE_TIMEOUT_MS;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), limitMs);
   const t0 = Date.now();
   try {
     const r = await fetch(url, {
@@ -2279,7 +2291,7 @@ async function probeGeminiModel(model) {
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: '{"ok":true} 만 출력해라.' }] }],
+        contents: [{ parts: [{ text: long ? probeLongPrompt() : '{"ok":true} 만 출력해라.' }] }],
         generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
       }),
     });
@@ -2287,13 +2299,20 @@ async function probeGeminiModel(model) {
     const ms = Date.now() - t0;
     if (!r.ok) return { model, ok: false, result: `HTTP ${r.status}`, ms, detail: bodyText.slice(0, 160) };
     let sample = '';
-    try { sample = JSON.parse(bodyText)?.candidates?.[0]?.content?.parts?.[0]?.text || ''; } catch { /* 무시 */ }
-    return { model, ok: true, result: 'OK', ms, detail: sample.slice(0, 60) };
+    let usage = null;
+    try {
+      const parsed = JSON.parse(bodyText);
+      sample = parsed?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const u = parsed?.usageMetadata || {};
+      // thoughts = '생각(thinking)'에 쓴 토큰. 이게 크면 그 모델은 요약 작업에 과한 추론을 하고 있다는 뜻이다
+      usage = { prompt: u.promptTokenCount, out: u.candidatesTokenCount, thoughts: u.thoughtsTokenCount || 0 };
+    } catch { /* 무시 */ }
+    return { model, ok: true, result: 'OK', ms, usage, detail: sample.slice(0, 60) };
   } catch (e) {
     const ms = Date.now() - t0;
     return {
       model, ok: false, ms,
-      result: controller.signal.aborted ? `응답없음(${PROBE_TIMEOUT_MS / 1000}초 초과)` : '연결실패',
+      result: controller.signal.aborted ? `응답없음(${limitMs / 1000}초 초과)` : '연결실패',
       detail: (e?.message || '').slice(0, 120),
     };
   } finally {
@@ -2320,13 +2339,14 @@ app.get('/api/gemini-models', async (req, res) => {
     try {
       const asked = String(req.query.models || '').split(',').map((s) => s.trim()).filter(Boolean);
       const targets = [...new Set(asked.length ? asked : [...MODEL_CANDIDATES, ...GEMINI_PROBE_EXTRA])];
+      const long = !!req.query.long;   // long=1 이면 실제 크기(본문 3,500자) 프롬프트로 잰다
       const results = [];
       let next = 0;
       await Promise.all(
         Array.from({ length: Math.min(PROBE_CONCURRENCY, targets.length) }, async () => {
           while (next < targets.length) {
             const model = targets[next++];
-            const one = await probeGeminiModel(model);
+            const one = await probeGeminiModel(model, long);
             results.push({ ...one, inAccount: usable.includes(model) });
           }
         })
@@ -2336,7 +2356,8 @@ app.get('/api/gemini-models', async (req, res) => {
       const okList = results.filter((x) => x.ok).map((x) => `${x.model} ${x.ms}ms`);
       console.log(`[Gemini 진단] ${results.length}개 시도, 성공 ${okList.length}개 → ${okList.join(', ') || '없음'}`);
       res.json({
-        note: '이 서버(Render)에서 각 모델에 짧은 요청을 보내 본 결과입니다. ok:true 중 ms가 작은 것이 1순위 후보입니다.',
+        note: `이 서버에서 각 모델에 ${long ? '실제 크기(본문 3,500자)' : '짧은'} 요청을 보내 본 결과입니다. ok:true 중 ms가 작은 것이 1순위 후보입니다.`,
+        mode: long ? 'long(실제 크기 프롬프트)' : 'short(짧은 인사)',
         active: ACTIVE_MODEL,
         candidates: MODEL_CANDIDATES,
         tookMs: Date.now() - t0,
