@@ -1935,8 +1935,10 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const MODEL_CANDIDATES = [
   process.env.GEMINI_MODEL, // .env / Render 환경변수에 지정했다면 1순위
   'gemini-3.5-flash-lite',  // 빠르고 한도 넉넉 → 최우선
-  'gemini-flash-lite-latest', // 위 모델의 별칭(구글이 최신 Lite로 연결해 준다)
-  'gemini-3.6-flash',       // 느리고 하루 20회 한도 → 폴백
+  // 2순위는 일부러 '다른 계열'을 둔다. gemini-flash-lite-latest 는 위 모델의 별칭이라
+  //   1순위가 한도 초과·무응답이면 똑같이 실패한다. 진짜 우회가 되려면 계열이 달라야 한다.
+  'gemini-3.6-flash',       // 느리고(13초) 하루 20회 한도지만, 계열이 달라 우회로가 된다
+  'gemini-flash-lite-latest', // 1순위가 404로 사라졌을 때를 대비한 자동 최신 별칭
   'gemini-flash-latest',
   'gemini-2.5-flash-lite',  // 현재 키에서는 404(신규 키 차단). 다른 키를 대비해 남겨 둔다
   'gemini-2.5-flash',
@@ -1981,10 +1983,24 @@ const BRIEF_PROMPT = `너는 신문사 편집기자다. 아래 [기사 본문]�
 }`;
 
 // 모델 하나로 실제 호출 (실패하면 status를 담은 에러를 던진다)
+// [응답 없음 대비] 한 모델을 얼마나 기다려 줄지
+//   2026-07-27 Render 에서 구글이 응답을 아예 안 주는 일이 생겼다(로그에 25초 abort만 반복).
+//   예전에는 25초를 통째로 기다렸다가 그냥 포기했다 — 다른 모델을 시도해 볼 기회도 없었다.
+//   이제는 짧게 끊고 다음 후보로 넘어간다.
+const GEMINI_TIMEOUT_MS = 9000;       // 기본 상한 (성공하는 호출은 보통 2~3초라 넉넉한 편이다)
+//   단, '생각(thinking)'을 하는 모델은 원래 13초쯤 걸리므로 더 넉넉히 준다.
+//   여기에 없는 모델은 전부 기본값을 쓴다.
+const GEMINI_SLOW_MODELS = {
+  'gemini-3.6-flash': 20000,
+  'gemini-flash-latest': 20000,       // 구글이 3.6-flash 로 연결해 주는 별칭
+};
+function geminiTimeoutFor(model) { return GEMINI_SLOW_MODELS[model] || GEMINI_TIMEOUT_MS; }
+
 async function callGeminiOnce(model, prompt) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+  const limitMs = geminiTimeoutFor(model);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25000);
+  const timer = setTimeout(() => controller.abort(), limitMs);
   try {
     const r = await fetch(url, {
       method: 'POST',
@@ -2006,6 +2022,17 @@ async function callGeminiOnce(model, prompt) {
     }
     const data = await r.json();
     return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  } catch (e) {
+    // 응답 없음(상한 초과)과 연결 실패는 '이 모델은 지금 못 쓴다'로 묶어서 표시한다.
+    //   status 가 붙은 에러(404·429·503 등)는 구글이 대답은 해 준 것이므로 그대로 올린다.
+    if (e?.status) throw e;
+    const err = new Error(
+      controller.signal.aborted
+        ? `Gemini 응답 없음 (${Math.round(limitMs / 1000)}초 초과): ${model}`
+        : `Gemini 연결 실패: ${model} (${e?.message || ''})`
+    );
+    err.noAnswer = true;   // ← callGeminiModels 가 '다음 후보로' 판단하는 표시
+    throw err;
   } finally {
     clearTimeout(timer);
   }
@@ -2026,6 +2053,11 @@ function isTransientGeminiError(e) { return GEMINI_TRANSIENT_STATUS.includes(e?.
 //   쿨다운 중인 모델은 아예 호출하지 않아 헛된 왕복을 줄인다.
 // -----------------------------------------------------------------
 const GEMINI_COOLDOWN_MS = 1000 * 60 * 10;   // 429 맞은 모델을 쉬게 할 기본 시간 (10분)
+const GEMINI_NOANSWER_COOLDOWN_MS = 1000 * 60 * 3; // 응답이 없던 모델을 쉬게 할 시간 (3분)
+//   한 번의 요청이 후보들을 훑는 데 쓸 수 있는 전체 시간.
+//   이걸 안 두면 후보가 6개라 최악의 경우 12초 x 6 = 72초를 기다리게 된다.
+//   남은 시간이 다음 후보의 상한보다 적으면 더 시도하지 않고 깔끔하게 끝낸다.
+const GEMINI_TOTAL_BUDGET_MS = 30000;
 const geminiCooldown = new Map();            // model -> 언제까지 쉴지(ms 시각)
 
 function isGeminiCooling(model) {
@@ -2036,10 +2068,11 @@ function isGeminiCooling(model) {
 }
 
 // 후보 목록을 돌면서 '되는 모델'을 찾아 한 번 호출한다
-//  - 404(모델 없음)   → 다음 후보로
-//  - 503 등 일시 장애  → 그 모델이 붐비는 것이므로 역시 다음 후보로 우회
-//  - 429(한도 초과)   → 그 모델을 쿨다운에 넣고 다음 후보로 우회
-async function callGeminiModels(prompt) {
+//  - 404(모델 없음)     → 다음 후보로
+//  - 503 등 일시 장애    → 그 모델이 붐비는 것이므로 역시 다음 후보로 우회
+//  - 429(한도 초과)     → 그 모델을 쿨다운에 넣고 다음 후보로 우회
+//  - 응답 없음/연결 실패 → 역시 쿨다운에 넣고 다음 후보로 우회 (deadline 안에서만)
+async function callGeminiModels(prompt, deadline = Date.now() + GEMINI_TOTAL_BUDGET_MS) {
   const base = ACTIVE_MODEL ? [ACTIVE_MODEL] : MODEL_CANDIDATES;
   // 쉬고 있는 모델은 건너뛴다. 다만 전부 쉬는 중이면 그냥 원래 목록대로 부딪쳐 본다
   //   (쿨다운이 실제보다 길게 잡혔을 수 있으므로 아예 못 부르는 상태는 만들지 않는다)
@@ -2048,6 +2081,12 @@ async function callGeminiModels(prompt) {
   let lastErr;
 
   for (const model of list) {
+    // 남은 시간으로 이 후보를 끝까지 기다려 줄 수 없으면 여기서 멈춘다.
+    //   (사용자를 무한정 붙잡아 두지 않기 위한 상한. 단 첫 후보는 무조건 한 번 해 본다)
+    if (lastErr && Date.now() + geminiTimeoutFor(model) > deadline) {
+      console.warn(`[Gemini] 전체 대기 상한(${GEMINI_TOTAL_BUDGET_MS / 1000}초) 도달 → 남은 후보는 다음 요청에서 시도`);
+      break;
+    }
     try {
       const out = await callGeminiOnce(model, prompt);
       if (ACTIVE_MODEL !== model) console.log(`[Gemini] 사용 모델 확정: ${model}`);
@@ -2059,13 +2098,13 @@ async function callGeminiModels(prompt) {
       if (e.status === 404) {
         console.warn(`[Gemini] ${model} 사용 불가(404) → 다음 후보 시도`);
         // 확정돼 있던 모델이 갑자기 막혔다면 확정을 풀고 전체 후보를 다시 시도
-        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt); }
+        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, deadline); }
         continue; // 모델이 없는 경우만 다음 후보로
       }
       if (isTransientGeminiError(e)) {
         console.warn(`[Gemini] ${model} 일시 장애(${e.status}) → 다른 모델로 우회 시도`);
         // 확정 모델이 붐비는 중 → 확정을 풀고 나머지 후보들을 훑는다
-        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt); }
+        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, deadline); }
         continue;
       }
       if (e.status === 429) {
@@ -2074,7 +2113,15 @@ async function callGeminiModels(prompt) {
         const cool = Math.max(e.retryAfterMs || 0, GEMINI_COOLDOWN_MS);
         geminiCooldown.set(model, Date.now() + cool);
         console.warn(`[Gemini] ${model} 한도 초과(429) → ${Math.round(cool / 60000)}분간 쉬고 다음 후보 시도`);
-        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt); }
+        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, deadline); }
+        continue;
+      }
+      if (e.noAnswer) {
+        // 구글이 대답 자체를 안 준 경우(상한 초과·연결 실패).
+        //   이 모델만 잠시 쉬게 하고 다음 후보로 넘어간다.
+        geminiCooldown.set(model, Date.now() + GEMINI_NOANSWER_COOLDOWN_MS);
+        console.warn(`[Gemini] ${e.message} → ${GEMINI_NOANSWER_COOLDOWN_MS / 60000}분간 쉬고 다음 후보 시도`);
+        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, deadline); }
         continue;
       }
       throw e; // 400 등은 모델을 바꿔도 소용없으므로 위로 던진다
@@ -2083,6 +2130,12 @@ async function callGeminiModels(prompt) {
   // 모든 후보가 일시 장애/한도 초과였다면 그 상태(503·429)를 그대로 위로 올려
   //   아래 callGemini 의 재시도·안내문 처리가 받게 한다
   if (isTransientGeminiError(lastErr) || lastErr?.status === 429) throw lastErr;
+  if (lastErr?.noAnswer) {
+    // 어느 모델도 대답을 안 했다 → 재시도해 봐야 같은 결과일 가능성이 크니 바로 안내한다
+    const friendly = new Error('AI 서버에서 응답이 오지 않았어요. 잠시 후 다시 시도해 주세요.');
+    friendly.noAnswer = true;
+    throw friendly;
+  }
   throw new Error(`쓸 수 있는 Gemini 모델을 찾지 못했습니다. /api/gemini-models 로 확인해 보세요. (${lastErr?.message || ''})`);
 }
 

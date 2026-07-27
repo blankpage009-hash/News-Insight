@@ -134,6 +134,33 @@ Render 로그에서 이 두 줄을 확인하면 정상 :
   실측 한도는 분당 15회(`GenerateRequestsPerMinutePerProjectPerModel-FreeTier = 15`).
   주요 내용 → 곧바로 Insight 흐름에서 두 번째 호출이 6초 → **2.0초**
 
+### 구글이 응답을 아예 안 줄 때의 완충장치 (2026-07-27)
+
+위 작업을 배포한 직후, **Render 에서만** Gemini 가 응답을 아예 안 주는 현상이 나타났다.
+로컬에서 같은 코드가 1.6~2.9초에 도는데 Render 에서는 25초 상한까지 기다렸다 실패한다.
+
+- Render 로그에 `[Gemini]` 경고가 **한 줄도 없고** `[deep-brief] The user aborted a request.` 만 반복된다.
+  = 429도 아니고 장애 응답도 아니고, **요청이 그냥 안 돌아온다.**
+- 같은 시각 Render 에서 구글 **모델 목록 조회(GET)는 331ms 정상**. `generateContent`(POST)만 멈춘다.
+- 이번 커밋(`c9fc1b8`)이 원인은 아니다. 요청을 보내는 `callGeminiOnce` 본문은 그대로였다.
+  **원인 미확정** — Render 에서 구글로 나가는 경로 문제로 추정.
+
+원인을 못 잡은 동안 피해를 줄이는 완충장치를 넣었다 :
+- 모델당 대기 상한 25초 → **9초** (`GEMINI_TIMEOUT_MS`).
+  단 '생각'하는 모델은 원래 13초쯤 걸리므로 예외로 20초를 준다(`GEMINI_SLOW_MODELS`).
+- **응답 없음·연결 실패도 429처럼 다음 후보로 넘어간다** (`err.noAnswer`).
+  그 모델은 3분 쿨다운(`GEMINI_NOANSWER_COOLDOWN_MS`)에 넣어 다음 요청에서 건너뛴다.
+- 한 요청이 후보를 훑는 **전체 상한 30초**(`GEMINI_TOTAL_BUDGET_MS`). 없으면 최악 9초x6=54초가 된다.
+- 후보 2순위를 `gemini-flash-lite-latest` → `gemini-3.6-flash` 로 바꿨다.
+  **별칭은 우회로가 못 된다.** `gemini-flash-lite-latest` 는 1순위와 같은 모델로 연결되므로
+  1순위가 무응답·한도초과면 똑같이 실패한다. 2순위는 반드시 **계열이 다른 모델**이어야 한다.
+
+가짜 fetch 로 검증한 결과 :
+- 1순위만 무응답 → 첫 클릭 **9.0초에 다른 모델로 우회 성공**, 두 번째 클릭부터는 쿨다운 덕에 바로 성공
+- 전부 무응답 → **29초 후 "AI 서버에서 응답이 오지 않았어요"** 안내
+  (예전엔 25초 후 `The user aborted a request.` 라는 개발자용 메시지가 그대로 노출됐다)
+- 1순위 429 → 기존 폴백 그대로 동작
+
 주의할 것 :
 - **`GEMINI_MODEL` 환경변수가 `MODEL_CANDIDATES`보다 우선한다.** Render 대시보드에 이 값이
   걸려 있으면 코드 순서를 바꿔도 프로덕션은 안 바뀐다. 로컬 `.env`는 주석 처리해 뒀다.
