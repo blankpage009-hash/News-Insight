@@ -1926,19 +1926,27 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 // [수정] 모델을 하나로 고정하지 않는다.
 //   구글이 구형 모델을 신규 API 키에 막으면서 404가 나기 때문에,
 //   후보를 순서대로 시도하고 성공한 모델을 기억해서 재사용한다.
-// [모델 선택] Flash-Lite 계열을 최우선으로 쓴다. (2026-07-27 실측 근거)
-//   - gemini-3.5-flash-lite : 2.6초. 하루 한도 넉넉.
-//   - gemini-3.6-flash      : 13.4초. '생각(thinking)'이 기본 ON이라 매 호출 2,700토큰을 더 쓴다.
-//                             게다가 무료 한도가 '모델별 하루 20회'라 금방 429가 난다.
-//   그래서 3.6-flash 는 최우선이 아니라 폴백 자리에 둔다.
+// [모델 선택] Flash-Lite 계열을 최우선으로 쓴다.
 //   순서를 바꿀 땐 GEMINI_MODEL 환경변수(아래 1순위)가 이 목록보다 우선한다는 점에 주의.
+//
+// [2026-07-27 재조정] `/api/gemini-models?test=1&long=1` 로 Render 에서 직접 재 본 결과다.
+//   실제 크기(본문 3,500자) 프롬프트 기준 :
+//   - gemini-3.1-flash-lite : Render 3.1~9.5초 · 로컬 2.8~8.9초. 생각토큰 0. → 양쪽에서 되는 유일한 lite
+//   - gemini-3.6-flash      : 계열이 달라 우회로로 쓸 만하지만 하루 20회 한도라 상시로는 못 쓴다
+//   - gemini-3.5-flash-lite : 로컬 2.4초로 제일 빠른데 **Render 에서는 30초까지도 응답이 없다**.
+//                             별칭 gemini-flash-lite-latest 도 똑같이 무응답 = 같은 백엔드다.
+//                             프로덕션이 Render 이므로 1순위에서 내리고 폴백 자리에 둔다.
+//   - gemini-3-flash-preview: 19.6초(생각토큰 1,328). 느려서 탈락
+//   - gemini-3.5-flash      : 503(붐빔)이 계속 나서 제외
 const MODEL_CANDIDATES = [
   process.env.GEMINI_MODEL, // .env / Render 환경변수에 지정했다면 1순위
-  'gemini-3.5-flash-lite',  // 빠르고 한도 넉넉 → 최우선
-  // 2순위는 일부러 '다른 계열'을 둔다. gemini-flash-lite-latest 는 위 모델의 별칭이라
-  //   1순위가 한도 초과·무응답이면 똑같이 실패한다. 진짜 우회가 되려면 계열이 달라야 한다.
-  'gemini-3.6-flash',       // 느리고(13초) 하루 20회 한도지만, 계열이 달라 우회로가 된다
-  'gemini-flash-lite-latest', // 1순위가 404로 사라졌을 때를 대비한 자동 최신 별칭
+  'gemini-3.1-flash-lite',  // Render·로컬 양쪽에서 되고 생각토큰 0 → 최우선
+  // 2순위는 일부러 '다른 계열'을 둔다. gemini-flash-lite-latest 는 lite 의 별칭이라
+  //   같은 계열이 무응답·한도초과면 똑같이 실패한다. 진짜 우회가 되려면 계열이 달라야 한다.
+  'gemini-3.6-flash',       // 하루 20회 한도지만 계열이 달라 우회로가 된다
+  'gemini-3.1-flash-lite-preview', // 1순위와 같은 계열의 preview. 실측 중앙값이 오히려 조금 빨랐다
+  'gemini-3.5-flash-lite',  // 로컬에선 제일 빠름. Render 에선 무응답이라 쿨다운으로 걸러진다
+  'gemini-flash-lite-latest', // 위 모델의 자동 최신 별칭 (404로 사라졌을 때 대비)
   'gemini-flash-latest',
   'gemini-2.5-flash-lite',  // 현재 키에서는 404(신규 키 차단). 다른 키를 대비해 남겨 둔다
   'gemini-2.5-flash',
@@ -1993,12 +2001,18 @@ const GEMINI_TIMEOUT_MS = 9000;       // 기본 상한 (성공하는 호출은 �
 const GEMINI_SLOW_MODELS = {
   'gemini-3.6-flash': 20000,
   'gemini-flash-latest': 20000,       // 구글이 3.6-flash 로 연결해 주는 별칭
+  // 1순위와 그 preview. 편차가 크다 — Render 실측 3.1 / 4.1 / 6.4 / 9.5 / 10.3 / 10.5 / 14.0 / 21.0초.
+  //   기본 상한 9초를 그대로 두면 절반 이상을 코앞에서 끊고 다음 후보로 넘기게 된다.
+  //   (다음 후보로 넘어가 봐야 어차피 비슷하게 느리므로, 기다리는 편이 사용자에게 낫다)
+  'gemini-3.1-flash-lite': 20000,
+  'gemini-3.1-flash-lite-preview': 20000,
 };
 function geminiTimeoutFor(model) { return GEMINI_SLOW_MODELS[model] || GEMINI_TIMEOUT_MS; }
 
-async function callGeminiOnce(model, prompt) {
+async function callGeminiOnce(model, prompt, limitOverrideMs) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-  const limitMs = geminiTimeoutFor(model);
+  // 남은 전체 시간이 모델 상한보다 짧으면 그만큼만 기다린다 (호출자가 넘겨준다)
+  const limitMs = limitOverrideMs || geminiTimeoutFor(model);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), limitMs);
   try {
@@ -2055,9 +2069,13 @@ function isTransientGeminiError(e) { return GEMINI_TRANSIENT_STATUS.includes(e?.
 const GEMINI_COOLDOWN_MS = 1000 * 60 * 10;   // 429 맞은 모델을 쉬게 할 기본 시간 (10분)
 const GEMINI_NOANSWER_COOLDOWN_MS = 1000 * 60 * 3; // 응답이 없던 모델을 쉬게 할 시간 (3분)
 //   한 번의 요청이 후보들을 훑는 데 쓸 수 있는 전체 시간.
-//   이걸 안 두면 후보가 6개라 최악의 경우 12초 x 6 = 72초를 기다리게 된다.
-//   남은 시간이 다음 후보의 상한보다 적으면 더 시도하지 않고 깔끔하게 끝낸다.
-const GEMINI_TOTAL_BUDGET_MS = 30000;
+//   이걸 안 두면 후보가 7개라 최악의 경우 20초 x 7 = 140초를 기다리게 된다.
+//   남은 시간이 아래 최소치보다 적으면 더 시도하지 않고 깔끔하게 끝낸다.
+//   (1순위 상한을 20초로 올렸으므로 30초로는 2순위를 제대로 못 해 본다 → 36초)
+const GEMINI_TOTAL_BUDGET_MS = 36000;
+//   다음 후보를 시도해 볼 가치가 있는 최소 남은 시간. 이보다 적게 남았으면 깔끔하게 포기한다
+//   (2초쯤 남겨 두고 부르면 어차피 끊겨서 한도만 축낸다)
+const GEMINI_MIN_TRY_MS = 6000;
 const geminiCooldown = new Map();            // model -> 언제까지 쉴지(ms 시각)
 
 function isGeminiCooling(model) {
@@ -2082,14 +2100,18 @@ async function callGeminiModels(prompt, deadline = Date.now() + GEMINI_TOTAL_BUD
   const fails = [];   // [{ model, e }] — 모델별로 '왜 실패했는지'를 모아 둔다 (아래 원인 고르기에 쓴다)
 
   for (const model of list) {
-    // 남은 시간으로 이 후보를 끝까지 기다려 줄 수 없으면 여기서 멈춘다.
+    // 남은 시간이 '해 볼 가치가 있는 최소치'보다 적으면 여기서 멈춘다.
     //   (사용자를 무한정 붙잡아 두지 않기 위한 상한. 단 첫 후보는 무조건 한 번 해 본다)
-    if (lastErr && Date.now() + geminiTimeoutFor(model) > deadline) {
+    //   예전에는 '모델 상한을 통째로 확보할 수 있을 때만' 시도했는데,
+    //   1순위 14초 + 2순위 20초 = 34초라 전체 상한 30초 안에서 2순위를 아예 못 해 보게 됐다.
+    //   그래서 남은 시간만큼만 잘라서라도 다음 후보를 시도한다.
+    const remain = deadline - Date.now();
+    if (lastErr && remain < GEMINI_MIN_TRY_MS) {
       console.warn(`[Gemini] 전체 대기 상한(${GEMINI_TOTAL_BUDGET_MS / 1000}초) 도달 → 남은 후보는 다음 요청에서 시도`);
       break;
     }
     try {
-      const out = await callGeminiOnce(model, prompt);
+      const out = await callGeminiOnce(model, prompt, Math.min(geminiTimeoutFor(model), remain));
       if (ACTIVE_MODEL !== model) console.log(`[Gemini] 사용 모델 확정: ${model}`);
       ACTIVE_MODEL = model;
       geminiCooldown.delete(model);   // 성공했으면 쿨다운 해제
@@ -2279,8 +2301,10 @@ function probeLongPrompt() {
 }
 
 // 모델 하나에 요청을 보내 본다. 실제 호출과 같은 형태(JSON 응답 요구)로 보낸다.
-async function probeGeminiModel(model, long = false) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+async function probeGeminiModel(model, long = false, ver = 'v1beta') {
+  // ver 은 API 버전(v1beta / v1). Render 에서 특정 모델만 응답이 없을 때
+  //   '경로 문제인지 모델 문제인지' 가르려고 바꿔 볼 수 있게 열어 뒀다.
+  const url = `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
   const limitMs = long ? PROBE_LONG_TIMEOUT_MS : PROBE_TIMEOUT_MS;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), limitMs);
@@ -2340,13 +2364,14 @@ app.get('/api/gemini-models', async (req, res) => {
       const asked = String(req.query.models || '').split(',').map((s) => s.trim()).filter(Boolean);
       const targets = [...new Set(asked.length ? asked : [...MODEL_CANDIDATES, ...GEMINI_PROBE_EXTRA])];
       const long = !!req.query.long;   // long=1 이면 실제 크기(본문 3,500자) 프롬프트로 잰다
+      const ver = req.query.ver === 'v1' ? 'v1' : 'v1beta';   // ver=v1 로 다른 API 경로도 시험해 본다
       const results = [];
       let next = 0;
       await Promise.all(
         Array.from({ length: Math.min(PROBE_CONCURRENCY, targets.length) }, async () => {
           while (next < targets.length) {
             const model = targets[next++];
-            const one = await probeGeminiModel(model, long);
+            const one = await probeGeminiModel(model, long, ver);
             results.push({ ...one, inAccount: usable.includes(model) });
           }
         })
@@ -2357,7 +2382,7 @@ app.get('/api/gemini-models', async (req, res) => {
       console.log(`[Gemini 진단] ${results.length}개 시도, 성공 ${okList.length}개 → ${okList.join(', ') || '없음'}`);
       res.json({
         note: `이 서버에서 각 모델에 ${long ? '실제 크기(본문 3,500자)' : '짧은'} 요청을 보내 본 결과입니다. ok:true 중 ms가 작은 것이 1순위 후보입니다.`,
-        mode: long ? 'long(실제 크기 프롬프트)' : 'short(짧은 인사)',
+        mode: `${long ? 'long(실제 크기 프롬프트)' : 'short(짧은 인사)'} · ${ver}`,
         active: ACTIVE_MODEL,
         candidates: MODEL_CANDIDATES,
         tookMs: Date.now() - t0,
