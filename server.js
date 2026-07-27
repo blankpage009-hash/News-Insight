@@ -2079,6 +2079,7 @@ async function callGeminiModels(prompt, deadline = Date.now() + GEMINI_TOTAL_BUD
   const awake = base.filter((m) => !isGeminiCooling(m));
   const list = awake.length ? awake : base;
   let lastErr;
+  const fails = [];   // [{ model, e }] — 모델별로 '왜 실패했는지'를 모아 둔다 (아래 원인 고르기에 쓴다)
 
   for (const model of list) {
     // 남은 시간으로 이 후보를 끝까지 기다려 줄 수 없으면 여기서 멈춘다.
@@ -2095,6 +2096,7 @@ async function callGeminiModels(prompt, deadline = Date.now() + GEMINI_TOTAL_BUD
       return out;
     } catch (e) {
       lastErr = e;
+      fails.push({ model, e });
       if (e.status === 404) {
         console.warn(`[Gemini] ${model} 사용 불가(404) → 다음 후보 시도`);
         // 확정돼 있던 모델이 갑자기 막혔다면 확정을 풀고 전체 후보를 다시 시도
@@ -2127,16 +2129,38 @@ async function callGeminiModels(prompt, deadline = Date.now() + GEMINI_TOTAL_BUD
       throw e; // 400 등은 모델을 바꿔도 소용없으므로 위로 던진다
     }
   }
-  // 모든 후보가 일시 장애/한도 초과였다면 그 상태(503·429)를 그대로 위로 올려
-  //   아래 callGemini 의 재시도·안내문 처리가 받게 한다
-  if (isTransientGeminiError(lastErr) || lastErr?.status === 429) throw lastErr;
-  if (lastErr?.noAnswer) {
+  // -----------------------------------------------------------------
+  // [원인 고르기] 예전에는 '마지막 에러(lastErr)' 하나만 보고 판단했다.
+  //   후보 목록 맨 뒤의 2.5 계열은 현재 키에서 404라서, 진짜 원인(429·무응답)이
+  //   그 404에 덮여 "쓸 수 있는 Gemini 모델을 찾지 못했습니다" 로만 표시됐다.
+  //   이제는 모델별 실패 사유를 전부 모아 두고, 그중 설명이 되는 것을 골라 올린다.
+  //   404(그 키에 없는 모델)는 '원인'이 아니라 '건너뛴 것'이므로 가장 뒤로 민다.
+  // -----------------------------------------------------------------
+  const summary = fails.map(({ model, e }) => `${model}=${geminiFailReason(e)}`).join(', ');
+  if (fails.length) console.warn(`[Gemini] 후보 전부 실패 → ${summary}`);
+  const pick = (fn) => fails.find(({ e }) => fn(e))?.e;
+  const transient = pick(isTransientGeminiError);
+  const quota = pick((e) => e?.status === 429);
+  const noAnswer = pick((e) => e?.noAnswer);
+  // 일시 장애·한도 초과는 그대로 위로 올려 callGemini 의 재시도·안내문 처리가 받게 한다
+  if (transient) throw transient;
+  if (quota) throw quota;
+  if (noAnswer) {
     // 어느 모델도 대답을 안 했다 → 재시도해 봐야 같은 결과일 가능성이 크니 바로 안내한다
     const friendly = new Error('AI 서버에서 응답이 오지 않았어요. 잠시 후 다시 시도해 주세요.');
     friendly.noAnswer = true;
     throw friendly;
   }
-  throw new Error(`쓸 수 있는 Gemini 모델을 찾지 못했습니다. /api/gemini-models 로 확인해 보세요. (${lastErr?.message || ''})`);
+  throw new Error(`쓸 수 있는 Gemini 모델을 찾지 못했습니다. /api/gemini-models?test=1 로 확인해 보세요. (${summary || lastErr?.message || ''})`);
+}
+
+// 실패 사유를 사람이 읽기 쉬운 한 마디로 (로그·에러 메시지에 쓴다)
+function geminiFailReason(e) {
+  if (e?.noAnswer) return '응답없음';
+  if (e?.status === 404) return '404(키에 없는 모델)';
+  if (e?.status === 429) return '429(한도초과)';
+  if (e?.status) return `HTTP ${e.status}`;
+  return (e?.message || '알수없음').slice(0, 60);
 }
 
 // -----------------------------------------------------------------
@@ -2223,6 +2247,60 @@ async function callGemini(prompt) {
   }
 }
 
+// -----------------------------------------------------------------
+// [진단] 이 서버에서 어떤 모델이 '실제로 응답하는지' 재 본다
+//   2026-07-27, 같은 코드·같은 키인데 Render 에서만 응답이 안 오는 일이 있었다.
+//   내 PC 에서는 재현이 안 되므로 Render 서버가 직접 재 보는 수밖에 없다.
+//   후보 모델들에게 짧은 요청을 하나씩 보내고 status·소요시간을 표로 돌려준다.
+//   사용법 : https://news-insight.onrender.com/api/gemini-models?test=1
+//           특정 모델만 : ...?test=1&models=gemini-3.5-flash-lite,gemini-3.1-flash-lite
+// -----------------------------------------------------------------
+// 후보 목록에는 없지만 '대안이 될 수 있나' 확인해 볼 만한 모델들
+const GEMINI_PROBE_EXTRA = [
+  'gemini-3.1-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-3-flash-preview',
+  'gemini-2.0-flash-lite',
+  'gemini-2.0-flash',
+];
+const PROBE_TIMEOUT_MS = 15000;   // 실제 호출 상한(9초)보다 길게 줘서 '느린 것'과 '아예 안 오는 것'을 구분한다
+const PROBE_CONCURRENCY = 3;      // 한꺼번에 다 쏘면 서로 영향을 줄 수 있어 3개씩만
+let probeRunning = false;         // 동시에 두 번 돌리지 않게 (한도를 헛되이 쓰지 않으려고)
+
+// 모델 하나에 짧은 요청을 보내 본다. 실제 호출과 같은 형태(JSON 응답 요구)로 보낸다.
+async function probeGeminiModel(model) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  const t0 = Date.now();
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: '{"ok":true} 만 출력해라.' }] }],
+        generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
+      }),
+    });
+    const bodyText = await r.text();
+    const ms = Date.now() - t0;
+    if (!r.ok) return { model, ok: false, result: `HTTP ${r.status}`, ms, detail: bodyText.slice(0, 160) };
+    let sample = '';
+    try { sample = JSON.parse(bodyText)?.candidates?.[0]?.content?.parts?.[0]?.text || ''; } catch { /* 무시 */ }
+    return { model, ok: true, result: 'OK', ms, detail: sample.slice(0, 60) };
+  } catch (e) {
+    const ms = Date.now() - t0;
+    return {
+      model, ok: false, ms,
+      result: controller.signal.aborted ? `응답없음(${PROBE_TIMEOUT_MS / 1000}초 초과)` : '연결실패',
+      detail: (e?.message || '').slice(0, 120),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // [추가] 내 API 키로 실제 쓸 수 있는 모델 목록 확인
 //   브라우저에서 http://localhost:3000/api/gemini-models 접속
 app.get('/api/gemini-models', async (req, res) => {
@@ -2233,7 +2311,40 @@ app.get('/api/gemini-models', async (req, res) => {
     const usable = (data.models || [])
       .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
       .map((m) => m.name.replace('models/', ''));
-    res.json({ active: ACTIVE_MODEL, candidates: MODEL_CANDIDATES, usable });
+
+    if (!req.query.test) return res.json({ active: ACTIVE_MODEL, candidates: MODEL_CANDIDATES, usable });
+
+    if (probeRunning) return res.status(429).json({ error: '진단이 이미 돌고 있습니다. 잠시 뒤 다시 열어 주세요.' });
+    probeRunning = true;
+    const t0 = Date.now();
+    try {
+      const asked = String(req.query.models || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const targets = [...new Set(asked.length ? asked : [...MODEL_CANDIDATES, ...GEMINI_PROBE_EXTRA])];
+      const results = [];
+      let next = 0;
+      await Promise.all(
+        Array.from({ length: Math.min(PROBE_CONCURRENCY, targets.length) }, async () => {
+          while (next < targets.length) {
+            const model = targets[next++];
+            const one = await probeGeminiModel(model);
+            results.push({ ...one, inAccount: usable.includes(model) });
+          }
+        })
+      );
+      // 되는 모델을 먼저, 그 안에서는 빠른 순으로
+      results.sort((a, b) => (a.ok === b.ok ? a.ms - b.ms : a.ok ? -1 : 1));
+      const okList = results.filter((x) => x.ok).map((x) => `${x.model} ${x.ms}ms`);
+      console.log(`[Gemini 진단] ${results.length}개 시도, 성공 ${okList.length}개 → ${okList.join(', ') || '없음'}`);
+      res.json({
+        note: '이 서버(Render)에서 각 모델에 짧은 요청을 보내 본 결과입니다. ok:true 중 ms가 작은 것이 1순위 후보입니다.',
+        active: ACTIVE_MODEL,
+        candidates: MODEL_CANDIDATES,
+        tookMs: Date.now() - t0,
+        results,
+      });
+    } finally {
+      probeRunning = false;
+    }
   } catch (e) {
     res.json({ error: e.message });
   }
