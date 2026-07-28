@@ -981,6 +981,34 @@
     </div>
   </div>
 
+  <!-- [추가] SCFI 지수 차트 팝업 (운임지수 섹션의 SCFI 패널을 누르면 열린다) -->
+  <div id="scfi-modal" class="hidden fixed inset-0 z-[75] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeScfiChartOnBackdrop(event)">
+    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-4xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center gap-4 p-6 pb-3 shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-gold2 shrink-0">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          </span>
+          <h3 class="text-gold font-bold tracking-wider truncate">SCFI 종합지수 추이</h3>
+        </div>
+        <button onclick="closeScfiChart()" class="text-muted hover:text-paper transition shrink-0">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <!-- 기간 버튼 (1주일 ~ 3년) -->
+      <div id="scfi-range-tabs" class="flex flex-wrap gap-1.5 px-6 pb-3 shrink-0"></div>
+      <div id="scfi-chart-body" class="px-6 overflow-y-auto grow pb-4"></div>
+      <div class="popup-foot flex items-center justify-between gap-3 flex-wrap p-6 pt-4 border-t border-line shrink-0">
+        <span class="text-muted font-mono text-[0.75rem]">SCFI는 매주 금요일 1회 발표됩니다.</span>
+        <a href="https://en.sse.net.cn/indices/scfinew.jsp" target="_blank" rel="noopener noreferrer"
+          class="flex items-center gap-1 text-wire hover:text-blue-300 px-2.5 py-1 rounded-md transition border border-wire/30 bg-wire/10 font-semibold text-[0.8rem]">
+          상하이해운거래소
+          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+
   <!-- 관련 기사 팝업 모달 ([수정] 나중에 연 팝업이 위로 오도록 z-index는 bringModalToFront()가 정한다) -->
   <div id="related-modal" class="hidden fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeRelatedOnBackdrop(event)">
     <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
@@ -2361,15 +2389,22 @@
       const changeText = d.change === 0
         ? '보합'
         : `${arrow}${fmt(d.change)}p (${arrow}${Math.abs(d.changePercent).toFixed(2)}%)`;
-      return `<div class="flex items-center gap-x-4 gap-y-2 flex-wrap px-5 py-3 bg-panel/70 border border-gold/25 rounded-xl">
+      // [추가] 패널 자체가 차트 팝업을 여는 버튼이다. 안쪽 출처 링크만 예외로 둔다.
+      return `<div onclick="openScfiChart()" role="button" tabindex="0"
+        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openScfiChart();}"
+        title="눌러서 지수 차트 보기"
+        class="flex items-center gap-x-4 gap-y-2 flex-wrap px-5 py-3 bg-panel/70 border border-gold/25 rounded-xl cursor-pointer transition hover:border-gold/60 hover:bg-panel">
         <span class="text-gold2 shrink-0">${icon('line-chart', 'w-4 h-4')}</span>
         <span class="text-gold font-semibold tracking-wider whitespace-nowrap">SCFI 종합지수</span>
         <span class="font-mono text-paper text-xl tabular-nums">${d.current.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         <span class="font-mono ${colorClass} tabular-nums whitespace-nowrap">${changeText}</span>
         <span class="text-muted font-mono text-[0.8rem] whitespace-nowrap">전주(${scfiDateText(d.lastDate)}) ${d.previous.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 대비</span>
+        <span class="text-gold2 font-mono text-[0.75rem] flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-md border border-gold/30 bg-gold/10">
+          ${icon('line-chart', 'w-3 h-3')} 차트
+        </span>
         <span class="text-muted font-mono text-[0.8rem] ml-auto whitespace-nowrap">
           ${scfiDateText(d.currentDate)} 발표${d.stale ? ' (캐시)' : ''} ·
-          <a href="${d.sourceUrl}" target="_blank" rel="noopener" class="hover:text-gold underline decoration-dotted">상하이해운거래소</a>
+          <a href="${d.sourceUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="hover:text-gold underline decoration-dotted">상하이해운거래소</a>
         </span>
       </div>`;
     }
@@ -2403,6 +2438,281 @@
         const keyword = document.getElementById('search-input').value.trim();
         if (!settingMode) updateScfiPanel(keyword);
       }
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] SCFI 지수 차트 팝업
+    //  - 위 패널을 누르면 열린다. 기간 버튼(1주일~3년)으로 구간을 바꾼다.
+    //  - SCFI는 주 1회 발표라 점 사이 간격이 7일이다. 그래서 '1주일'을 고르면
+    //    점이 1개뿐일 수 있는데, 선이 안 그려지므로 그때는 최근 2개를 보여준다.
+    //  - 그래프는 SVG 하나로 직접 그린다(외부 차트 라이브러리 없음).
+    // ---------------------------------------------------------------
+    const SCFI_RANGES = [
+      { key: '1w', label: '1주일', days: 7 },
+      { key: '1m', label: '1개월', days: 31 },
+      { key: '3m', label: '3개월', days: 92 },
+      { key: '6m', label: '6개월', days: 183 },
+      { key: '1y', label: '1년',   days: 365 },
+      { key: '2y', label: '2년',   days: 730 },
+      { key: '3y', label: '3년',   days: 1095 },
+    ];
+
+    let scfiHistory = null;      // [{ date, value }] 오름차순
+    let scfiHistoryError = false;
+    let scfiHistoryFetching = false;
+    let scfiRange = '1y';        // 처음 열었을 때 보여줄 기간
+
+    function openScfiChart() {
+      const modal = document.getElementById('scfi-modal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      bringModalToFront(modal);
+      renderScfiRangeTabs();
+      renderScfiChart();
+      if (!scfiHistory && !scfiHistoryError) loadScfiHistory();
+    }
+
+    function closeScfiChart() {
+      document.getElementById('scfi-modal').classList.add('hidden');
+    }
+
+    function closeScfiChartOnBackdrop(e) {
+      if (e.target.id === 'scfi-modal') closeScfiChart();
+    }
+
+    // 창 크기가 바뀌면 데스크톱/모바일 비율이 달라지므로 열려 있을 때만 다시 그린다.
+    let scfiResizeTimer = null;
+    window.addEventListener('resize', () => {
+      const modal = document.getElementById('scfi-modal');
+      if (!modal || modal.classList.contains('hidden')) return;
+      clearTimeout(scfiResizeTimer);
+      scfiResizeTimer = setTimeout(renderScfiChart, 150);
+    });
+
+    function setScfiRange(key) {
+      scfiRange = key;
+      renderScfiRangeTabs();
+      renderScfiChart();
+    }
+
+    function renderScfiRangeTabs() {
+      const el = document.getElementById('scfi-range-tabs');
+      if (!el) return;
+      el.innerHTML = SCFI_RANGES.map(r => {
+        const on = r.key === scfiRange;
+        const cls = on
+          ? 'bg-gold/20 text-gold border-gold/50'
+          : 'bg-ink3 text-muted border-line hover:text-paper hover:border-gold/30';
+        return `<button onclick="setScfiRange('${r.key}')"
+          class="px-3 py-1 rounded-md border font-semibold text-[0.8rem] transition ${cls}">${r.label}</button>`;
+      }).join('');
+    }
+
+    async function loadScfiHistory() {
+      if (scfiHistoryFetching) return;
+      scfiHistoryFetching = true;
+      try {
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/scfi/history`);
+        if (!res.ok) throw new Error('SCFI 시계열 API 오류: ' + res.status);
+        const data = await res.json();
+        scfiHistory = (data.points || []).filter(p => p && p.date && Number.isFinite(p.value));
+        scfiHistoryError = !scfiHistory.length;
+      } catch (err) {
+        console.error(err);
+        scfiHistoryError = true;
+      } finally {
+        scfiHistoryFetching = false;
+        renderScfiChart();
+      }
+    }
+
+    // 선택한 기간에 해당하는 점만 골라낸다.
+    function scfiRangePoints() {
+      if (!scfiHistory || !scfiHistory.length) return [];
+      const range = SCFI_RANGES.find(r => r.key === scfiRange) || SCFI_RANGES[4];
+      const last = new Date(`${scfiHistory[scfiHistory.length - 1].date}T00:00:00`);
+      const from = new Date(last.getTime() - range.days * 86400000);
+      const picked = scfiHistory.filter(p => new Date(`${p.date}T00:00:00`) >= from);
+      // 점이 하나면 선이 안 그려진다 → 최소 2개는 확보한다.
+      return picked.length >= 2 ? picked : scfiHistory.slice(-2);
+    }
+
+    function scfiNum(n, digits = 2) {
+      return n.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    }
+
+    function scfiAxisDate(iso, shortRange) {
+      const [y, m, d] = iso.split('-');
+      return shortRange ? `${Number(m)}/${Number(d)}` : `${y.slice(2)}.${m}`;
+    }
+
+    // Catmull-Rom 을 3차 베지에로 바꿔 부드러운 곡선 하나로 잇는다.
+    function scfiCurvePath(pts) {
+      if (pts.length < 2) return '';
+      const r = n => Math.round(n * 10) / 10;
+      let d = `M ${r(pts[0].x)} ${r(pts[0].y)}`;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i - 1] || pts[i];
+        const p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+        const t = 0.18;   // 곡률. 크게 하면 출렁이고, 0이면 직선이 된다.
+        d += ` C ${r(p1.x + (p2.x - p0.x) * t)} ${r(p1.y + (p2.y - p0.y) * t)}`
+           + ` ${r(p2.x - (p3.x - p1.x) * t)} ${r(p2.y - (p3.y - p1.y) * t)}`
+           + ` ${r(p2.x)} ${r(p2.y)}`;
+      }
+      return d;
+    }
+
+    function renderScfiChart() {
+      const body = document.getElementById('scfi-chart-body');
+      if (!body) return;
+
+      if (scfiHistoryError) {
+        body.innerHTML = `<div class="py-16 text-center text-muted font-mono text-[0.9rem]">
+          지수 추이를 불러오지 못했습니다.</div>`;
+        return;
+      }
+      if (!scfiHistory) {
+        body.innerHTML = `<div class="py-16 flex items-center justify-center gap-2 text-muted font-mono text-[0.9rem]">
+          ${icon('loader-2', 'w-4 h-4 animate-spin')}<span>지수 추이를 불러오는 중입니다...</span></div>`;
+        return;
+      }
+
+      const pts = scfiRangePoints();
+      const range = SCFI_RANGES.find(r => r.key === scfiRange) || SCFI_RANGES[4];
+      const shortRange = range.days <= 183;
+
+      // 좌표계 : viewBox 기준으로 그리고, 화면 폭에는 CSS 로 맞춘다.
+      //  - viewBox 비율이 곧 차트의 가로세로 비율이다. 데스크톱 비율(900:320)을
+      //    좁은 화면에 그대로 쓰면 높이가 100px대로 납작해져서 곡선이 안 보인다.
+      //    그래서 모바일은 더 세로로 긴 비율을 쓰고, 축 글씨도 따로 잡는다.
+      const narrow = window.innerWidth < 640;
+      const W = narrow ? 360 : 900, H = narrow ? 250 : 320;
+      const PL = narrow ? 44 : 66, PR = narrow ? 10 : 16, PT = narrow ? 12 : 16, PB = narrow ? 26 : 30;
+      const fs = narrow ? 10 : 11;   // 축 글씨 크기
+      const values = pts.map(p => p.value);
+      let lo = Math.min(...values), hi = Math.max(...values);
+      const pad = (hi - lo) * 0.12 || Math.max(hi * 0.02, 1);   // 값이 모두 같을 때도 납작해지지 않게
+      lo -= pad; hi += pad;
+
+      const xOf = i => PL + (pts.length === 1 ? (W - PL - PR) / 2 : (i * (W - PL - PR)) / (pts.length - 1));
+      const yOf = v => PT + (H - PT - PB) * (1 - (v - lo) / (hi - lo));
+      const xy = pts.map((p, i) => ({ x: xOf(i), y: yOf(p.value) }));
+
+      const first = pts[0], last = pts[pts.length - 1];
+      const diff = last.value - first.value;
+      const diffPct = first.value ? (diff / first.value) * 100 : 0;
+      const up = diff > 0, down = diff < 0;
+      const lineColor = up ? '#fb7185' : down ? '#60a5fa' : '#c8a45c';   // 상승 붉은색 / 하락 파란색 (국내 관행)
+      const sumClass = up ? 'text-rose-400' : down ? 'text-blue-400' : 'text-muted';
+      const arrow = up ? '▲' : down ? '▼' : '－';
+
+      // 가로 눈금선 4칸 + 왼쪽 값 라벨
+      const gridCount = 4;
+      const grid = Array.from({ length: gridCount + 1 }, (_, i) => {
+        const v = lo + ((hi - lo) * i) / gridCount;
+        const y = yOf(v);
+        return `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W - PR}" y2="${y.toFixed(1)}" stroke="currentColor" stroke-width="1" class="text-line" opacity="0.5"/>
+          <text x="${PL - 8}" y="${(y + fs / 3).toFixed(1)}" text-anchor="end" font-size="${fs}" fill="currentColor" class="text-muted" font-family="ui-monospace,monospace">${scfiNum(v, 0)}</text>`;
+      }).join('');
+
+      // 아래 날짜 라벨 (겹치지 않게 균등 간격. 좁은 화면은 개수를 줄인다)
+      const labelCount = Math.min(narrow ? 3 : 5, pts.length);
+      const xLabels = Array.from({ length: labelCount }, (_, i) => {
+        const idx = labelCount === 1 ? 0 : Math.round((i * (pts.length - 1)) / (labelCount - 1));
+        const anchor = i === 0 ? 'start' : i === labelCount - 1 ? 'end' : 'middle';
+        return `<text x="${xOf(idx).toFixed(1)}" y="${H - 8}" text-anchor="${anchor}" font-size="${fs}" fill="currentColor" class="text-muted" font-family="ui-monospace,monospace">${scfiAxisDate(pts[idx].date, shortRange)}</text>`;
+      }).join('');
+
+      const curve = scfiCurvePath(xy);
+      const area = `${curve} L ${xy[xy.length - 1].x.toFixed(1)} ${H - PB} L ${xy[0].x.toFixed(1)} ${H - PB} Z`;
+      // 점이 적을 때만 마커를 찍는다. 많으면 곡선이 지저분해진다.
+      const markers = pts.length <= (narrow ? 16 : 30)
+        ? xy.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${narrow ? 2 : 2.5}" fill="${lineColor}"/>`).join('')
+        : '';
+
+      body.innerHTML = `
+        <div class="flex items-baseline gap-x-3 gap-y-1 flex-wrap mb-3">
+          <span class="font-mono text-paper text-2xl tabular-nums">${scfiNum(last.value)}</span>
+          <span class="font-mono ${sumClass} tabular-nums">${diff === 0 ? '보합' : `${arrow}${scfiNum(Math.abs(diff))}p (${arrow}${Math.abs(diffPct).toFixed(2)}%)`}</span>
+          <span class="text-muted font-mono text-[0.8rem]">${range.label} 전 ${scfiNum(first.value)} 대비</span>
+          <span class="text-muted font-mono text-[0.8rem] ml-auto">${first.date} ~ ${last.date} · ${pts.length}주</span>
+        </div>
+        <div id="scfi-plot" class="relative select-none">
+          <svg id="scfi-svg" viewBox="0 0 ${W} ${H}" class="w-full h-auto block">
+            <defs>
+              <linearGradient id="scfi-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="${lineColor}" stop-opacity="0.28"/>
+                <stop offset="100%" stop-color="${lineColor}" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            ${grid}
+            <path d="${area}" fill="url(#scfi-fill)"/>
+            <path d="${curve}" fill="none" stroke="${lineColor}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            ${markers}
+            <line id="scfi-hover-line" x1="0" y1="${PT}" x2="0" y2="${H - PB}" stroke="${lineColor}" stroke-width="1" opacity="0" stroke-dasharray="3 3"/>
+            <circle id="scfi-hover-dot" r="4.5" fill="${lineColor}" opacity="0"/>
+            ${xLabels}
+          </svg>
+          <div id="scfi-tip" class="hidden absolute pointer-events-none z-10 px-2.5 py-1.5 rounded-md bg-ink border border-gold/40 font-mono text-[0.75rem] text-paper whitespace-nowrap shadow-lg"></div>
+        </div>
+        <p class="text-muted text-[0.72rem] leading-snug mt-3 break-keep">
+          SCFI는 매주 1회(금요일) 발표되는 주간 지수라 점 사이 간격이 일주일입니다.
+          중국 춘절·국경절처럼 발표를 쉬는 주에는 간격이 2주가 됩니다.
+        </p>`;
+
+      attachScfiHover(pts, xy, W, H, PT, H - PB);
+    }
+
+    // 마우스를 올리면 가장 가까운 주(週)의 값을 말풍선으로 보여준다.
+    function attachScfiHover(pts, xy, W, H, topY, bottomY) {
+      const svg = document.getElementById('scfi-svg');
+      const plot = document.getElementById('scfi-plot');
+      const tip = document.getElementById('scfi-tip');
+      const line = document.getElementById('scfi-hover-line');
+      const dot = document.getElementById('scfi-hover-dot');
+      if (!svg || !plot || !tip) return;
+
+      const hide = () => {
+        tip.classList.add('hidden');
+        line.setAttribute('opacity', '0');
+        dot.setAttribute('opacity', '0');
+      };
+
+      const move = (e) => {
+        const box = svg.getBoundingClientRect();
+        if (!box.width) return;
+        const touch = e.touches && e.touches[0];
+        const clientX = touch ? touch.clientX : e.clientX;
+        const vx = ((clientX - box.left) / box.width) * W;      // 화면 좌표 → viewBox 좌표
+        let best = 0;
+        for (let i = 1; i < xy.length; i++) {
+          if (Math.abs(xy[i].x - vx) < Math.abs(xy[best].x - vx)) best = i;
+        }
+        const p = pts[best], c = xy[best];
+        line.setAttribute('x1', c.x); line.setAttribute('x2', c.x);
+        line.setAttribute('y1', topY); line.setAttribute('y2', bottomY);
+        line.setAttribute('opacity', '0.7');
+        dot.setAttribute('cx', c.x); dot.setAttribute('cy', c.y);
+        dot.setAttribute('opacity', '1');
+
+        const prev = best > 0 ? pts[best - 1].value : null;
+        const wow = prev === null ? '' : `<br><span class="${p.value > prev ? 'text-rose-400' : p.value < prev ? 'text-blue-400' : 'text-muted'}">전주대비 ${p.value === prev ? '보합' : `${p.value > prev ? '▲' : '▼'}${scfiNum(Math.abs(p.value - prev))}p`}</span>`;
+        tip.innerHTML = `<span class="text-muted">${p.date}</span><br>${scfiNum(p.value)}${wow}`;
+        tip.classList.remove('hidden');
+
+        // 말풍선이 오른쪽 밖으로 나가지 않게 접었다 편다.
+        const px = (c.x / W) * box.width;
+        const py = (c.y / H) * box.height;
+        const tw = tip.offsetWidth;
+        tip.style.left = `${Math.max(0, Math.min(px - tw / 2, box.width - tw))}px`;
+        tip.style.top = `${Math.max(0, py - tip.offsetHeight - 12)}px`;
+      };
+
+      plot.addEventListener('mousemove', move);
+      plot.addEventListener('mouseleave', hide);
+      plot.addEventListener('touchstart', move, { passive: true });
+      plot.addEventListener('touchmove', move, { passive: true });
+      plot.addEventListener('touchend', hide);
     }
 
     // ---------------------------------------------------------------
@@ -3122,6 +3432,7 @@
       const open = [
         ['brief-modal', closeBrief],
         ['related-modal', closeRelated],
+        ['scfi-modal', closeScfiChart],
       ].filter(([id]) => {
         const el = document.getElementById(id);
         return el && !el.classList.contains('hidden');
