@@ -3205,7 +3205,7 @@
     function closeBriefOnBackdrop(e) { if (e.target.id === 'brief-modal') closeBrief(); }
 
     // ---------------------------------------------------------------
-    // Insight 모달 (AI 두 관점 인사이트) : ① 물류 관점  ② General
+    // Insight 모달 (AI 두 관점 인사이트) : ① 물류 관점  ② 주식시장 관점
     //  - deep-brief와 똑같은 방식으로 /api/insight 를 호출한다.
     // ---------------------------------------------------------------
     function insightLoadingHtml() {
@@ -3215,8 +3215,9 @@
       </div>`;
     }
 
-    // 관점 하나(물류/일반)를 카드로 그린다
-    function insightSectionHtml(iconName, label, accent, sec) {
+    // 관점 하나(물류/주식시장)를 카드로 그린다
+    //  - extraHtml : 카드 맨 아래에 덧붙일 내용 (주식시장 카드의 '관련 주요 종목')
+    function insightSectionHtml(iconName, label, accent, sec, extraHtml) {
       if (!sec) return '';
       const points = (sec.points || []).length ? `
         <ul class="space-y-3 mt-3">${sec.points.map(p => `
@@ -3232,6 +3233,39 @@
           </div>
           ${sec.summary ? `<p class="font-sans text-[1.15rem] font-bold text-paper leading-snug break-keep">${esc(sec.summary)}</p>` : ''}
           ${points}
+          ${extraHtml || ''}
+        </div>`;
+    }
+
+    // 'Stock Market Insight' 카드 맨 아래 붙는 '관련 주요 종목' 목록
+    //  - AI가 기사 맥락으로 골라낸 참고 목록이라, 아래에 안내 문구를 같이 둔다.
+    function insightStocksHtml(stocks) {
+      if (!Array.isArray(stocks) || !stocks.length) return '';
+      // 지수 위젯과 같은 국내 증시 관례 : 수혜(오름)=빨강, 부담(내림)=파랑
+      const tagStyle = {
+        '수혜': 'text-rose-400 border-rose-400/40 bg-rose-400/10',
+        '부담': 'text-blue-400 border-blue-400/40 bg-blue-400/10',
+      };
+      const rows = stocks.map(s => {
+        const tag = String(s.tag || '중립');
+        const style = tagStyle[tag] || 'text-muted border-line bg-ink3/40';
+        return `
+          <li class="flex flex-wrap items-baseline gap-x-2 gap-y-1 leading-snug break-keep">
+            <span class="font-bold text-paper">${esc(s.name || '')}</span>
+            ${s.sector ? `<span class="text-muted font-mono text-[0.7rem]">${esc(s.sector)}</span>` : ''}
+            <span class="shrink-0 rounded border px-1.5 py-px font-mono text-[0.7rem] ${style}">${esc(tag)}</span>
+            ${s.reason ? `<span class="basis-full text-paper/80 text-[0.9rem]">${esc(s.reason)}</span>` : ''}
+          </li>`;
+      }).join('');
+      return `
+        <div class="mt-4 pt-4 border-t border-line">
+          <span class="flex items-center gap-1.5 font-bold text-wire text-[0.8rem] uppercase tracking-widest mb-3">
+            ${icon('line-chart', 'w-3.5 h-3.5')} 관련 주요 종목
+          </span>
+          <ul class="space-y-3">${rows}</ul>
+          <p class="text-muted text-[0.72rem] leading-snug mt-3 break-keep">
+            AI가 기사 맥락만 보고 고른 참고 목록입니다. 실시간 시세·실적을 반영하지 않으며 투자 권유가 아닙니다.
+          </p>
         </div>`;
     }
 
@@ -3239,8 +3273,9 @@
       return `
         ${insightSectionHtml('package', '물류 관점 Insight',
           { border: 'border-gold/30', bg: 'bg-gold/5', text: 'text-gold2', dot: 'text-gold' }, d.logistics)}
-        ${insightSectionHtml('globe', 'General Insight',
-          { border: 'border-wire/30', bg: 'bg-wire/5', text: 'text-wire', dot: 'text-wire' }, d.general)}`;
+        ${insightSectionHtml('candlestick', 'Stock Market Insight',
+          { border: 'border-wire/30', bg: 'bg-wire/5', text: 'text-wire', dot: 'text-wire' }, d.stock,
+          insightStocksHtml(d.stock && d.stock.stocks))}`;
     }
 
     async function openInsight(id) {
