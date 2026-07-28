@@ -3013,11 +3013,13 @@ async function fetchScfiHistoryRecent() {
 async function buildScfiHistory() {
   let recent = [];
   let recentOk = true;
+  let recentError = null;
   try {
     recent = await fetchScfiHistoryRecent();
   } catch (e) {
     recentOk = false;
-    console.error('[SCFI 시계열 조회 실패]', e.message);
+    recentError = `${e.name}: ${e.message}${e.cause ? ' / ' + e.cause.message : ''}`;
+    console.error('[SCFI 시계열 조회 실패]', recentError);
   }
   // 같은 날짜가 겹치면 나중에 넣는 최신 수집분이 이긴다.
   const byDate = new Map();
@@ -3029,12 +3031,55 @@ async function buildScfiHistory() {
   return {
     points,
     recentOk,
+    recentError,   // 실패했을 때 이유. Render 로그를 못 볼 때 여기로 확인한다.
     source: 'Shanghai Shipping Exchange (via 한국관세물류협회)',
     sourceUrl: SCFI_HISTORY_URL,
   };
 }
 
+// -----------------------------------------------------------------
+// /api/scfi/history?diag=1 : 최근 구간을 못 받아올 때 원인을 Render 에서 직접 재 본다.
+//   Gemini 때와 같은 문제다 — 로컬에서는 되는데 Render 에서만 안 되면
+//   서버가 스스로 여러 방식으로 시도해 보고 결과를 표로 돌려주는 수밖에 없다.
+//   (PERFORMANCE.md 의 /api/gemini-models?test=1 과 같은 방식)
+// -----------------------------------------------------------------
+const UA_BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36';
+
+async function scfiDiag() {
+  const cases = [
+    ['현재 방식 (https + UA)', 'https://www.kcla.kr/web/inc/html/4-1_3.asp', { 'User-Agent': UA_BROWSER }, 10000],
+    ['헤더 없음', 'https://www.kcla.kr/web/inc/html/4-1_3.asp', {}, 10000],
+    ['브라우저 헤더 전체', 'https://www.kcla.kr/web/inc/html/4-1_3.asp', {
+      'User-Agent': UA_BROWSER,
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8',
+      'Cache-Control': 'no-cache',
+      'Referer': 'https://www.kcla.kr/web/inc/html/4-1.asp',
+    }, 10000],
+    ['http (평문)', 'http://www.kcla.kr/web/inc/html/4-1_3.asp', { 'User-Agent': UA_BROWSER }, 10000],
+    ['www 없이', 'https://kcla.kr/web/inc/html/4-1_3.asp', { 'User-Agent': UA_BROWSER }, 10000],
+    ['오래 기다리기 (30초)', 'https://www.kcla.kr/web/inc/html/4-1_3.asp', { 'User-Agent': UA_BROWSER }, 30000],
+    ['대조군: SSE 현재지수', 'https://en.sse.net.cn/currentIndex?indexName=scfi', { 'User-Agent': UA_BROWSER }, 10000],
+  ];
+  const rows = [];
+  for (const [name, url, headers, timeout] of cases) {
+    const t0 = Date.now();
+    try {
+      const r = await fetchWithTimeout(url, { headers, redirect: 'follow' }, timeout);
+      const body = await r.text();
+      const hits = [...body.matchAll(/'(\d{2})-([A-Za-z]{3})-(\d{2})'\s*,\s*([\d.]+)/g)].length;
+      rows.push({ name, ms: Date.now() - t0, status: r.status, bytes: body.length, 지수개수: hits });
+    } catch (e) {
+      rows.push({ name, ms: Date.now() - t0, error: `${e.name}: ${e.message}${e.cause ? ' / ' + e.cause.message : ''}` });
+    }
+  }
+  return rows;
+}
+
 app.get('/api/scfi/history', async (req, res) => {
+  if (req.query.diag === '1') {
+    return res.json({ ranAt: new Date().toISOString(), cases: await scfiDiag() });
+  }
   if (scfiHistoryCache && Date.now() - scfiHistoryCache.ts < SCFI_HISTORY_TTL) {
     return res.json(scfiHistoryCache.payload);
   }
