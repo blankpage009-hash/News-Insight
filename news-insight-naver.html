@@ -2084,20 +2084,42 @@
       if (cat === 'sports') expandedSports = open;      // [추가]
     }
 
-    // [추가] Today's Briefing 은 노출 건수 기본값이 10개, 그 외 카테고리는 5개.
-    //   같은 '노출 건수' 셀렉트를 공유하므로, 브리핑에 들어오고/나갈 때만 값을 맞춰준다.
-    //   (사용자가 필터에서 직접 바꾼 값은 그 화면을 보는 동안은 그대로 유지된다)
-    function applyBriefingCountDefault(newCat, oldCat) {
-      const sel = document.getElementById('count-select');
-      if (!sel) return;
-      if (newCat === 'briefing' && oldCat !== 'briefing') sel.value = '10';
-      else if (newCat !== 'briefing' && oldCat === 'briefing') sel.value = '5';
+    // [수정] 필터(노출 건수/게재 기간/정렬)는 섹션(하위 섹션 포함)마다 따로 기억한다.
+    //   예전에는 셀렉트 하나를 모든 섹션이 같이 썼기 때문에, '물류 > 경쟁사'에서 10건으로
+    //   바꾸면 다른 섹션으로 옮겨도 10건이 그대로 따라다녔다.
+    //   이제 섹션을 떠날 때 그 섹션의 값을 저장해 두고, 들어가는 섹션은
+    //   저장된 값(없으면 기본값)으로 셀렉트를 되돌린다.
+    //   기본값 : 노출 건수 5개 (Today's Briefing 만 10개) · 게재 기간 1일 · 정렬 정확도순
+    const SECTION_FILTER_DEFAULTS = { count: '5', hours: '24', sort: 'sim' };
+    const sectionFilterMemory = {};   // { 카테고리키: { count, hours, sort } }
+
+    function defaultSectionFilters(cat) {
+      return { ...SECTION_FILTER_DEFAULTS, count: cat === 'briefing' ? '10' : '5' };
+    }
+    // 좌측(숨김) 셀렉트 = 카테고리 모드의 실제 필터 값 저장소
+    function readCategoryFilters() {
+      return {
+        count: document.getElementById('count-select').value,
+        hours: document.getElementById('hours-select').value,
+        sort: document.getElementById('sort-select').value,
+      };
+    }
+    function writeCategoryFilters(v) {
+      document.getElementById('count-select').value = v.count;
+      document.getElementById('hours-select').value = v.hours;
+      document.getElementById('sort-select').value = v.sort;
+    }
+    // 섹션을 옮길 때 : 떠나는 섹션 값 저장 → 들어가는 섹션 값(또는 기본값) 적용
+    function switchSectionFilters(newCat, oldCat) {
+      if (newCat === oldCat) return;
+      if (oldCat) sectionFilterMemory[oldCat] = readCategoryFilters();
+      writeCategoryFilters(sectionFilterMemory[newCat] || defaultSectionFilters(newCat));
     }
 
     // 물류 / 증시처럼 하위 카테고리가 있는 버튼 클릭
     function onExpandableClick(cat) {
       exitKeywordSearch();   // 키워드 검색 결과를 보다가 섹션을 누르면 검색을 닫고 이동
-      applyBriefingCountDefault(cat, currentCategory);
+      switchSectionFilters(cat, currentCategory);
       const inThisGroup = currentCategory === cat || currentCategory.startsWith(cat + '_');
       if (inThisGroup) {
         const willOpen = !EXPANDABLE[cat].isOpen();
@@ -2121,7 +2143,7 @@
         window.scrollTo({ top: 0 });
       }
       exitKeywordSearch();   // 키워드 검색 결과를 보다가 섹션을 누르면 검색을 닫고 이동
-      applyBriefingCountDefault(cat, currentCategory);
+      switchSectionFilters(cat, currentCategory);
       currentCategory = cat;
       Object.keys(EXPANDABLE).forEach((g) => {
         setExpanded(g, cat === g || cat.startsWith(g + '_'));
@@ -2133,6 +2155,7 @@
     function onSearchClick() { runSearch(); }
 
     function resetSearch() {
+      Object.keys(sectionFilterMemory).forEach((k) => delete sectionFilterMemory[k]);   // [추가] 섹션별로 기억해 둔 필터도 초기화
       document.getElementById('search-input').value = '';
       document.getElementById('count-select').value = '10';   // 초기화 후 Today's Briefing으로 돌아가므로 기본 10개
       document.getElementById('hours-select').value = '24';
@@ -2544,6 +2567,9 @@
       } finally {
         isLoading = false;
         setSearchButtonLoading(false);
+        // [추가] 모바일 : 필터를 바꿔 검색이 끝나면 펼쳐 뒀던 필터를 다시 접는다.
+        //   (화면이 좁아서 필터가 펼쳐진 채로 있으면 기사 목록을 가린다)
+        if (isMobileLayout()) closeAllFilterDropdowns();
       }
     }
 
@@ -2747,6 +2773,8 @@
       } finally {
         s._loading = false;
         renderSectionsFromState();
+        // [추가] 모바일 : 이 섹션 박스의 필터도 검색이 끝나면 다시 접는다.
+        if (isMobileLayout() && openSectionFilters.has(key)) toggleSectionFilters(key);
       }
     }
 
@@ -2759,7 +2787,11 @@
       s.collapsed = false;
 
       // 받아둔 기사로 충분 → 재요청 없이 그 섹션만 즉시 다시 그림
-      if (newCount <= s.items.length) { renderSectionsFromState(); return; }
+      if (newCount <= s.items.length) {
+        renderSectionsFromState();
+        if (isMobileLayout() && openSectionFilters.has(key)) toggleSectionFilters(key);   // [추가] 모바일 : 반영 후 필터 접기
+        return;
+      }
 
       await refreshSection(key);   // 더 많이 요청 → 그 섹션 하나만 서버에서 다시 가져옴
     }
