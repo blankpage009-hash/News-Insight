@@ -610,6 +610,7 @@
              그대로 재사용한다. -->
         <div class="hidden">
           <select id="count-select" onchange="onLeftFilterChange()">
+            <option value="3">3개</option>
             <option value="5">5개</option>
             <option value="10" selected>10개</option>
             <option value="15">15개</option>
@@ -701,6 +702,7 @@
                 <label for="search-count-select" class="text-muted whitespace-nowrap">노출 건수</label>
                 <select id="search-count-select" onchange="onSearchClick()" title="노출 개수"
                   class="bg-ink border border-line rounded-lg px-2 py-1.5 text-paper font-mono focus:outline-none focus:border-gold/70">
+                  <option value="3">3개</option>
                   <option value="5">5개</option>
                   <option value="10" selected>10개</option>
                   <option value="15">15개</option>
@@ -782,6 +784,7 @@
           <div id="cat-header-filters" class="flex items-center gap-1.5 flex-wrap">
             <select id="header-count-select" onchange="onHeaderFilterChange()" title="노출 건수"
               class="bg-ink/70 border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
+              <option value="3">3개</option>
               <option value="5">5개</option>
               <option value="10">10개</option>
               <option value="15">15개</option>
@@ -849,6 +852,16 @@
               <span class="font-mono text-muted text-[0.8rem]">화면 밝기 · 이 기기에만 적용</span>
             </div>
             <div class="flex items-center gap-2 flex-wrap" id="theme-buttons"></div>
+          </div>
+
+          <!-- [추가] 기본 노출 건수 : 섹션을 처음 열 때 보여줄 기사 수 · 이 기기에 저장 -->
+          <div class="bg-ink/40 border border-line rounded-lg px-3 py-3 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="text-gold2 shrink-0" id="count-setting-icon"></span>
+              <span class="font-semibold text-paper text-[1.15rem]">기본 노출 건수</span>
+              <span class="font-mono text-muted text-[0.8rem]">처음 열 때 보여줄 기사 수 · 이 기기에만 적용</span>
+            </div>
+            <div id="count-setting-selects" class="grid grid-cols-1 sm:grid-cols-3 gap-2"></div>
           </div>
 
           <!-- [추가] 설정 비밀번호 변경 -->
@@ -1372,6 +1385,8 @@
       //   서로 상관없는 일인데도 앞의 것이 끝나야 뒤가 시작됐다.
       //   이제 캐시로 바로 시작하고, 서버 조회는 뒤에서 따로 돌린다.
       seedKeywordsFromCache();
+      loadDefaultCounts();          // [추가] 저장해 둔 기본 노출 건수 읽기
+      applyDefaultCounts();         // [추가] 첫 화면(Briefing) 건수를 기본값으로 맞춤
       renderCategoryButtons();
       renderSearchToggle();
       renderSettingToggle();        // [추가]
@@ -1856,10 +1871,80 @@
       renderThemeButtons();
     }
 
+    // ---------------------------------------------------------------
+    // [추가] 기본 노출 건수 설정
+    //   섹션을 '처음 열 때' 몇 건을 보여줄지 정한다.
+    //   제목 바에서 그때그때 바꾸는 값은 예전처럼 그 섹션에만 적용되고,
+    //   여기서 정한 값이 그 섹션의 '처음 상태'가 된다. (이 기기에만 저장)
+    // ---------------------------------------------------------------
+    const COUNT_STORAGE_KEY = 'newsInsightDefaultCount_v1';
+    const COUNT_CHOICES = [3, 5, 10, 15, 20, 30];
+    const BUILTIN_DEFAULT_COUNTS = { section: '5', briefing: '10', search: '10' };
+    const COUNT_TARGETS = [
+      { key: 'section', label: '섹션', hint: '전체·물류·증시…' },
+      { key: 'briefing', label: 'Briefing', hint: '첫 화면' },
+      { key: 'search', label: '키워드 검색', hint: '검색 결과' },
+    ];
+    let defaultCounts = { ...BUILTIN_DEFAULT_COUNTS };
+    let countDefaultsDirty = false;   // 설정에서 값을 바꿨으면 설정을 닫을 때 새 건수로 다시 불러온다
+
+    // 저장해 둔 값을 읽어 온다. (없거나 이상한 값이면 기본값 유지)
+    function loadDefaultCounts() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(COUNT_STORAGE_KEY) || '{}');
+        Object.keys(BUILTIN_DEFAULT_COUNTS).forEach((k) => {
+          if (COUNT_CHOICES.includes(Number(saved[k]))) defaultCounts[k] = String(Number(saved[k]));
+        });
+      } catch {}
+    }
+
+    // 이 카테고리를 처음 열 때 쓸 건수
+    function defaultCountFor(cat) {
+      return cat === 'briefing' ? defaultCounts.briefing : defaultCounts.section;
+    }
+
+    // 지금 화면(카테고리 / 키워드 검색)의 셀렉트를 기본값으로 맞춘다.
+    function applyDefaultCounts() {
+      const c = document.getElementById('count-select');
+      const s = document.getElementById('search-count-select');
+      if (c) c.value = defaultCountFor(currentCategory);
+      if (s) s.value = defaultCounts.search;
+    }
+
+    function setDefaultCount(target, value) {
+      if (!(target in BUILTIN_DEFAULT_COUNTS)) return;
+      const n = Number(value);
+      if (!COUNT_CHOICES.includes(n)) return;
+      defaultCounts[target] = String(n);
+      try { localStorage.setItem(COUNT_STORAGE_KEY, JSON.stringify(defaultCounts)); } catch {}
+      // 섹션별로 기억해 둔 예전 건수를 지워야 새 기본값이 모든 섹션에 바로 적용된다.
+      Object.keys(sectionFilterMemory).forEach((k) => delete sectionFilterMemory[k]);
+      applyDefaultCounts();
+      countDefaultsDirty = true;   // 설정을 닫을 때 새 건수로 다시 불러온다
+      renderCountSetting();
+    }
+
+    function renderCountSetting() {
+      const wrap = document.getElementById('count-setting-selects');
+      if (!wrap) return;
+      const iconEl = document.getElementById('count-setting-icon');
+      if (iconEl) iconEl.innerHTML = icon('sliders', 'w-4 h-4');
+      wrap.innerHTML = COUNT_TARGETS.map((t) => `
+        <div class="flex items-center justify-between gap-2 bg-ink border border-line rounded-lg px-2.5 py-2">
+          <span class="text-muted text-[0.95rem] min-w-0 truncate">${t.label}
+            <span class="font-mono text-muted/70 text-[0.75rem]">${t.hint}</span></span>
+          <select onchange="setDefaultCount('${t.key}', this.value)" title="${t.label} 기본 노출 건수"
+            class="shrink-0 bg-ink2 border border-line rounded-lg px-2 py-1 text-paper font-mono focus:outline-none focus:border-gold/70">
+            ${COUNT_CHOICES.map((n) => `<option value="${n}" ${String(n) === defaultCounts[t.key] ? 'selected' : ''}>${n}개</option>`).join('')}
+          </select>
+        </div>`).join('');
+    }
+
     // 오른쪽(기사 영역)에 키워드 설정 화면을 연다.
     function openSettingView() {
       settingMode = true;
       renderThemeButtons();                          // [추가] 테마 버튼(현재 선택 상태) 갱신
+      renderCountSetting();                          // [추가] 기본 노출 건수 셀렉트 갱신
       renderKeywordSettings();                       // 최신 값으로 입력칸 다시 그림
       const pwMsg = document.getElementById('password-change-msg');
       if (pwMsg) pwMsg.textContent = '';
@@ -1883,6 +1968,8 @@
     // 설정 화면을 닫고 기사 화면으로 돌아간다. rerun=true 면 새 키워드로 다시 검색.
     function closeSettingView(rerun) {
       settingMode = false;
+      // [추가] 기본 노출 건수를 바꿨으면 '닫기'로 나가도 새 건수로 다시 불러온다.
+      if (countDefaultsDirty) { rerun = true; countDefaultsDirty = false; }
       document.getElementById('setting-view').classList.add('hidden');
       document.getElementById('news-list').classList.remove('hidden');
       renderSettingToggle();
@@ -2117,12 +2204,13 @@
     //   바꾸면 다른 섹션으로 옮겨도 10건이 그대로 따라다녔다.
     //   이제 섹션을 떠날 때 그 섹션의 값을 저장해 두고, 들어가는 섹션은
     //   저장된 값(없으면 기본값)으로 셀렉트를 되돌린다.
-    //   기본값 : 노출 건수 5개 (Today's Briefing 만 10개) · 게재 기간 1일 · 정렬 정확도순
-    const SECTION_FILTER_DEFAULTS = { count: '5', hours: '24', sort: 'sim' };
+    //   기본값 : 게재 기간 1일 · 정렬 정확도순
+    //   [수정] 노출 건수 기본값은 설정 화면에서 조절한다. (defaultCountFor · 기본 섹션 5개 / Briefing 10개)
+    const SECTION_FILTER_DEFAULTS = { hours: '24', sort: 'sim' };
     const sectionFilterMemory = {};   // { 카테고리키: { count, hours, sort } }
 
     function defaultSectionFilters(cat) {
-      return { ...SECTION_FILTER_DEFAULTS, count: cat === 'briefing' ? '10' : '5' };
+      return { ...SECTION_FILTER_DEFAULTS, count: defaultCountFor(cat) };
     }
     // 좌측(숨김) 셀렉트 = 카테고리 모드의 실제 필터 값 저장소
     function readCategoryFilters() {
@@ -2185,10 +2273,10 @@
     function resetSearch() {
       Object.keys(sectionFilterMemory).forEach((k) => delete sectionFilterMemory[k]);   // [추가] 섹션별로 기억해 둔 필터도 초기화
       document.getElementById('search-input').value = '';
-      document.getElementById('count-select').value = '10';   // 초기화 후 Today's Briefing으로 돌아가므로 기본 10개
+      document.getElementById('count-select').value = defaultCounts.briefing;   // 초기화 후 Today's Briefing으로 돌아가므로 브리핑 기본값
       document.getElementById('hours-select').value = '24';
       document.getElementById('sort-select').value = 'sim';
-      document.getElementById('search-count-select').value = '10';
+      document.getElementById('search-count-select').value = defaultCounts.search;
       document.getElementById('search-hours-select').value = '720';
       document.getElementById('search-sort-select').value = 'sim';
       currentCategory = 'briefing';
