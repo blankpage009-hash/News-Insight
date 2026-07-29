@@ -4188,11 +4188,11 @@
 
     function insightHtml(d) {
       return `
-        ${insightSectionHtml('package', '물류 관점 Insight',
-          { border: 'border-gold/30', bg: 'bg-gold/5', text: 'text-gold2', dot: 'text-gold' }, d.logistics)}
         ${insightSectionHtml('candlestick', 'Stock Market Insight',
           { border: 'border-wire/30', bg: 'bg-wire/5', text: 'text-wire', dot: 'text-wire' }, d.stock,
-          insightStocksHtml(d.stock && d.stock.stocks))}`;
+          insightStocksHtml(d.stock && d.stock.stocks))}
+        ${insightSectionHtml('package', '물류 관점 Insight',
+          { border: 'border-gold/30', bg: 'bg-gold/5', text: 'text-gold2', dot: 'text-gold' }, d.logistics)}`;
     }
 
     async function openInsight(id) {

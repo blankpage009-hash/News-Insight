@@ -6,7 +6,7 @@
 ## 한 줄 요약
 
 각 기사에 **`💡 Insight` 버튼(녹색)**이 있다. 누르면 제미나이가 원문을 읽고
-**① 물류 관점 · ② General** 두 관점의 인사이트를 팝업으로 보여준다.
+**① Stock Market · ② 물류 관점** 두 관점의 인사이트를 팝업으로 보여준다.
 기존 `주요 내용`(deep-brief) 기능을 본떠 만든 것이다.
 
 ## 현재 상태 (중요)
@@ -72,8 +72,10 @@
 - `openInsight` — 버튼 클릭 핸들러. `/api/insight` 호출(`openBrief`와 대칭).
 - `openInsightFromBrief` — `주요 내용` 팝업 안의 Insight 버튼.
 - `insightHtml` / `insightSectionHtml` — 관점 2개 카드 렌더.
+  - 표시 순서는 `insightHtml` 안의 두 줄 순서로 정해진다. 현재는 **Stock Market 이 위**.
+  - Stock Market = 파란색(`wire`)+`candlestick` 아이콘, 라벨 `Stock Market Insight`,
+    카드 아래에 `insightStocksHtml` 의 '관련 주요 종목' 목록이 붙는다
   - 물류 = 금색(`gold`)+`package` 아이콘, 라벨 `물류 관점 Insight`
-  - General = 파란색(`wire`)+`globe` 아이콘
   - 줄간격은 이 함수 안 `leading-*` 클래스로 조정한다.
 - `insight-modal` — 팝업 모달 DOM(`z-[65]`). 본문 `#insight-body`, 안내문 `#insight-note`, 링크 `#insight-link`.
 - `lightbulb` — `ICON_PATHS` 의 버튼 아이콘.
