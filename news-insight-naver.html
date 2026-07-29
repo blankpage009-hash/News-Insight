@@ -184,6 +184,18 @@
   @keyframes pulse-soft { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
   .skeleton { animation: pulse-soft 1.6s ease-in-out infinite; }
 
+  /* 검색 중 : 목록 자리 가운데에서 빙글빙글 도는 고리
+     바깥 고리(연한 선) 위에 금색 원호 하나를 얹고 통째로 돌린다. */
+  @keyframes spin-ring { to { transform: rotate(360deg); } }
+  .loading-ring {
+    width: 46px;
+    height: 46px;
+    border-radius: 999px;
+    border: 3px solid rgb(var(--c-line));
+    border-top-color: rgb(var(--c-gold));
+    animation: spin-ring .8s linear infinite;
+  }
+
   @keyframes modal-in {
     from { opacity: 0; transform: translateY(10px) scale(.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
@@ -384,6 +396,8 @@
 
   @media (prefers-reduced-motion: reduce) {
     .skeleton, .modal-pop { animation: none; }
+    /* 로딩 고리는 '아직 도는 중'을 알려야 해서 끄지 않고 아주 느리게만 돌린다 */
+    .loading-ring { animation-duration: 2.4s; }
     /* 티커 자동 흐름은 JS에서 멈춘다(드래그는 그대로 동작) */
   }
 
@@ -3305,6 +3319,10 @@
       document.getElementById('scfi-panel').classList.add('hidden');
       setSearchButtonLoading(true);
       renderLoadingSkeleton();
+      // 검색 중에는 위 상태줄을 감춘다(가운데 로딩 고리와 같은 말이 두 번 나오지 않게).
+      //   display:none 이 아니라 invisible(=visibility:hidden) 이라 자리는 그대로 남는다.
+      //   → 결과가 뜨면서 아래 목록이 위아래로 튀지 않는다.
+      document.getElementById('status-line').classList.add('invisible');
 
       const keyword = document.getElementById('search-input').value.trim();
       const dateFrom = '';   // 시작일/종료일 입력은 제거됨 (게재기간 필터로 대체)
@@ -3421,6 +3439,8 @@
       } finally {
         isLoading = false;
         setSearchButtonLoading(false);
+        // 성공이든 오류든 검색이 끝나면 상태줄을 다시 보여준다(문구는 위에서 이미 채워둠).
+        document.getElementById('status-line').classList.remove('invisible');
         // [추가] 모바일 : 필터를 바꿔 검색이 끝나면 펼쳐 뒀던 필터를 다시 접는다.
         //   (화면이 좁아서 필터가 펼쳐진 채로 있으면 기사 목록을 가린다)
         if (isMobileLayout()) closeAllFilterDropdowns();
@@ -3438,9 +3458,13 @@
     // ---------------------------------------------------------------
     // 렌더링
     // ---------------------------------------------------------------
+    // 검색 중 화면. 빈 회색 상자 4개 대신 가운데에 도는 고리 하나만 보여준다.
     function renderLoadingSkeleton() {
-      document.getElementById('news-list').innerHTML = Array.from({ length: 4 }).map(() => `
-        <div class="skeleton bg-ink2/70 border border-line rounded-2xl p-5 h-28"></div>`).join('');
+      document.getElementById('news-list').innerHTML = `
+        <div class="py-24 flex flex-col items-center justify-center gap-4" role="status" aria-live="polite">
+          <div class="loading-ring"></div>
+          <p class="text-sm text-muted">뉴스를 불러오는 중입니다...</p>
+        </div>`;
     }
 
     function renderError(message) {
