@@ -379,8 +379,9 @@ Render 로그에서 본 것. **응답 캐시 사본(2장 마지막 절)이 저�
 - 이미지 처리 도구 없음(sharp / ImageMagick 미설치).
   PowerShell `System.Drawing` 으로 축소 + Node 내장 `zlib` 로 무손실 재압축으로 처리했다.
 - **물류·경제·증시·스포츠 상위 섹션은 `/api/{base}/digest`(엄선 목록)를 쓴다.**
-  섹션 박스를 여러 개 늘어놓는 `/api/all/sections`(전체보기)는 이제 '전체' 화면 하나뿐이고,
-  `/api/{base}/sections` 는 아무도 안 쓴다(라우트만 남아 있음).
+  섹션 박스를 여러 개 늘어놓는 라우트는 이제 '전체' 화면이 쓰는 `/api/all/sections` 하나뿐이다.
+  `/api/{base}/sections` 와 `buildSubSections()` 는 부르는 곳이 없어져 지웠다.
+  하위 섹션 1개를 주는 `/api/{base}/section/:key` 는 그대로 쓴다(`registerSubSectionRoute`).
   프리워밍도 그에 맞춰 `briefing` · `all/sections` · digest 4개를 데운다(`warmJobs`).
   스포츠는 '전체' 화면에 없는 섹션이라 상위 검색어 정의가 `DIGEST_EXTRA_PARENTS` 에 따로 있다.
   화면의 `DEFAULT_KEYWORDS.sports` 와 값이 어긋나면 캐시 키가 갈라지니 같이 고칠 것.

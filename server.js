@@ -4,7 +4,8 @@
 // [이번 업데이트]
 //  1) /api/briefing : 카테고리 균형(속보 쏠림 방지) 라운드로빈 선발
 //  2) /api/article-summary : 원문 본문에서 잡음 제거 후 핵심 문장 N개(기본 2개)만 반환
-//  3) /api/all/sections, /api/logistics/sections : perSection 파라미터로 노출 개수 조절
+//  3) /api/all/sections : perSection 파라미터로 노출 개수 조절
+//  4) /api/{물류|경제|증시|스포츠}/digest : 하위 섹션 기사를 모아 중요한 것만 엄선
 //
 // [정확도 고도화 업데이트]
 //  [H] DOMAINS      : 카테고리별 '맥락 단어(context)' / '제외 단어(exclude)' 사전
@@ -1762,45 +1763,21 @@ app.get('/api/all/sections', async (req, res) => {
 });
 
 // -----------------------------------------------------------------
-// 하위 카테고리 공통 라우트 등록
-//  /api/{base}/sections        : 하위 카테고리 전체 묶음
-//  /api/{base}/section/:key    : 하위 카테고리 1개
-//  -> 물류(logistics), 증시(stock) 두 곳에서 함께 사용
+// 하위 카테고리 1개 조회 : /api/{base}/section/:key
+//  -> 물류 / 증시 / 스포츠 / 경제 네 곳에서 함께 사용
+//
+//  [정리] 예전에는 하위 섹션을 통째로 주는 /api/{base}/sections 도 같이 등록했다.
+//  상위 섹션 화면이 '전체보기'에서 엄선 목록(/api/{base}/digest)으로 바뀌면서
+//  부르는 곳이 없어져 지웠다. 여러 섹션을 한 번에 주는 라우트는 이제
+//  '전체' 화면이 쓰는 /api/all/sections 하나뿐이다.
 // -----------------------------------------------------------------
-async function buildSubSections(SECTIONS, { limit, dateFrom, dateTo, hours, sort }, kwMap) {
-  const sections = await Promise.all(
-    SECTIONS.map(async (sec) => {
-      const { terms, exclude } = resolveSectionKw(kwMap, sec);
-      const items = await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain, exclude });
-      return { key: sec.key, label: sec.label, items: collapseEvents(items, sort).slice(0, limit) };
-    })
-  );
-  return { sections };
-}
-
 async function buildOneSection(sec, { limit, dateFrom, dateTo, hours, sort }, kwMap) {
   const { terms, exclude } = resolveSectionKw(kwMap, sec);
   const items = await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, sort, domain: sec.domain, exclude });
   return { items: collapseEvents(items, sort).slice(0, limit), label: sec.label };
 }
 
-function registerSectionRoutes(base, SECTIONS) {
-  app.get(`/api/${base}/sections`, async (req, res) => {
-    const { dateFrom, dateTo, perSection = '5', hours, sort, kw } = req.query;
-    const kwMap = parseKw(kw);
-    const opts = { limit: Math.min(Number(perSection) || 5, 30), dateFrom, dateTo, hours, sort };
-    try {
-      res.json(await cachedResponse(
-        buildSectionsKey(`${base}/sections`, SECTIONS, opts, kwMap),
-        TTL_SECTION,
-        () => buildSubSections(SECTIONS, opts, kwMap),
-      ));
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
-    }
-  });
-
+function registerSubSectionRoute(base, SECTIONS) {
   app.get(`/api/${base}/section/:key`, async (req, res) => {
     const sec = SECTIONS.find((s) => s.key === req.params.key);
     if (!sec) return res.status(404).json({ error: '존재하지 않는 카테고리입니다.' });
@@ -1821,10 +1798,10 @@ function registerSectionRoutes(base, SECTIONS) {
   });
 }
 
-registerSectionRoutes('logistics', LOGISTICS_SECTIONS);
-registerSectionRoutes('stock', STOCK_SECTIONS);
-registerSectionRoutes('sports', SPORTS_SECTIONS);   // [추가] 스포츠 하위 섹션
-registerSectionRoutes('economy', ECONOMY_SECTIONS); // [추가] 경제 하위 섹션(거시경제/시장)
+registerSubSectionRoute('logistics', LOGISTICS_SECTIONS);
+registerSubSectionRoute('stock', STOCK_SECTIONS);
+registerSubSectionRoute('sports', SPORTS_SECTIONS);   // [추가] 스포츠 하위 섹션
+registerSubSectionRoute('economy', ECONOMY_SECTIONS); // [추가] 경제 하위 섹션(거시경제/시장)
 
 // -----------------------------------------------------------------
 // [추가] /api/{base}/digest : 상위 섹션(물류 / 경제 / 증시) 화면용 '엄선' 목록
