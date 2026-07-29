@@ -861,7 +861,7 @@
               <span class="font-semibold text-paper text-[1.15rem]">기본 노출 건수</span>
               <span class="font-mono text-muted text-[0.8rem]">처음 열 때 보여줄 기사 수 · 이 기기에만 적용</span>
             </div>
-            <div id="count-setting-selects" class="grid grid-cols-1 sm:grid-cols-3 gap-2"></div>
+            <div id="count-setting-selects" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
           </div>
 
           <!-- [추가] 설정 비밀번호 변경 -->
@@ -1908,9 +1908,11 @@
     // ---------------------------------------------------------------
     const COUNT_STORAGE_KEY = 'newsInsightDefaultCount_v1';
     const COUNT_CHOICES = [3, 5, 10, 15, 20, 30];
-    const BUILTIN_DEFAULT_COUNTS = { section: '5', briefing: '10', search: '10' };
+    // [수정] 기본 섹션(속보·물류·경제…)과 하위 섹션(롯데글로벌로지스·경쟁사…)을 따로 정한다.
+    const BUILTIN_DEFAULT_COUNTS = { section: '5', subsection: '5', briefing: '10', search: '10' };
     const COUNT_TARGETS = [
-      { key: 'section', label: '섹션', hint: '전체·물류·증시…' },
+      { key: 'section', label: '기본 섹션', hint: '속보·물류·경제…' },
+      { key: 'subsection', label: '하위 섹션', hint: '롯데글로벌로지스·경쟁사…' },
       { key: 'briefing', label: 'Briefing', hint: '첫 화면' },
       { key: 'search', label: '키워드 검색', hint: '검색 결과' },
     ];
@@ -1924,12 +1926,20 @@
         Object.keys(BUILTIN_DEFAULT_COUNTS).forEach((k) => {
           if (COUNT_CHOICES.includes(Number(saved[k]))) defaultCounts[k] = String(Number(saved[k]));
         });
+        // [추가] 하위 섹션 항목이 생기기 전에 저장한 값 이어받기.
+        //   예전에는 섹션 하나로 묶여 있었으므로, 하위 섹션 값이 없으면 그 값을 그대로 쓴다.
+        if (!COUNT_CHOICES.includes(Number(saved.subsection))
+            && COUNT_CHOICES.includes(Number(saved.section))) {
+          defaultCounts.subsection = String(Number(saved.section));
+        }
       } catch {}
     }
 
     // 이 카테고리를 처음 열 때 쓸 건수
+    //   briefing(첫 화면) · 하위 섹션 · 기본 섹션을 각각 따로 본다.
     function defaultCountFor(cat) {
-      return cat === 'briefing' ? defaultCounts.briefing : defaultCounts.section;
+      if (cat === 'briefing') return defaultCounts.briefing;
+      return isSubCategory(cat) ? defaultCounts.subsection : defaultCounts.section;
     }
 
     // 지금 화면(카테고리 / 키워드 검색)의 셀렉트를 기본값으로 맞춘다.
@@ -2234,7 +2244,8 @@
     //   이제 섹션을 떠날 때 그 섹션의 값을 저장해 두고, 들어가는 섹션은
     //   저장된 값(없으면 기본값)으로 셀렉트를 되돌린다.
     //   기본값 : 게재 기간 1일 · 정렬 정확도순
-    //   [수정] 노출 건수 기본값은 설정 화면에서 조절한다. (defaultCountFor · 기본 섹션 5개 / Briefing 10개)
+    //   [수정] 노출 건수 기본값은 설정 화면에서 조절한다.
+    //          (defaultCountFor · 기본 섹션 5개 / 하위 섹션 5개 / Briefing 10개)
     const SECTION_FILTER_DEFAULTS = { hours: '24', sort: 'sim' };
     const sectionFilterMemory = {};   // { 카테고리키: { count, hours, sort } }
 
