@@ -384,6 +384,11 @@ Render 로그에서 본 것. **응답 캐시 사본(2장 마지막 절)이 저�
   1순위인 뉴욕 연은(`markets.newyorkfed.org/api/rates/unsecured/effr/last/200.json`)은
   FOMC 목표범위를 `targetRateFrom`/`targetRateTo` 로 그대로 주고, Render에서 막히지 않는다.
   네 경로가 전부 실패할 때만 `FALLBACK_US_BASE_RATE`(`live:false`)가 보인다.
+- 증시 지수 차트(`/api/index-chart`)는 **야후 파이낸스 → 네이버** 순으로 조회한다.
+  야후(`query1.finance.yahoo.com/v8/finance/chart/...`) 하나로 지수 5개 × 기간 7개가 다 되지만,
+  Render에서 막히면 네이버로 넘어간다. 네이버는 **국내는 분봉까지 되고 해외는 분봉이 빈 배열**이라
+  폴백 상태에서는 해외 지수의 '1일(5분봉)'만 오류로 뜬다. 나머지 기간은 일/주/월봉으로 채워진다.
+  캐시는 기사 응답 캐시(`respCache`)를 밀어내지 않도록 `indexChartCache` 로 따로 둔다.
 
 ---
 

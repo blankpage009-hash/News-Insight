@@ -1022,6 +1022,31 @@
     </div>
   </div>
 
+  <!-- [추가] 증시 지수 차트 팝업 ('증시 > 지수 차트'의 지수 카드를 누르면 열린다) -->
+  <div id="index-modal" class="hidden fixed inset-0 z-[75] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeIndexChartOnBackdrop(event)">
+    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-4xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center gap-4 p-6 pb-3 shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-gold2 shrink-0">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          </span>
+          <h3 id="index-modal-title" class="text-gold font-bold tracking-wider truncate">지수 추이</h3>
+        </div>
+        <button onclick="closeIndexChart()" class="text-muted hover:text-paper transition shrink-0">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <!-- 기간 버튼 (1일 ~ 3년) -->
+      <div id="index-range-tabs" class="flex flex-wrap gap-1.5 px-6 pb-3 shrink-0"></div>
+      <div id="index-chart-body" class="px-6 overflow-y-auto grow pb-4"></div>
+      <div class="popup-foot flex items-center justify-between gap-3 flex-wrap p-6 pt-4 border-t border-line shrink-0">
+        <span id="index-chart-note" class="text-muted font-mono text-[0.75rem]"></span>
+        <button onclick="closeIndexChart()"
+          class="text-muted hover:text-gold border border-line rounded-lg px-3 py-1.5 transition text-[0.8rem] font-semibold">닫기</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 관련 기사 팝업 모달 ([수정] 나중에 연 팝업이 위로 오도록 z-index는 bringModalToFront()가 정한다) -->
   <div id="related-modal" class="hidden fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeRelatedOnBackdrop(event)">
     <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
@@ -1046,6 +1071,8 @@
     const topLevelCategories = ['briefing', 'all', 'breaking', 'logistics', 'economy', 'society', 'global', 'ai', 'stock', 'sports'];
 
     const stockSubcategories = [
+      // [추가] '지수 차트'는 기사를 가져오지 않는다. 주요 지수 카드 + 기간별 차트만 보여준다.
+      { key: 'stock_chart', label: '지수 차트' },
       { key: 'stock_domestic', label: '국내' },
       { key: 'stock_us', label: '해외' },
       { key: 'stock_issue', label: '이슈 섹터' },
@@ -1083,6 +1110,7 @@
       logistics_domestic: '국내 물류', logistics_global: '글로벌 물류',
       logistics_freight: '운임지수',
       economy: '경제', society: '정치/사회', global: '글로벌', ai: 'AI', stock: '증시',
+      stock_chart: '지수 차트',
       stock_domestic: '국내', stock_us: '해외', stock_issue: '이슈 섹터',
       economy_macro: '거시경제/시장',
       sports: '스포츠',
@@ -1096,6 +1124,7 @@
       logistics_domestic: 'package', logistics_global: 'package',
       logistics_freight: 'line-chart',
       economy: 'line-chart', society: 'users', global: 'globe', ai: 'cpu', stock: 'candlestick',
+      stock_chart: 'line-chart',
       stock_domestic: 'candlestick', stock_us: 'candlestick', stock_issue: 'candlestick',
       economy_macro: 'line-chart',
       sports: 'trophy',
@@ -2439,7 +2468,14 @@
       const iconName = keyword ? 'search' : (categoryIcons[currentCategory] || 'grid');
       document.getElementById('cat-header-icon').innerHTML = icon(iconName, 'w-5 h-5');
       document.getElementById('cat-header-title').textContent = label;
-      document.getElementById('cat-header-count').textContent = visibleCount() + '건';
+
+      // [추가] '지수 차트'는 기사 목록이 아니라서 건수·필터(노출 건수/게재 기간/정렬)가 의미 없다 → 감춘다
+      const chartView = isIndexCardView();
+      document.getElementById('cat-header-count').textContent = chartView ? '' : visibleCount() + '건';
+      const filterBtn = document.getElementById('cat-header-filter-btn');
+      if (filterBtn) filterBtn.classList.toggle('hidden', chartView);
+      if (chartView && document.body.classList.contains('hf-open')) toggleHeaderFilters();
+
       syncHeaderFilters();
       el.classList.remove('hidden');
       updateScfiPanel(keyword);
@@ -2625,7 +2661,7 @@
       return picked.length >= 2 ? picked : scfiHistory.slice(-2);
     }
 
-    function scfiNum(n, digits = 2) {
+    function numText(n, digits = 2) {
       return n.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
     }
 
@@ -2635,7 +2671,7 @@
     }
 
     // Catmull-Rom 을 3차 베지에로 바꿔 부드러운 곡선 하나로 잇는다.
-    function scfiCurvePath(pts) {
+    function curvePath(pts) {
       if (pts.length < 2) return '';
       const r = n => Math.round(n * 10) / 10;
       let d = `M ${r(pts[0].x)} ${r(pts[0].y)}`;
@@ -2700,7 +2736,7 @@
         const v = lo + ((hi - lo) * i) / gridCount;
         const y = yOf(v);
         return `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W - PR}" y2="${y.toFixed(1)}" stroke="currentColor" stroke-width="1" class="text-line" opacity="0.5"/>
-          <text x="${PL - 8}" y="${(y + fs / 3).toFixed(1)}" text-anchor="end" font-size="${fs}" fill="currentColor" class="text-muted" font-family="ui-monospace,monospace">${scfiNum(v, 0)}</text>`;
+          <text x="${PL - 8}" y="${(y + fs / 3).toFixed(1)}" text-anchor="end" font-size="${fs}" fill="currentColor" class="text-muted" font-family="ui-monospace,monospace">${numText(v, 0)}</text>`;
       }).join('');
 
       // 아래 날짜 라벨 (겹치지 않게 균등 간격. 좁은 화면은 개수를 줄인다)
@@ -2711,7 +2747,7 @@
         return `<text x="${xOf(idx).toFixed(1)}" y="${H - 8}" text-anchor="${anchor}" font-size="${fs}" fill="currentColor" class="text-muted" font-family="ui-monospace,monospace">${scfiAxisDate(pts[idx].date, shortRange)}</text>`;
       }).join('');
 
-      const curve = scfiCurvePath(xy);
+      const curve = curvePath(xy);
       const area = `${curve} L ${xy[xy.length - 1].x.toFixed(1)} ${H - PB} L ${xy[0].x.toFixed(1)} ${H - PB} Z`;
       // 점이 적을 때만 마커를 찍는다. 많으면 곡선이 지저분해진다.
       const markers = pts.length <= (narrow ? 16 : 30)
@@ -2720,9 +2756,9 @@
 
       body.innerHTML = `
         <div class="flex items-baseline gap-x-3 gap-y-1 flex-wrap mb-3">
-          <span class="font-mono text-paper text-2xl tabular-nums">${scfiNum(last.value)}</span>
-          <span class="font-mono ${sumClass} tabular-nums">${diff === 0 ? '보합' : `${arrow}${scfiNum(Math.abs(diff))}p (${arrow}${Math.abs(diffPct).toFixed(2)}%)`}</span>
-          <span class="text-muted font-mono text-[0.8rem]">${range.label} 전 ${scfiNum(first.value)} 대비</span>
+          <span class="font-mono text-paper text-2xl tabular-nums">${numText(last.value)}</span>
+          <span class="font-mono ${sumClass} tabular-nums">${diff === 0 ? '보합' : `${arrow}${numText(Math.abs(diff))}p (${arrow}${Math.abs(diffPct).toFixed(2)}%)`}</span>
+          <span class="text-muted font-mono text-[0.8rem]">${range.label} 전 ${numText(first.value)} 대비</span>
           <span class="text-muted font-mono text-[0.8rem] ml-auto">${first.date} ~ ${last.date} · ${pts.length}주</span>
         </div>
         <div id="scfi-plot" class="relative select-none">
@@ -2784,8 +2820,378 @@
         dot.setAttribute('opacity', '1');
 
         const prev = best > 0 ? pts[best - 1].value : null;
-        const wow = prev === null ? '' : `<br><span class="${p.value > prev ? 'text-rose-400' : p.value < prev ? 'text-blue-400' : 'text-muted'}">전주대비 ${p.value === prev ? '보합' : `${p.value > prev ? '▲' : '▼'}${scfiNum(Math.abs(p.value - prev))}p`}</span>`;
-        tip.innerHTML = `<span class="text-muted">${p.date}</span><br>${scfiNum(p.value)}${wow}`;
+        const wow = prev === null ? '' : `<br><span class="${p.value > prev ? 'text-rose-400' : p.value < prev ? 'text-blue-400' : 'text-muted'}">전주대비 ${p.value === prev ? '보합' : `${p.value > prev ? '▲' : '▼'}${numText(Math.abs(p.value - prev))}p`}</span>`;
+        tip.innerHTML = `<span class="text-muted">${p.date}</span><br>${numText(p.value)}${wow}`;
+        tip.classList.remove('hidden');
+
+        // 말풍선이 오른쪽 밖으로 나가지 않게 접었다 편다.
+        const px = (c.x / W) * box.width;
+        const py = (c.y / H) * box.height;
+        const tw = tip.offsetWidth;
+        tip.style.left = `${Math.max(0, Math.min(px - tw / 2, box.width - tw))}px`;
+        tip.style.top = `${Math.max(0, py - tip.offsetHeight - 12)}px`;
+      };
+
+      plot.addEventListener('mousemove', move);
+      plot.addEventListener('mouseleave', hide);
+      plot.addEventListener('touchstart', move, { passive: true });
+      plot.addEventListener('touchmove', move, { passive: true });
+      plot.addEventListener('touchend', hide);
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] '증시 > 지수 차트' 화면
+    //  - 기사를 가져오지 않는 섹션이다. 주요 지수 5개를 카드로 보여주고,
+    //    카드를 누르면 기간별(1일~3년) 차트 팝업이 열린다.
+    //  - 카드 값(금일 지수·전일대비·등락률)은 상단 티커가 쓰는 /api/indices 를 그대로 쓴다.
+    //    티커가 30초마다 새로 받으므로 카드도 같이 갱신된다.
+    // ---------------------------------------------------------------
+    const INDEX_CARDS = [
+      { key: 'kospi', label: 'KOSPI', sub: '코스피' },
+      { key: 'kosdaq', label: 'KOSDAQ', sub: '코스닥' },
+      { key: 'sp500', label: 'S&P 500', sub: '미국' },
+      { key: 'nasdaq', label: 'NASDAQ', sub: '미국' },
+      { key: 'dow', label: 'DOW JONES', sub: '미국' },
+    ];
+
+    // 지수 카드 화면을 보고 있는가? (키워드 검색 중이거나 설정 화면이면 아니다)
+    function isIndexCardView() {
+      if (settingMode) return false;
+      if (document.getElementById('search-input').value.trim()) return false;
+      return currentCategory === 'stock_chart';
+    }
+
+    function indexCardHtml(card, item) {
+      if (!item) {
+        return `<div class="bg-panel/70 border border-line rounded-xl px-5 py-4">
+          <div class="flex items-center gap-2">
+            <span class="text-muted font-semibold tracking-wider">${card.label}</span>
+          </div>
+          <div class="flex items-center gap-2 mt-2 text-muted font-mono text-[0.9rem]">
+            ${icon('loader-2', 'w-4 h-4 animate-spin')}<span>불러오는 중...</span>
+          </div>
+        </div>`;
+      }
+      const isUp = item.change > 0, isDown = item.change < 0;
+      const arrow = isUp ? '▲' : isDown ? '▼' : '－';
+      const colorClass = isUp ? 'text-rose-400' : isDown ? 'text-blue-400' : 'text-muted';
+      const changeText = item.change === 0
+        ? '보합'
+        : `${arrow}${numText(Math.abs(item.change))}p (${arrow}${Math.abs(item.changePercent).toFixed(2)}%)`;
+      return `<button onclick="openIndexChart('${card.key}')" title="눌러서 기간별 차트 보기"
+        class="text-left w-full bg-panel/70 border border-gold/25 rounded-xl px-5 py-4 transition hover:border-gold/60 hover:bg-panel focus:outline-none focus:border-gold/70">
+        <div class="flex items-center gap-2">
+          <span class="text-gold font-semibold tracking-wider">${card.label}</span>
+          <span class="text-muted font-mono text-[0.75rem]">${card.sub}</span>
+          <span class="text-gold2 font-mono text-[0.7rem] flex items-center gap-1 ml-auto px-2 py-0.5 rounded-md border border-gold/30 bg-gold/10">
+            ${icon('line-chart', 'w-3 h-3')} 차트
+          </span>
+        </div>
+        <div class="font-mono text-paper text-3xl tabular-nums mt-2">${numText(item.price)}</div>
+        <div class="font-mono ${colorClass} tabular-nums mt-1">${changeText}</div>
+      </button>`;
+    }
+
+    function renderIndexCards() {
+      if (!isIndexCardView()) return;
+      const wrap = document.getElementById('news-list');
+      if (!wrap) return;
+
+      // 지수 값을 한 번도 못 받았으면 카드 대신 안내를 보여준다 (계속 '불러오는 중'으로 두지 않는다)
+      if (indexItemsError && !lastIndexItems.length) {
+        wrap.innerHTML = `<div class="py-16 text-center text-muted bg-ink2/50 border border-line rounded-2xl">
+          ${icon('alert-triangle', 'w-10 h-10 mx-auto mb-3 text-amber-400/80')}
+          <p>지수 정보를 불러오지 못했습니다.</p>
+          <button onclick="refreshIndexTicker()" class="mt-4 text-gold hover:text-gold2 border border-gold/40 rounded-lg px-4 py-2 transition">다시 시도</button>
+        </div>`;
+        return;
+      }
+
+      const byKey = {};
+      lastIndexItems.forEach((it) => { if (it.key) byKey[it.key] = it; });
+
+      wrap.innerHTML = `
+        <div class="flex items-center gap-2 flex-wrap px-1">
+          <span class="text-muted font-mono text-[0.85rem]">전일 종가 대비 · 카드를 누르면 기간별 차트가 열립니다.</span>
+          <span class="text-muted font-mono text-[0.8rem] ml-auto">30초마다 자동 갱신</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          ${INDEX_CARDS.map((c) => indexCardHtml(c, byKey[c.key])).join('')}
+        </div>`;
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] 지수 차트 팝업
+    //  - 기간 버튼(1일~3년)으로 구간을 바꾼다. 1일은 5분봉이다.
+    //  - 받아온 구간은 화면에 보관해 두고, 다시 누르면 곧바로 그린다.
+    //  - 그래프는 SCFI 차트와 같은 방식으로 SVG 하나에 직접 그린다.
+    // ---------------------------------------------------------------
+    const INDEX_RANGES = [
+      { key: '1d', label: '1일' },
+      { key: '1w', label: '1주일' },
+      { key: '1m', label: '1개월' },
+      { key: '3m', label: '3개월' },
+      { key: '6m', label: '6개월' },
+      { key: '1y', label: '1년' },
+      { key: '3y', label: '3년' },
+    ];
+
+    const indexChartStore = {};   // '지수키:기간' -> { data } | { error: true }
+    let indexChartKey = 'kospi';  // 지금 팝업에 떠 있는 지수
+    let indexChartRange = '1d';   // 처음 열었을 때 보여줄 기간
+
+    function indexChartCacheKey() { return `${indexChartKey}:${indexChartRange}`; }
+
+    function openIndexChart(key) {
+      if (!INDEX_CARDS.some((c) => c.key === key)) return;
+      indexChartKey = key;
+      indexChartRange = '1d';
+      const modal = document.getElementById('index-modal');
+      if (!modal) return;
+      const card = INDEX_CARDS.find((c) => c.key === key);
+      document.getElementById('index-modal-title').textContent = `${card.label} 지수 추이`;
+      modal.classList.remove('hidden');
+      bringModalToFront(modal);
+      renderIndexRangeTabs();
+      renderIndexChart();
+      loadIndexChart();
+    }
+
+    function closeIndexChart() {
+      document.getElementById('index-modal').classList.add('hidden');
+    }
+
+    function closeIndexChartOnBackdrop(e) {
+      if (e.target.id === 'index-modal') closeIndexChart();
+    }
+
+    // 창 크기가 바뀌면 데스크톱/모바일 비율이 달라지므로 열려 있을 때만 다시 그린다.
+    let indexResizeTimer = null;
+    window.addEventListener('resize', () => {
+      const modal = document.getElementById('index-modal');
+      if (!modal || modal.classList.contains('hidden')) return;
+      clearTimeout(indexResizeTimer);
+      indexResizeTimer = setTimeout(renderIndexChart, 150);
+    });
+
+    function setIndexRange(key) {
+      indexChartRange = key;
+      renderIndexRangeTabs();
+      renderIndexChart();
+      loadIndexChart();
+    }
+
+    function renderIndexRangeTabs() {
+      const el = document.getElementById('index-range-tabs');
+      if (!el) return;
+      el.innerHTML = INDEX_RANGES.map((r) => {
+        const on = r.key === indexChartRange;
+        const cls = on
+          ? 'bg-gold/20 text-gold border-gold/50'
+          : 'bg-ink3 text-muted border-line hover:text-paper hover:border-gold/30';
+        return `<button onclick="setIndexRange('${r.key}')"
+          class="px-3 py-1 rounded-md border font-semibold text-[0.8rem] transition ${cls}">${r.label}</button>`;
+      }).join('');
+    }
+
+    async function loadIndexChart() {
+      const cacheKey = indexChartCacheKey();
+      // 이미 받아 둔 구간이면 그대로 그린다. 실패했던 구간은 다시 눌렀을 때 한 번 더 시도한다.
+      const slot = indexChartStore[cacheKey];
+      if (slot && !slot.error) { renderIndexChart(); return; }
+      indexChartStore[cacheKey] = { loading: true };
+      const [key, range] = cacheKey.split(':');
+      try {
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/index-chart?key=${key}&range=${range}`);
+        if (!res.ok) throw new Error('지수 차트 API 오류: ' + res.status);
+        const data = await res.json();
+        const points = (data.points || []).filter((p) => p && Number.isFinite(p.t) && Number.isFinite(p.value));
+        indexChartStore[cacheKey] = points.length >= 2 ? { data: { ...data, points } } : { error: true };
+      } catch (err) {
+        console.error(err);
+        indexChartStore[cacheKey] = { error: true };
+      }
+      // 응답을 기다리는 사이 다른 지수·기간으로 옮겼을 수 있으니 현재 화면 기준으로만 다시 그린다.
+      if (cacheKey === indexChartCacheKey()) renderIndexChart();
+    }
+
+    // 거래소 현지 시각으로 축 글씨를 만든다. (t = UTC 초, off = 그 거래소의 시차 초)
+    //   보는 사람이 어디에 있든 같은 그림이 되도록 UTC 함수로만 읽는다.
+    function indexLocalDate(t, off) { return new Date((t + (off || 0)) * 1000); }
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
+    function indexAxisLabel(t, off, rangeKey) {
+      const d = indexLocalDate(t, off);
+      if (rangeKey === '1d') return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+      if (rangeKey === '1y' || rangeKey === '3y') return `${String(d.getUTCFullYear()).slice(2)}.${pad2(d.getUTCMonth() + 1)}`;
+      return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+    }
+
+    function indexTipLabel(t, off, rangeKey) {
+      const d = indexLocalDate(t, off);
+      const day = `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+      return (rangeKey === '1d' || rangeKey === '1w')
+        ? `${day} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`
+        : day;
+    }
+
+    function renderIndexChart() {
+      const body = document.getElementById('index-chart-body');
+      const note = document.getElementById('index-chart-note');
+      if (!body) return;
+      const slot = indexChartStore[indexChartCacheKey()];
+      const rangeLabel = (INDEX_RANGES.find((r) => r.key === indexChartRange) || {}).label || '';
+
+      if (!slot || slot.loading) {
+        if (note) note.textContent = '';
+        body.innerHTML = `<div class="py-16 flex items-center justify-center gap-2 text-muted font-mono text-[0.9rem]">
+          ${icon('loader-2', 'w-4 h-4 animate-spin')}<span>지수 추이를 불러오는 중입니다...</span></div>`;
+        return;
+      }
+      if (slot.error) {
+        if (note) note.textContent = '';
+        body.innerHTML = `<div class="py-16 text-center text-muted font-mono text-[0.9rem]">
+          지수 추이를 불러오지 못했습니다.</div>`;
+        return;
+      }
+
+      const data = slot.data;
+      const pts = data.points;
+      const off = data.gmtoffset || 0;
+      const isIntraday = indexChartRange === '1d';
+      if (note) {
+        note.textContent = `출처 ${data.source || '-'}${data.stale ? ' (캐시)' : ''}`
+          + (isIntraday ? ' · 5분 간격' : '');
+      }
+
+      // 좌표계 : viewBox 로 그리고 화면 폭에는 CSS 로 맞춘다.
+      //   데스크톱 비율(900:320)을 좁은 화면에 그대로 쓰면 납작해져 곡선이 안 보인다.
+      const narrow = window.innerWidth < 640;
+      const W = narrow ? 360 : 900, H = narrow ? 250 : 320;
+      const PL = narrow ? 50 : 74, PR = narrow ? 10 : 16, PT = narrow ? 12 : 16, PB = narrow ? 26 : 30;
+      const fs = narrow ? 10 : 11;
+
+      // 1일 차트에는 전일 종가를 점선으로 같이 그린다 → 위/아래 어느 쪽인지 한눈에 보인다.
+      const base = (isIntraday && Number.isFinite(data.prevClose)) ? data.prevClose : null;
+      const values = pts.map((p) => p.value);
+      if (base !== null) values.push(base);
+      let lo = Math.min(...values), hi = Math.max(...values);
+      const pad = (hi - lo) * 0.12 || Math.max(Math.abs(hi) * 0.002, 1);   // 값이 모두 같아도 납작해지지 않게
+      lo -= pad; hi += pad;
+
+      const xOf = (i) => PL + (pts.length === 1 ? (W - PL - PR) / 2 : (i * (W - PL - PR)) / (pts.length - 1));
+      const yOf = (v) => PT + (H - PT - PB) * (1 - (v - lo) / (hi - lo));
+      const xy = pts.map((p, i) => ({ x: xOf(i), y: yOf(p.value) }));
+
+      // 기준값 : 1일은 전일 종가, 나머지는 그 구간의 첫 점
+      const first = pts[0], last = pts[pts.length - 1];
+      const from = base !== null ? base : first.value;
+      const diff = last.value - from;
+      const diffPct = from ? (diff / from) * 100 : 0;
+      const up = diff > 0, down = diff < 0;
+      const lineColor = up ? '#fb7185' : down ? '#60a5fa' : '#c8a45c';   // 상승 붉은색 / 하락 파란색 (국내 관행)
+      const sumClass = up ? 'text-rose-400' : down ? 'text-blue-400' : 'text-muted';
+      const arrow = up ? '▲' : down ? '▼' : '－';
+
+      // 가로 눈금선 4칸 + 왼쪽 값 라벨
+      const gridCount = 4;
+      const grid = Array.from({ length: gridCount + 1 }, (_, i) => {
+        const v = lo + ((hi - lo) * i) / gridCount;
+        const y = yOf(v);
+        return `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W - PR}" y2="${y.toFixed(1)}" stroke="currentColor" stroke-width="1" class="text-line" opacity="0.5"/>
+          <text x="${PL - 8}" y="${(y + fs / 3).toFixed(1)}" text-anchor="end" font-size="${fs}" fill="currentColor" class="text-muted" font-family="ui-monospace,monospace">${numText(v, hi - lo < 20 ? 1 : 0)}</text>`;
+      }).join('');
+
+      const baseLine = base === null ? '' : `
+        <line x1="${PL}" y1="${yOf(base).toFixed(1)}" x2="${W - PR}" y2="${yOf(base).toFixed(1)}"
+          stroke="currentColor" class="text-muted" stroke-width="1" stroke-dasharray="4 4" opacity="0.9"/>
+        <text x="${W - PR}" y="${(yOf(base) - 5).toFixed(1)}" text-anchor="end" font-size="${fs}" fill="currentColor" class="text-muted" font-family="ui-monospace,monospace">전일 ${numText(base)}</text>`;
+
+      // 아래 시각/날짜 라벨 (겹치지 않게 균등 간격. 좁은 화면은 개수를 줄인다)
+      const labelCount = Math.min(narrow ? 3 : 5, pts.length);
+      const xLabels = Array.from({ length: labelCount }, (_, i) => {
+        const idx = labelCount === 1 ? 0 : Math.round((i * (pts.length - 1)) / (labelCount - 1));
+        const anchor = i === 0 ? 'start' : i === labelCount - 1 ? 'end' : 'middle';
+        return `<text x="${xOf(idx).toFixed(1)}" y="${H - 8}" text-anchor="${anchor}" font-size="${fs}" fill="currentColor" class="text-muted" font-family="ui-monospace,monospace">${indexAxisLabel(pts[idx].t, off, indexChartRange)}</text>`;
+      }).join('');
+
+      const curve = curvePath(xy);
+      const area = `${curve} L ${xy[xy.length - 1].x.toFixed(1)} ${H - PB} L ${xy[0].x.toFixed(1)} ${H - PB} Z`;
+      // 점이 적을 때만 마커를 찍는다. 많으면 곡선이 지저분해진다.
+      const markers = pts.length <= (narrow ? 16 : 30)
+        ? xy.map((p) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${narrow ? 2 : 2.5}" fill="${lineColor}"/>`).join('')
+        : '';
+
+      body.innerHTML = `
+        <div class="flex items-baseline gap-x-3 gap-y-1 flex-wrap mb-3">
+          <span class="font-mono text-paper text-2xl tabular-nums">${numText(last.value)}</span>
+          <span class="font-mono ${sumClass} tabular-nums">${diff === 0 ? '보합' : `${arrow}${numText(Math.abs(diff))}p (${arrow}${Math.abs(diffPct).toFixed(2)}%)`}</span>
+          <span class="text-muted font-mono text-[0.8rem]">${base !== null ? `전일 종가 ${numText(base)} 대비` : `${rangeLabel} 전 ${numText(first.value)} 대비`}</span>
+          <span class="text-muted font-mono text-[0.8rem] ml-auto">${indexTipLabel(first.t, off, indexChartRange)} ~ ${indexTipLabel(last.t, off, indexChartRange)}</span>
+        </div>
+        <div id="index-plot" class="relative select-none">
+          <svg id="index-svg" viewBox="0 0 ${W} ${H}" class="w-full h-auto block">
+            <defs>
+              <linearGradient id="index-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="${lineColor}" stop-opacity="0.28"/>
+                <stop offset="100%" stop-color="${lineColor}" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            ${grid}
+            <path d="${area}" fill="url(#index-fill)"/>
+            <path d="${curve}" fill="none" stroke="${lineColor}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            ${markers}
+            ${baseLine}
+            <line id="index-hover-line" x1="0" y1="${PT}" x2="0" y2="${H - PB}" stroke="${lineColor}" stroke-width="1" opacity="0" stroke-dasharray="3 3"/>
+            <circle id="index-hover-dot" r="4.5" fill="${lineColor}" opacity="0"/>
+            ${xLabels}
+          </svg>
+          <div id="index-tip" class="hidden absolute pointer-events-none z-10 px-2.5 py-1.5 rounded-md bg-ink border border-gold/40 font-mono text-[0.75rem] text-paper whitespace-nowrap shadow-lg"></div>
+        </div>
+        <p class="text-muted text-[0.72rem] leading-snug mt-3 break-keep">
+          ${isIntraday
+            ? '오늘 장중 5분 간격 지수입니다. 점선은 전일 종가이며, 시각은 그 시장의 현지 시간 기준입니다.'
+            : '종가 기준 추이입니다. 휴장일은 점이 없어 간격이 벌어질 수 있습니다.'}
+        </p>`;
+
+      attachIndexHover(pts, xy, off, W, H, PT, H - PB);
+    }
+
+    // 마우스를 올리면 가장 가까운 점의 값을 말풍선으로 보여준다.
+    function attachIndexHover(pts, xy, off, W, H, topY, bottomY) {
+      const svg = document.getElementById('index-svg');
+      const plot = document.getElementById('index-plot');
+      const tip = document.getElementById('index-tip');
+      const line = document.getElementById('index-hover-line');
+      const dot = document.getElementById('index-hover-dot');
+      if (!svg || !plot || !tip) return;
+
+      const hide = () => {
+        tip.classList.add('hidden');
+        line.setAttribute('opacity', '0');
+        dot.setAttribute('opacity', '0');
+      };
+
+      const move = (e) => {
+        const box = svg.getBoundingClientRect();
+        if (!box.width) return;
+        const touch = e.touches && e.touches[0];
+        const clientX = touch ? touch.clientX : e.clientX;
+        const vx = ((clientX - box.left) / box.width) * W;      // 화면 좌표 → viewBox 좌표
+        let best = 0;
+        for (let i = 1; i < xy.length; i++) {
+          if (Math.abs(xy[i].x - vx) < Math.abs(xy[best].x - vx)) best = i;
+        }
+        const p = pts[best], c = xy[best];
+        line.setAttribute('x1', c.x); line.setAttribute('x2', c.x);
+        line.setAttribute('y1', topY); line.setAttribute('y2', bottomY);
+        line.setAttribute('opacity', '0.7');
+        dot.setAttribute('cx', c.x); dot.setAttribute('cy', c.y);
+        dot.setAttribute('opacity', '1');
+
+        const prev = best > 0 ? pts[best - 1].value : null;
+        const step = prev === null ? '' : `<br><span class="${p.value > prev ? 'text-rose-400' : p.value < prev ? 'text-blue-400' : 'text-muted'}">직전 대비 ${p.value === prev ? '보합' : `${p.value > prev ? '▲' : '▼'}${numText(Math.abs(p.value - prev))}p`}</span>`;
+        tip.innerHTML = `<span class="text-muted">${indexTipLabel(p.t, off, indexChartRange)}</span><br>${numText(p.value)}${step}`;
         tip.classList.remove('hidden');
 
         // 말풍선이 오른쪽 밖으로 나가지 않게 접었다 편다.
@@ -2926,6 +3332,14 @@
             `${currentCategory === 'all' ? '전체' : categoryLabels[currentCategory]} 카테고리 뉴스입니다. (최근 ${hoursLabel()} 이내)`;
           renderSectionsFromState();
           if (!currentResults.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 기간을 조정해보세요.');
+
+        } else if (currentCategory === 'stock_chart') {
+          // [추가] 기사를 가져오지 않는 섹션. 지수 카드만 그리고, 값은 티커와 같은 /api/indices 를 쓴다.
+          document.getElementById('status-line').textContent =
+            '주요 증시 지수입니다. 카드를 누르면 기간별 지수 차트가 열립니다.';
+          renderIndexCards();
+          if (!lastIndexItems.length) await refreshIndexTicker();
+          renderIndexCards();
 
         } else if (currentCategory.startsWith('logistics_') || currentCategory.startsWith('stock_')
                    || currentCategory.startsWith('economy_') || currentCategory.startsWith('sports_')) {
@@ -3324,6 +3738,7 @@
     // 기준금리·환율 항목 (한국은행 ECOS / FRED / 네이버 환율 API에서 실시간 조회)
     let extraTickerHtml = '';
     let lastIndexItems = [];
+    let indexItemsError = false;   // [추가] 지수 값을 못 받아왔는지 ('지수 차트' 카드 화면 안내용)
 
     function formatExtraEntry(item) {
       const isUp = item.change > 0, isDown = item.change < 0;
@@ -3489,12 +3904,16 @@
         const data = await res.json();
         if (!Array.isArray(data.items) || !data.items.length) throw new Error('지수 데이터 없음');
         lastIndexItems = data.items;
+        indexItemsError = false;
         renderIndexTicker(data.items);
+        renderIndexCards();   // [추가] '지수 차트' 화면을 보고 있으면 카드도 같이 갱신된다
       } catch (err) {
         console.error(err);
+        indexItemsError = true;
         const msg = '<span>지수 정보를 불러올 수 없습니다.</span>' + extraTickerHtml;
         document.getElementById('ticker-content').innerHTML = msg;
         document.getElementById('ticker-content-2').innerHTML = msg;
+        renderIndexCards();   // [추가] 카드 화면이면 '다시 시도'를 보여준다
       }
     }
 
@@ -3521,6 +3940,7 @@
         ['brief-modal', closeBrief],
         ['related-modal', closeRelated],
         ['scfi-modal', closeScfiChart],
+        ['index-modal', closeIndexChart],
       ].filter(([id]) => {
         const el = document.getElementById(id);
         return el && !el.classList.contains('hidden');

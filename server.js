@@ -2551,12 +2551,14 @@ app.get('/api/insight', async (req, res) => {
 // -----------------------------------------------------------------
 // /api/indices : KOSPI / KOSDAQ / NASDAQ / S&P 500 / DOW JONES
 // -----------------------------------------------------------------
+// key : 화면(지수 카드·차트 팝업)이 지수를 구분할 때 쓰는 고정 이름.
+//   name 은 표시용이라 바뀔 수 있으므로 화면이 이름으로 짝을 맞추지 않게 한다.
 const INDEX_TARGETS = [
-  { codes: ['KOSPI'], name: 'KOSPI', world: false },
-  { codes: ['KOSDAQ'], name: 'KOSDAQ', world: false },
-  { codes: ['.IXIC'], name: 'NASDAQ', world: true },
-  { codes: ['.INX', '.SPX', 'SPI@SPX'], name: 'S&P 500', world: true },
-  { codes: ['.DJI'], name: 'DOW JONES', world: true },
+  { key: 'kospi', codes: ['KOSPI'], name: 'KOSPI', world: false },
+  { key: 'kosdaq', codes: ['KOSDAQ'], name: 'KOSDAQ', world: false },
+  { key: 'nasdaq', codes: ['.IXIC'], name: 'NASDAQ', world: true },
+  { key: 'sp500', codes: ['.INX', '.SPX', 'SPI@SPX'], name: 'S&P 500', world: true },
+  { key: 'dow', codes: ['.DJI'], name: 'DOW JONES', world: true },
 ];
 
 function toNum(v) {
@@ -2579,7 +2581,7 @@ function indexUrls({ codes, world }) {
 }
 
 async function fetchOneIndex(target) {
-  const { codes, name } = target;
+  const { codes, name, key } = target;
   let lastErr;
 
   for (const url of indexUrls(target)) {
@@ -2605,6 +2607,7 @@ async function fetchOneIndex(target) {
       const isDown = dirCode === '5' || dirCode === '4';
 
       return {
+        key,
         name,
         price,
         change: isDown ? -change : change,
@@ -2639,6 +2642,240 @@ app.get('/api/indices', async (req, res) => {
     res.json(await cachedResponse('indices', TTL_INDICES, buildIndices));
   } catch (err) {
     res.status(502).json({ error: '증시 지수 정보를 가져오지 못했습니다.', items: [] });
+  }
+});
+
+// -----------------------------------------------------------------
+// /api/index-chart : 증시 지수의 기간별 추이 (지수 카드를 누르면 열리는 차트 팝업용)
+//  - 1일은 5분봉, 1주일은 30분봉, 그 위로는 일봉(3년만 주봉)이다.
+//  - 1순위는 야후 파이낸스. 지수 5개 × 모든 기간을 같은 형식으로 주고
+//    5분봉까지 있어서 이 경로 하나로 화면이 다 채워진다.
+//  - 야후가 막히면 네이버로 넘어간다. 다만 네이버는
+//      · 국내(코스피/코스닥) : 분봉 + 임의 기간 일/주봉이 모두 된다.
+//      · 해외(나스닥/S&P/다우) : 분봉이 빈 배열로 오고, 한 번에 110개까지만 준다.
+//    그래서 폴백은 되는 것만 채우고, 해외 '1일'처럼 안 되는 조합은 오류로 돌려준다.
+//  - 응답 형식 : { key, name, range, points: [{ t(초), value }], prevClose, gmtoffset, source }
+//    t 는 UTC 초, gmtoffset 은 그 거래소의 시차(초)다. 화면은 이 둘을 더해
+//    '거래소 현지 시각'으로 축을 그린다 → 보는 사람의 시간대와 상관없이 같은 그림이 된다.
+// -----------------------------------------------------------------
+const INDEX_CHART_TARGETS = {
+  kospi:  { name: 'KOSPI',     yahoo: '^KS11', world: false, naverCode: 'KOSPI' },
+  kosdaq: { name: 'KOSDAQ',    yahoo: '^KQ11', world: false, naverCode: 'KOSDAQ' },
+  sp500:  { name: 'S&P 500',   yahoo: '^GSPC', world: true,  naverCode: '.INX' },
+  nasdaq: { name: 'NASDAQ',    yahoo: '^IXIC', world: true,  naverCode: '.IXIC' },
+  dow:    { name: 'DOW JONES', yahoo: '^DJI',  world: true,  naverCode: '.DJI' },
+};
+
+// days = 화면에 보여줄 기간(일). 폴백에서 '어디서 잘라낼지' 기준으로도 쓴다.
+const INDEX_CHART_RANGES = {
+  '1d': { label: '1일',   yRange: '1d',  yInterval: '5m',  days: 1 },
+  '1w': { label: '1주일', yRange: '5d',  yInterval: '30m', days: 7 },
+  '1m': { label: '1개월', yRange: '1mo', yInterval: '1d',  days: 31 },
+  '3m': { label: '3개월', yRange: '3mo', yInterval: '1d',  days: 92 },
+  '6m': { label: '6개월', yRange: '6mo', yInterval: '1d',  days: 183 },
+  '1y': { label: '1년',   yRange: '1y',  yInterval: '1d',  days: 365 },
+  '3y': { label: '3년',   yRange: '3y',  yInterval: '1wk', days: 1095 },
+};
+
+// UA_BROWSER 는 이 아래(SCFI 절)에서 선언되므로 파일을 읽는 시점에는 아직 값이 없다.
+//   실제로 부를 때 꺼내도록 함수로 둔다.
+function naverStockHeaders() {
+  return {
+    'User-Agent': UA_BROWSER,
+    Accept: 'application/json',
+    Referer: 'https://m.stock.naver.com/',
+  };
+}
+
+// [1순위] 야후 파이낸스 차트 API. 키·쿠키가 필요 없다.
+async function fetchIndexChartFromYahoo(target, rangeKey) {
+  const range = INDEX_CHART_RANGES[rangeKey];
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(target.yahoo)}`
+    + `?range=${range.yRange}&interval=${range.yInterval}`;
+  const res = await fetchWithTimeout(url, {
+    headers: { 'User-Agent': UA_BROWSER, Accept: 'application/json' },
+  }, 8000);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const r = data?.chart?.result?.[0];
+  const stamps = r?.timestamp;
+  const closes = r?.indicators?.quote?.[0]?.close;
+  if (!Array.isArray(stamps) || !Array.isArray(closes)) throw new Error('야후 응답 형식 해석 불가');
+
+  // 휴장·거래정지 구간은 close 가 null 로 온다 → 선이 끊기지 않게 빼고 잇는다.
+  const points = [];
+  for (let i = 0; i < stamps.length; i++) {
+    if (Number.isFinite(stamps[i]) && Number.isFinite(closes[i])) {
+      points.push({ t: stamps[i], value: closes[i] });
+    }
+  }
+  if (points.length < 2) throw new Error('야후 응답에 값이 부족함');
+
+  return {
+    points,
+    prevClose: Number.isFinite(r.meta?.chartPreviousClose) ? r.meta.chartPreviousClose : null,
+    gmtoffset: Number.isFinite(r.meta?.gmtoffset) ? r.meta.gmtoffset : 0,
+    source: 'Yahoo Finance',
+  };
+}
+
+// 'YYYYMMDDHHmmss'(한국 시각) → UTC 초
+function kstStampToEpoch(s) {
+  const ms = Date.parse(
+    `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T${s.slice(8, 10)}:${s.slice(10, 12)}:00+09:00`
+  );
+  return Number.isNaN(ms) ? NaN : Math.round(ms / 1000);
+}
+
+// 'YYYYMMDD' → 그날 정오(UTC) 초.
+//   일봉은 날짜만 쓰므로 시각은 아무 값이나 되지만, 자정으로 잡으면 시차 때문에
+//   화면에서 하루 밀려 보일 수 있어 정오로 둔다.
+function dayStampToEpoch(s) {
+  const ms = Date.UTC(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)), 12);
+  return Number.isNaN(ms) ? NaN : Math.round(ms / 1000);
+}
+
+function trimToRange(points, days) {
+  const from = Date.now() / 1000 - days * 86400;
+  const kept = points.filter((p) => p.t >= from);
+  return kept.length >= 2 ? kept : points.slice(-2);   // 점이 1개면 선이 안 그려진다
+}
+
+// [2순위 · 국내] 코스피 / 코스닥
+//   · 1일 : 네이버 증권 분봉(1분)을 받아 5분 간격으로 솎는다. (오늘치만 온다)
+//   · 그 밖 : 임의 기간을 받을 수 있는 siseJson 으로 일/주봉을 받는다.
+//     1주일도 여기로 보낸다. 분봉으로는 오늘 하루밖에 못 채우기 때문이다.
+async function fetchIndexChartFromNaverDomestic(target, rangeKey) {
+  const range = INDEX_CHART_RANGES[rangeKey];
+
+  if (rangeKey === '1d') {
+    // 정규장이 390분이라 400개면 오늘치가 모두 들어온다.
+    const url = `https://api.stock.naver.com/chart/domestic/index/${encodeURIComponent(target.naverCode)}/minute?count=400`;
+    const res = await fetchWithTimeout(url, { headers: naverStockHeaders() }, 8000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rows = await res.json();
+    if (!Array.isArray(rows) || !rows.length) throw new Error('네이버 분봉 응답이 비어 있음');
+
+    const points = [];
+    rows.forEach((row) => {
+      const stamp = String(row.localDateTime || '');
+      const value = toNum(row.currentPrice ?? row.closePrice);
+      if (stamp.length !== 14 || !Number.isFinite(value)) return;
+      if (Number(stamp.slice(10, 12)) % 5 !== 0) return;   // 5분봉만 남긴다
+      const t = kstStampToEpoch(stamp);
+      if (Number.isFinite(t)) points.push({ t, value });
+    });
+    if (points.length < 2) throw new Error('네이버 분봉에 값이 부족함');
+    return { points, prevClose: null, gmtoffset: 9 * 3600, source: '네이버 증권' };
+  }
+
+  const end = new Date();
+  // 휴장일이 있어 요청 기간보다 점이 적게 온다 → 넉넉히(1.6배) 받아서 뒤에서 자른다.
+  const start = new Date(end.getTime() - Math.round(range.days * 1.6) * 86400000);
+  const timeframe = range.days > 730 ? 'week' : 'day';
+  const url = `https://api.finance.naver.com/siseJson.naver?symbol=${encodeURIComponent(target.naverCode)}`
+    + `&requestType=1&startTime=${ymd(start)}&endTime=${ymd(end)}&timeframe=${timeframe}`;
+  const res = await fetchWithTimeout(url, { headers: naverStockHeaders() }, 8000);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+
+  // 응답이 정식 JSON이 아니라(머리글 행이 작은따옴표) 값만 골라 읽는다.
+  //   ["20250102", 시가, 고가, 저가, 종가, 거래량, 외국인소진율]
+  const points = [];
+  const re = /\["(\d{8})",\s*([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const t = dayStampToEpoch(m[1]);
+    const value = Number(m[5]);   // 종가
+    if (Number.isFinite(t) && Number.isFinite(value)) points.push({ t, value });
+  }
+  if (points.length < 2) throw new Error('네이버 일봉에 값이 부족함');
+  return {
+    points: trimToRange(points, range.days),
+    prevClose: null,
+    gmtoffset: 9 * 3600,
+    source: '네이버 증권',
+  };
+}
+
+// [2순위 · 해외] 나스닥 / S&P 500 / 다우
+//   분봉은 빈 배열로 오고, 일·주·월봉은 한 번에 110개까지만 준다.
+//   → 기간에 맞춰 봉 종류를 바꿔 110개 안에 들어오게 한다.
+async function fetchIndexChartFromNaverForeign(target, rangeKey) {
+  const range = INDEX_CHART_RANGES[rangeKey];
+  // 분봉이 없으므로 '1일'만 포기한다. 1주일은 일봉 5개로 대신 그린다.
+  if (rangeKey === '1d') throw new Error('해외 지수는 분봉 대체 경로가 없음');
+
+  const periodType = range.days <= 183 ? 'dayCandle' : range.days <= 730 ? 'weekCandle' : 'monthCandle';
+  const url = `https://api.stock.naver.com/chart/foreign/index/${encodeURIComponent(target.naverCode)}?periodType=${periodType}`;
+  const res = await fetchWithTimeout(url, { headers: naverStockHeaders() }, 8000);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+
+  const rows = Array.isArray(data?.priceInfos) ? data.priceInfos : [];
+  const points = [];
+  rows.forEach((row) => {
+    const stamp = String(row.localDate || '');
+    const value = toNum(row.closePrice);
+    if (stamp.length !== 8 || !Number.isFinite(value)) return;
+    const t = dayStampToEpoch(stamp);
+    if (Number.isFinite(t)) points.push({ t, value });
+  });
+  if (points.length < 2) throw new Error('네이버 해외 지수에 값이 부족함');
+  points.sort((a, b) => a.t - b.t);
+  return {
+    points: trimToRange(points, range.days),
+    prevClose: null,
+    gmtoffset: 0,
+    source: '네이버 증권',
+  };
+}
+
+// 지수 5개 × 기간 7개 = 35칸. 기사 응답 캐시(respCache)에 섞으면 그쪽을 밀어내므로 따로 둔다.
+const INDEX_CHART_CACHE_MAX = 40;
+const indexChartCache = new Map();   // "지수:기간" -> { ts, payload }
+
+function indexChartTtl(rangeKey) {
+  if (rangeKey === '1d') return 60 * 1000;         // 장중에는 계속 움직인다
+  if (rangeKey === '1w') return 5 * 60 * 1000;
+  return 30 * 60 * 1000;                           // 일봉은 하루 한 번만 바뀐다
+}
+
+async function buildIndexChart(key, rangeKey) {
+  const target = INDEX_CHART_TARGETS[key];
+  const head = { key, name: target.name, range: rangeKey, label: INDEX_CHART_RANGES[rangeKey].label };
+  try {
+    return { ...head, ...(await fetchIndexChartFromYahoo(target, rangeKey)) };
+  } catch (e) {
+    console.error(`[지수 차트] 야후 실패 (${key}/${rangeKey}):`, e.message);
+    const fallback = target.world ? fetchIndexChartFromNaverForeign : fetchIndexChartFromNaverDomestic;
+    return { ...head, ...(await fallback(target, rangeKey)) };
+  }
+}
+
+app.get('/api/index-chart', async (req, res) => {
+  const key = String(req.query.key || '');
+  const rangeKey = String(req.query.range || '1m');
+  if (!INDEX_CHART_TARGETS[key] || !INDEX_CHART_RANGES[rangeKey]) {
+    return res.status(400).json({ error: '알 수 없는 지수 또는 기간입니다.' });
+  }
+
+  const cacheKey = `${key}:${rangeKey}`;
+  const hit = indexChartCache.get(cacheKey);
+  if (hit && Date.now() - hit.ts < indexChartTtl(rangeKey)) return res.json(hit.payload);
+
+  try {
+    const payload = await buildIndexChart(key, rangeKey);
+    indexChartCache.delete(cacheKey);              // 다시 넣어 '가장 최근'으로 옮긴다
+    indexChartCache.set(cacheKey, { ts: Date.now(), payload });
+    while (indexChartCache.size > INDEX_CHART_CACHE_MAX) {
+      indexChartCache.delete(indexChartCache.keys().next().value);
+    }
+    res.json(payload);
+  } catch (err) {
+    console.error(`[지수 차트 실패] ${cacheKey}:`, err.message);
+    if (hit) return res.json({ ...hit.payload, stale: true });   // 조금 낡아도 빈 화면보다 낫다
+    res.status(502).json({ error: '지수 차트를 가져오지 못했습니다.' });
   }
 });
 
