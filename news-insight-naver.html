@@ -1153,10 +1153,10 @@
     function isSubCategory(cat) { return parentCategoryOf(cat) !== null; }
 
     // [추가] '엄선 목록'으로 보여줄 상위 섹션
-    //   물류·경제·증시를 누르면 하위 섹션 박스를 전부 늘어놓는 전체보기 대신,
+    //   하위 섹션이 있는 섹션을 누르면 하위 섹션 박스를 전부 늘어놓는 전체보기 대신,
     //   하위 섹션 기사들을 한 통에 모아 중요한 것만 골라낸 한 목록을 보여준다.
-    //   (스포츠는 지금까지처럼 하위 섹션 전체보기다)
-    const DIGEST_CATEGORIES = ['logistics', 'economy', 'stock'];
+    //   (여러 섹션을 한 화면에 늘어놓는 전체보기는 이제 '전체' 화면에만 남아 있다)
+    const DIGEST_CATEGORIES = ['logistics', 'economy', 'stock', 'sports'];
 
     let currentCategory = 'briefing';   // 기본 메인화면
     let expandedLogistics = false;
@@ -3347,7 +3347,7 @@
           if (!list.length) showFallbackBanner('브리핑에 표시할 기사를 찾지 못했습니다.');
 
         } else if (DIGEST_CATEGORIES.includes(currentCategory)) {
-          // [수정] 물류/경제/증시 : 하위 섹션 전체보기 대신 '엄선 목록' 한 덩어리
+          // [수정] 물류/경제/증시/스포츠 : 하위 섹션 전체보기 대신 '엄선 목록' 한 덩어리
           const items = await fetchDigest(currentCategory, { dateFrom, dateTo });
           const list = sortItemsByCurrent(decorateItems(items, currentCategory));
           currentResults = list;
@@ -3356,9 +3356,9 @@
           renderNews(list);
           if (!list.length) showFallbackBanner(`최근 ${hoursLabel()} 이내 기사를 찾지 못했습니다. 게재 기간을 늘려보세요.`);
 
-        } else if (['all', 'sports'].includes(currentCategory)) {
-          const endpoint = currentCategory === 'all' ? '/api/all/sections' : `/api/${currentCategory}/sections`;
-          const sections = await fetchSectionsData(endpoint, { dateFrom, dateTo });
+        } else if (currentCategory === 'all') {
+          // 섹션 박스를 여러 개 늘어놓는 '전체보기'는 이제 이 화면 하나뿐이다.
+          const sections = await fetchSectionsData('/api/all/sections', { dateFrom, dateTo });
           sectionState = sections.map((sec) => ({
             key: sec.key,
             label: sec.label,
@@ -3371,7 +3371,7 @@
           mergeCatsAcrossSections(sectionState);
           currentResults = sectionState.flatMap((s) => s.items);
           document.getElementById('status-line').textContent =
-            `${currentCategory === 'all' ? '전체' : categoryLabels[currentCategory]} 카테고리 뉴스입니다. (최근 ${hoursLabel()} 이내)`;
+            `전체 카테고리 뉴스입니다. (최근 ${hoursLabel()} 이내)`;
           renderSectionsFromState();
           if (!currentResults.length) showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 기간을 조정해보세요.');
 

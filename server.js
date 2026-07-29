@@ -1845,10 +1845,20 @@ const DIGEST_KEEP = 30;             // 캐시에 담아 둘 최대 건수 (화�
 const DIGEST_POOL_PER_SECTION = 20; // 섹션마다 후보로 모아 둘 최대 건수
 const DIGEST_SPREAD_PENALTY = 1.5;  // 같은 섹션에서 연달아 뽑을 때의 감점 (한 곳이 독식하지 않게)
 
+// 상위 섹션 자신의 검색 설정.
+//   스포츠는 '전체(all)' 화면에 없는 섹션이라 ALL_SECTIONS 에 정의가 없다.
+//   화면 설정(DEFAULT_KEYWORDS.sports)과 같은 값으로 여기에 따로 둔다.
+const DIGEST_EXTRA_PARENTS = {
+  sports: { key: 'sports', label: '스포츠', terms: ['스포츠', '축구', '야구'], domain: 'sports' },
+};
+function digestParent(base) {
+  return ALL_SECTIONS.find((s) => s.key === base) || DIGEST_EXTRA_PARENTS[base] || null;
+}
+
 // 이 상위 섹션의 기사를 어디서 모을지 : 상위 섹션 자신 + 하위 섹션 전부
 //   상위 자신을 넣는 이유 : 하위 섹션 어디에도 안 걸리는 그 분야 일반 기사를 놓치지 않기 위해서다.
 function digestSources(base, SECTIONS) {
-  const parent = ALL_SECTIONS.find((s) => s.key === base);
+  const parent = digestParent(base);
   return parent ? [parent, ...SECTIONS] : [...SECTIONS];
 }
 
@@ -1917,7 +1927,7 @@ async function buildDigest(sources, { dateFrom, dateTo, hours }, kwMap) {
 
 function registerDigestRoute(base, SECTIONS) {
   const sources = digestSources(base, SECTIONS);
-  const label = (ALL_SECTIONS.find((s) => s.key === base) || {}).label || base;
+  const label = (digestParent(base) || {}).label || base;
 
   app.get(`/api/${base}/digest`, async (req, res) => {
     const { dateFrom, dateTo, display = '10', hours, sort, kw } = req.query;
@@ -1950,6 +1960,7 @@ const DIGEST_BASES = [
   ['logistics', LOGISTICS_SECTIONS],
   ['economy', ECONOMY_SECTIONS],
   ['stock', STOCK_SECTIONS],
+  ['sports', SPORTS_SECTIONS],
 ];
 DIGEST_BASES.forEach(([base, SECTIONS]) => registerDigestRoute(base, SECTIONS));
 
@@ -3565,7 +3576,8 @@ function warnUncoveredSections(kwMap) {
     ...LOGISTICS_SECTIONS,
     ...STOCK_SECTIONS,
     ...SPORTS_SECTIONS,
-    ...ECONOMY_SECTIONS,   // [추가] 경제 엄선 목록이 이 섹션을 쓴다
+    ...ECONOMY_SECTIONS,                   // [추가] 경제 엄선 목록이 이 섹션을 쓴다
+    ...Object.values(DIGEST_EXTRA_PARENTS), // [추가] 스포츠 상위 (전체 화면엔 없는 섹션)
     ...BRIEFING_SOURCES.map((s) => ({ key: s.cat })),
   ];
   const missing = [...new Set(
@@ -3598,8 +3610,9 @@ function warmJobs(kwMap) {
     },
   ];
 
-  // [수정] 물류·경제·증시를 누르면 이제 '전체보기'가 아니라 엄선 목록(digest)이 뜬다.
-  //   그래서 데울 대상도 digest 로 바꿨다. 건수·정렬은 캐시 키에 없으므로 여기서 정하지 않는다.
+  // [수정] 하위 섹션이 있는 상위 섹션(물류·경제·증시·스포츠)을 누르면
+  //   이제 '전체보기'가 아니라 엄선 목록(digest)이 뜬다. 그래서 데울 대상도 digest 로 바꿨다.
+  //   건수·정렬은 캐시 키에 없으므로 여기서 정하지 않는다.
   const digestOpts = { hours: WARM_HOURS };
   DIGEST_BASES.forEach(([base, SECTIONS]) => {
     const sources = digestSources(base, SECTIONS);
@@ -3608,13 +3621,6 @@ function warmJobs(kwMap) {
       key: buildDigestKey(base, sources, digestOpts, kwMap),
       run: () => buildDigest(sources, digestOpts, kwMap),
     });
-  });
-
-  // 스포츠는 지금도 하위 섹션 전체보기 화면이다.
-  jobs.push({
-    name: 'sports/sections',
-    key: buildSectionsKey('sports/sections', SPORTS_SECTIONS, secOpts, kwMap),
-    run: () => buildSubSections(SPORTS_SECTIONS, secOpts, kwMap),
   });
 
   return jobs;

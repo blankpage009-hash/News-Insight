@@ -378,8 +378,12 @@ Render 로그에서 본 것. **응답 캐시 사본(2장 마지막 절)이 저�
 - **줄바꿈** : `server.js` CRLF, `news-insight-naver.html` LF. 편집 후 확인할 것.
 - 이미지 처리 도구 없음(sharp / ImageMagick 미설치).
   PowerShell `System.Drawing` 으로 축소 + Node 내장 `zlib` 로 무손실 재압축으로 처리했다.
-- **물류·경제·증시 상위 섹션은 `/api/{base}/digest`(엄선 목록)를 쓴다.** `/api/{base}/sections`(전체보기)는
-  이제 스포츠만 쓴다. 프리워밍도 그에 맞춰 digest 3개 + `sports/sections` 를 데운다(`warmJobs`).
+- **물류·경제·증시·스포츠 상위 섹션은 `/api/{base}/digest`(엄선 목록)를 쓴다.**
+  섹션 박스를 여러 개 늘어놓는 `/api/all/sections`(전체보기)는 이제 '전체' 화면 하나뿐이고,
+  `/api/{base}/sections` 는 아무도 안 쓴다(라우트만 남아 있음).
+  프리워밍도 그에 맞춰 `briefing` · `all/sections` · digest 4개를 데운다(`warmJobs`).
+  스포츠는 '전체' 화면에 없는 섹션이라 상위 검색어 정의가 `DIGEST_EXTRA_PARENTS` 에 따로 있다.
+  화면의 `DEFAULT_KEYWORDS.sports` 와 값이 어긋나면 캐시 키가 갈라지니 같이 고칠 것.
   digest 캐시 키에는 **건수(display)와 정렬(sort)이 없다.** 항상 30건까지 순위를 매겨 캐시해 두고
   응답할 때만 자르므로, 설정에서 노출 건수를 바꿔도 캐시 미스가 나지 않는다.
   건수·정렬을 키에 넣으면 조합마다 캐시가 갈라져 프리워밍이 헛돈다 — 넣지 말 것.
