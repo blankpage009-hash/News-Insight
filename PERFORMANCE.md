@@ -378,6 +378,11 @@ Render 로그에서 본 것. **응답 캐시 사본(2장 마지막 절)이 저�
 - **줄바꿈** : `server.js` CRLF, `news-insight-naver.html` LF. 편집 후 확인할 것.
 - 이미지 처리 도구 없음(sharp / ImageMagick 미설치).
   PowerShell `System.Drawing` 으로 축소 + Node 내장 `zlib` 로 무손실 재압축으로 처리했다.
+- **물류·경제·증시 상위 섹션은 `/api/{base}/digest`(엄선 목록)를 쓴다.** `/api/{base}/sections`(전체보기)는
+  이제 스포츠만 쓴다. 프리워밍도 그에 맞춰 digest 3개 + `sports/sections` 를 데운다(`warmJobs`).
+  digest 캐시 키에는 **건수(display)와 정렬(sort)이 없다.** 항상 30건까지 순위를 매겨 캐시해 두고
+  응답할 때만 자르므로, 설정에서 노출 건수를 바꿔도 캐시 미스가 나지 않는다.
+  건수·정렬을 키에 넣으면 조합마다 캐시가 갈라져 프리워밍이 헛돈다 — 넣지 말 것.
 - 화면 기본값 : `hours=24`, `sort=sim`, `perSection=30`, 브리핑 `limit=10`.
   브리핑 외 카테고리로 이동하면 count가 5로 바뀐다(`applyBriefingCountDefault`).
 - 미국 기준금리는 **뉴욕 연은 → FRED → 마지막 성공값 → 폴백 상수** 순으로 조회한다(`US_RATE_SOURCES`).

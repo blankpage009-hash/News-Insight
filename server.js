@@ -1827,6 +1827,133 @@ registerSectionRoutes('sports', SPORTS_SECTIONS);   // [추가] 스포츠 하위
 registerSectionRoutes('economy', ECONOMY_SECTIONS); // [추가] 경제 하위 섹션(거시경제/시장)
 
 // -----------------------------------------------------------------
+// [추가] /api/{base}/digest : 상위 섹션(물류 / 경제 / 증시) 화면용 '엄선' 목록
+//
+//   예전에는 상위 섹션을 누르면 하위 섹션 박스가 줄줄이 나오는 '전체보기'였다.
+//   이제는 하위 섹션들(+ 상위 섹션 자신)의 기사를 한 통에 모아 점수를 매기고
+//   화면이 요청한 건수만큼만 골라서 한 목록으로 돌려준다. 점수는 네 가지의 합이다.
+//     · 정확도  : 네이버 정확도순 결과에서 몇 번째로 나왔는지 (앞일수록 검색어에 잘 맞음)
+//     · 인기    : 같은 사건을 다룬 기사가 몇 건인지 (여러 매체가 다룰수록 큰 이슈)
+//     · 최신성  : 얼마나 최근 기사인지
+//     · 교차노출 : 하위 섹션 여러 곳에 동시에 걸렸는지
+//
+//   캐시를 아끼려고 '건수(display)'와 '정렬(sort)'은 캐시 키에 넣지 않는다.
+//   항상 DIGEST_KEEP 건까지 순위를 매겨 캐시해 두고, 응답할 때만 자르고 늘어놓는다.
+//   → 설정에서 노출 건수를 3 → 10 으로 바꿔도 네이버를 다시 부르지 않는다.
+// -----------------------------------------------------------------
+const DIGEST_KEEP = 30;             // 캐시에 담아 둘 최대 건수 (화면 노출 건수 최대치와 같다)
+const DIGEST_POOL_PER_SECTION = 20; // 섹션마다 후보로 모아 둘 최대 건수
+const DIGEST_SPREAD_PENALTY = 1.5;  // 같은 섹션에서 연달아 뽑을 때의 감점 (한 곳이 독식하지 않게)
+
+// 이 상위 섹션의 기사를 어디서 모을지 : 상위 섹션 자신 + 하위 섹션 전부
+//   상위 자신을 넣는 이유 : 하위 섹션 어디에도 안 걸리는 그 분야 일반 기사를 놓치지 않기 위해서다.
+function digestSources(base, SECTIONS) {
+  const parent = ALL_SECTIONS.find((s) => s.key === base);
+  return parent ? [parent, ...SECTIONS] : [...SECTIONS];
+}
+
+function buildDigestKey(base, sources, { dateFrom, dateTo, hours }, kwMap) {
+  return `${base}/digest|${dateFrom || ''}|${dateTo || ''}|${hours || ''}|${kwSig(sources, kwMap)}`;
+}
+
+async function buildDigest(sources, { dateFrom, dateTo, hours }, kwMap) {
+  // 1) 섹션별로 후보를 모은다.
+  //    정렬은 화면 설정과 무관하게 항상 정확도순(sim) : '몇 번째로 나왔는지'를 점수로 써야 하고,
+  //    엄선 목록은 최신순으로 긁어오면 정확도 신호가 통째로 사라진다.
+  const perSec = await Promise.all(sources.map(async (sec) => {
+    const { terms, exclude } = resolveSectionKw(kwMap, sec);
+    const items = await searchByTerms(terms, {
+      display: DIGEST_POOL_PER_SECTION, dateFrom, dateTo, hours,
+      sort: 'sim', domain: sec.domain, exclude,
+    });
+    return items.slice(0, DIGEST_POOL_PER_SECTION)
+      .map((it, i) => ({ ...it, _sec: sec.key, _rank: i }));
+  }));
+
+  // 2) 같은 기사(URL)는 하나로 합치고, 걸린 섹션은 cats 에 모은다.
+  const byUrl = new Map();
+  perSec.flat().forEach((it) => {
+    if (!it.url) return;
+    const prev = byUrl.get(it.url);
+    if (!prev) { byUrl.set(it.url, { ...it, cats: [it._sec] }); return; }
+    if (!prev.cats.includes(it._sec)) prev.cats.push(it._sec);
+    if (it._rank < prev._rank) { prev._rank = it._rank; prev._sec = it._sec; }
+  });
+  const merged = [...byUrl.values()];
+  if (!merged.length) return { items: [] };
+
+  // 3) 같은 사건을 다룬 기사끼리 묶어 대표 1건만 남기고 점수를 매긴다.
+  const now = Date.now();
+  const events = clusterByEvent(merged).map((cluster) => {
+    const rep = pickRepresentative(cluster);
+    const cats = [...new Set(cluster.flatMap((c) => c.cats))];
+    const best = cluster.reduce((a, b) => (b._rank < a._rank ? b : a));
+    const ageHr = rep.datetime ? (now - new Date(rep.datetime).getTime()) / 3600000 : 999;
+    const score =
+      Math.log2(cluster.length + 1) * 3                                                     // 인기(보도량)
+      + (Math.max(0, 72 - ageHr) / 72) * 6                                                  // 최신성
+      + (Math.max(0, DIGEST_POOL_PER_SECTION - best._rank) / DIGEST_POOL_PER_SECTION) * 5   // 정확도
+      + (cats.length - 1) * 2;                                                              // 교차 노출
+    return { ...rep, cats, _home: best._sec, _score: score };
+  });
+
+  // 4) 점수순으로 뽑되, 이미 뽑힌 섹션에는 감점을 줘서 하위 섹션이 골고루 섞이게 한다.
+  const rest = events;
+  const used = new Map();
+  const picked = [];
+  while (picked.length < DIGEST_KEEP && rest.length) {
+    let bi = 0, bs = -Infinity;
+    for (let i = 0; i < rest.length; i++) {
+      const s = rest[i]._score - DIGEST_SPREAD_PENALTY * (used.get(rest[i]._home) || 0);
+      if (s > bs) { bs = s; bi = i; }
+    }
+    const e = rest.splice(bi, 1)[0];
+    used.set(e._home, (used.get(e._home) || 0) + 1);
+    picked.push(e);
+  }
+
+  return { items: picked.map(({ _sec, _rank, _score, _home, ...it }) => it) };
+}
+
+function registerDigestRoute(base, SECTIONS) {
+  const sources = digestSources(base, SECTIONS);
+  const label = (ALL_SECTIONS.find((s) => s.key === base) || {}).label || base;
+
+  app.get(`/api/${base}/digest`, async (req, res) => {
+    const { dateFrom, dateTo, display = '10', hours, sort, kw } = req.query;
+    const kwMap = parseKw(kw);
+    const opts = { dateFrom, dateTo, hours };
+    const limit = Math.min(Math.max(Number(display) || 10, 1), DIGEST_KEEP);
+    try {
+      const data = await cachedResponse(
+        buildDigestKey(base, sources, opts, kwMap),
+        TTL_SECTION,
+        () => buildDigest(sources, opts, kwMap),
+      );
+      // 캐시본은 건드리지 않는다 (slice 로 새 배열을 만들어 자른다).
+      let items = (data.items || []).slice(0, limit);
+      // 최신순을 골랐으면 '뽑힌 기사들' 안에서만 시간순으로 다시 늘어놓는다.
+      //   무엇을 뽑을지는 정렬과 상관없이 언제나 중요도 기준이다.
+      if (sort === 'date') {
+        items = [...items].sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0));
+      }
+      res.json({ items, label });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+    }
+  });
+}
+
+// 하위 섹션을 가진 상위 섹션 : 눌렀을 때 '전체보기' 대신 엄선 목록을 보여준다.
+const DIGEST_BASES = [
+  ['logistics', LOGISTICS_SECTIONS],
+  ['economy', ECONOMY_SECTIONS],
+  ['stock', STOCK_SECTIONS],
+];
+DIGEST_BASES.forEach(([base, SECTIONS]) => registerDigestRoute(base, SECTIONS));
+
+// -----------------------------------------------------------------
 // /api/topic/:key : 단일 상위 섹션 (경제 / 정치·사회 / 글로벌 / 속보 등)
 //   '전체(all)' 화면과 완전히 같은 키워드·도메인·세팅을 사용한다.
 //   → 어느 화면에서 보든 같은 세팅이 적용되어 결과가 일관된다.
@@ -3438,6 +3565,7 @@ function warnUncoveredSections(kwMap) {
     ...LOGISTICS_SECTIONS,
     ...STOCK_SECTIONS,
     ...SPORTS_SECTIONS,
+    ...ECONOMY_SECTIONS,   // [추가] 경제 엄선 목록이 이 섹션을 쓴다
     ...BRIEFING_SOURCES.map((s) => ({ key: s.cat })),
   ];
   const missing = [...new Set(
@@ -3470,14 +3598,24 @@ function warmJobs(kwMap) {
     },
   ];
 
-  [['logistics', LOGISTICS_SECTIONS], ['stock', STOCK_SECTIONS], ['sports', SPORTS_SECTIONS]]
-    .forEach(([base, SECTIONS]) => {
-      jobs.push({
-        name: `${base}/sections`,
-        key: buildSectionsKey(`${base}/sections`, SECTIONS, secOpts, kwMap),
-        run: () => buildSubSections(SECTIONS, secOpts, kwMap),
-      });
+  // [수정] 물류·경제·증시를 누르면 이제 '전체보기'가 아니라 엄선 목록(digest)이 뜬다.
+  //   그래서 데울 대상도 digest 로 바꿨다. 건수·정렬은 캐시 키에 없으므로 여기서 정하지 않는다.
+  const digestOpts = { hours: WARM_HOURS };
+  DIGEST_BASES.forEach(([base, SECTIONS]) => {
+    const sources = digestSources(base, SECTIONS);
+    jobs.push({
+      name: `${base}/digest`,
+      key: buildDigestKey(base, sources, digestOpts, kwMap),
+      run: () => buildDigest(sources, digestOpts, kwMap),
     });
+  });
+
+  // 스포츠는 지금도 하위 섹션 전체보기 화면이다.
+  jobs.push({
+    name: 'sports/sections',
+    key: buildSectionsKey('sports/sections', SPORTS_SECTIONS, secOpts, kwMap),
+    run: () => buildSubSections(SPORTS_SECTIONS, secOpts, kwMap),
+  });
 
   return jobs;
 }

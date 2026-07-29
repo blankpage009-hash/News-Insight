@@ -1152,6 +1152,12 @@
     // 이 카테고리가 '하위 섹션'인지 여부
     function isSubCategory(cat) { return parentCategoryOf(cat) !== null; }
 
+    // [추가] '엄선 목록'으로 보여줄 상위 섹션
+    //   물류·경제·증시를 누르면 하위 섹션 박스를 전부 늘어놓는 전체보기 대신,
+    //   하위 섹션 기사들을 한 통에 모아 중요한 것만 골라낸 한 목록을 보여준다.
+    //   (스포츠는 지금까지처럼 하위 섹션 전체보기다)
+    const DIGEST_CATEGORIES = ['logistics', 'economy', 'stock'];
+
     let currentCategory = 'briefing';   // 기본 메인화면
     let expandedLogistics = false;
     let expandedStock = false;
@@ -2386,7 +2392,20 @@
       return data.items;
     }
 
-    // [추가] 단일 상위 섹션(경제/정치·사회/글로벌 등) : '전체' 화면과 같은 키워드 설정 사용
+    // [추가] 상위 섹션 엄선 목록(물류/경제/증시)
+    //   서버가 하위 섹션들을 모두 모아 정확도·중요도·인기·최신성으로 순위를 매겨 준다.
+    //   display 로 보낸 건수만큼만 잘라서 온다. (설정 화면의 '기본 섹션' 노출 건수)
+    async function fetchDigest(base, { dateFrom, dateTo }) {
+      const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()), sort: getSort() });
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
+      setKwParam(params);   // 키워드 설정 반영
+      const data = await apiGet(`/api/${base}/digest?${params.toString()}`);
+      if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
+      return data.items;
+    }
+
+    // [추가] 단일 상위 섹션(정치·사회/글로벌 등) : '전체' 화면과 같은 키워드 설정 사용
     async function fetchTopic(key, { dateFrom, dateTo }) {
       const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
@@ -3256,9 +3275,11 @@
           ${label}</button>`;
       };
 
-      // 맨 앞: 상위 전체 보기 → 그다음: 각 하위 섹션
+      // 맨 앞: 상위 섹션 → 그다음: 각 하위 섹션
+      //   [수정] 물류/경제/증시는 '전체보기'가 아니라 엄선 목록이라 칩 이름도 '주요'로 바꿨다.
+      const headLabel = categoryLabels[parent] + (DIGEST_CATEGORIES.includes(parent) ? ' 주요' : ' 전체');
       el.innerHTML =
-        chip(parent, categoryLabels[parent] + ' 전체') +
+        chip(parent, headLabel) +
         subs.map((s) => chip(s.key, s.label)).join('');
       el.style.display = 'flex';
     }
@@ -3325,7 +3346,17 @@
           renderBriefing(list);
           if (!list.length) showFallbackBanner('브리핑에 표시할 기사를 찾지 못했습니다.');
 
-        } else if (['all', 'logistics', 'stock', 'sports'].includes(currentCategory)) {
+        } else if (DIGEST_CATEGORIES.includes(currentCategory)) {
+          // [수정] 물류/경제/증시 : 하위 섹션 전체보기 대신 '엄선 목록' 한 덩어리
+          const items = await fetchDigest(currentCategory, { dateFrom, dateTo });
+          const list = sortItemsByCurrent(decorateItems(items, currentCategory));
+          currentResults = list;
+          document.getElementById('status-line').textContent =
+            `${categoryLabels[currentCategory]} 하위 섹션에서 가장 중요한 뉴스 ${list.length}건을 골랐습니다. (최근 ${hoursLabel()} 이내)`;
+          renderNews(list);
+          if (!list.length) showFallbackBanner(`최근 ${hoursLabel()} 이내 기사를 찾지 못했습니다. 게재 기간을 늘려보세요.`);
+
+        } else if (['all', 'sports'].includes(currentCategory)) {
           const endpoint = currentCategory === 'all' ? '/api/all/sections' : `/api/${currentCategory}/sections`;
           const sections = await fetchSectionsData(endpoint, { dateFrom, dateTo });
           sectionState = sections.map((sec) => ({
@@ -3373,7 +3404,7 @@
           if (!list.length) showFallbackBanner('최근 1시간 이내 속보가 없습니다.');
 
         } else {
-          // 경제 / 정치·사회 / 글로벌 : '전체' 화면과 동일한 키워드 설정으로 수집
+          // 정치·사회 / 글로벌 / AI : '전체' 화면과 동일한 키워드 설정으로 수집
           const items = await fetchTopic(currentCategory, { dateFrom, dateTo });
           const list = sortItemsByCurrent(decorateItems(items, currentCategory));
           currentResults = list;
