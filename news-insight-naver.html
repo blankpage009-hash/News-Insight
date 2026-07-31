@@ -154,6 +154,10 @@
     max-width: 100%;
     overflow-x: hidden;
     overscroll-behavior-x: none;
+    /* [추가] 세로 고무줄도 이 화면 안에서 끝낸다.
+       → 맨 위에서 아래로 끌 때 브라우저 자체 새로고침이 끼어들지 않고
+         아래에서 직접 만든 '끌어서 새로고침'이 동작한다. */
+    overscroll-behavior-y: contain;
   }
   /* [수정] overflow-x:hidden 은 html/body 를 스크롤 컨테이너로 만들어
      안쪽의 position:sticky(상단 제목 바·검색 패널)를 무력화한다.
@@ -196,6 +200,47 @@
     border-radius: 999px;
     border: 3px solid rgb(var(--c-line));
     border-top-color: rgb(var(--c-gold));
+    animation: spin-ring .8s linear infinite;
+  }
+
+  /* ---------------------------------------------------------------
+     [추가] 모바일 '끌어서 새로고침' 표시등
+       화면 맨 위에서 아래로 끄는 만큼(--pr-y) 고리가 따라 내려오고,
+       손을 놓아 새로고침이 시작되면 그 자리에서 빙글빙글 돈다.
+     --------------------------------------------------------------- */
+  #pull-refresh {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    background: rgb(var(--c-ink2));
+    border: 1px solid rgb(var(--c-line));
+    box-shadow: 0 6px 16px rgb(0 0 0 / .28);
+    pointer-events: none;                       /* 표시만 하는 요소 : 터치를 가로채지 않는다 */
+    opacity: var(--pr-op, 0);
+    transform: translate(-50%, var(--pr-y, 0px)) translateY(-46px);
+    transition: transform .24s ease, opacity .24s ease;
+  }
+  /* 끌고 있는 동안에는 손가락을 그대로 따라오게(전환 효과 없음) */
+  #pull-refresh.is-dragging { transition: none; }
+  .pr-ring {
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    border: 2.5px solid rgb(var(--c-line));
+    border-top-color: rgb(var(--c-gold));
+    transform: rotate(var(--pr-rot, 0deg));
+  }
+  /* 놓으면 새로고침되는 지점까지 끌었을 때 : 색을 밝게 바꿔 알려준다 */
+  #pull-refresh.is-ready .pr-ring { border-top-color: rgb(var(--c-gold2)); }
+  #pull-refresh.is-refreshing .pr-ring {
+    transform: none;
     animation: spin-ring .8s linear infinite;
   }
 
@@ -263,11 +308,12 @@
     }
     body.nav-open #nav-scrim { opacity: 1; pointer-events: auto; }
 
-    /* --- 2) 스크롤 시 상단바 축소 (body.tb-compact) --- */
-    #top-bar .ticker-viewport,
-    #app-header, #app-logo {
-      transition: max-height .2s ease, opacity .2s ease, padding .2s ease,
-                  width .2s ease, height .2s ease, font-size .2s ease;
+    /* --- 2) 스크롤 시 상단바 축소 (body.tb-compact) ---
+       [수정] 로고(아이콘 + 'Beyond News')와 헤더 자체는 절대 건드리지 않는다.
+              스크롤할 때 제목이 작아지거나 위로 움찔거리는 것처럼 보이던 원인이라
+              이제는 그 아래 지수 티커만 접어서 읽는 영역을 넓힌다. */
+    #top-bar .ticker-viewport {
+      transition: max-height .2s ease, opacity .2s ease, padding .2s ease;
     }
     body.tb-compact .ticker-viewport {
       max-height: 0; opacity: 0;
@@ -275,9 +321,6 @@
       border-bottom-width: 0;
       overflow: hidden;
     }
-    body.tb-compact #app-header { padding-top: .4rem; padding-bottom: .4rem; }
-    body.tb-compact #app-logo { --logo-h: 1.3rem; }
-    body.tb-compact #app-subtitle { display: none; }
 
     /* --- 카테고리 제목 바 --- */
     #cat-header > div { padding: .25rem .25rem .5rem; gap: .375rem .5rem; }
@@ -586,6 +629,9 @@
 
   <!-- [추가] 모바일 드로어 뒷배경 (눌러서 닫기) -->
   <div id="nav-scrim" onclick="closeNav()" aria-hidden="true"></div>
+
+  <!-- [추가] 모바일 : 화면을 아래로 끌어 새로고침할 때 따라 내려오는 고리 -->
+  <div id="pull-refresh" aria-hidden="true"><div class="pr-ring"></div></div>
 
   <!-- [추가] 데스크톱 : 사이드바가 접혀 있을 때만 화면 왼쪽에 나타나는 펼치기 탭 (») -->
   <button id="sidebar-expand-btn" onclick="toggleSidebar()" aria-controls="sidebar" aria-expanded="false"
@@ -1478,6 +1524,12 @@
       document.addEventListener('touchend', onNavTouchEnd);
       document.addEventListener('touchcancel', onNavTouchEnd);
 
+      // [추가] 모바일 : 맨 위에서 화면을 아래로 끌면 대시보드 전체 새로고침
+      document.addEventListener('touchstart', onPullTouchStart, { passive: true });
+      document.addEventListener('touchmove', onPullTouchMove, { passive: false });
+      document.addEventListener('touchend', onPullTouchEnd);
+      document.addEventListener('touchcancel', onPullTouchEnd);
+
       // [추가] 지수 티커 : 자동 흐름 + 잡고 끌기
       setupTickerDrag();
 
@@ -1647,6 +1699,114 @@
       const shouldOpen = d.isOpen ? d.progress > 1 - thr : d.progress > thr;
       clearNavDragStyle();
       setNav(shouldOpen);
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] 모바일 '끌어서 새로고침'
+    //   맨 위(스크롤 0)에서 화면을 잡고 아래로 끌면 대시보드를 통째로 다시 불러온다.
+    //   - 끌린 거리는 절반만 반영해(고무줄 느낌) 고리가 PULL_TRIGGER 까지 내려오면 실행
+    //   - 기사 목록(runSearch) 과 상단 지수 티커를 함께 갱신한다
+    // ---------------------------------------------------------------
+    const PULL_SLOP = 8;         // 이 정도 움직임은 그냥 스크롤로 본다
+    const PULL_TRIGGER = 70;     // 고리가 여기까지 내려온 뒤 놓으면 새로고침
+    const PULL_MAX = 110;        // 더 끌어도 고리는 여기까지만 내려온다
+    let pullDrag = null, pullRefreshing = false;
+
+    function pullRefreshEl() { return document.getElementById('pull-refresh'); }
+
+    // 지금 이 터치를 '끌어서 새로고침'으로 볼 수 있는 상황인지 판단한다.
+    function canStartPull(el) {
+      if (!isMobileLayout() || pullRefreshing) return false;
+      if (document.body.classList.contains('nav-open') || settingMode) return false;
+      if ((window.scrollY || document.documentElement.scrollTop || 0) > 0) return false;
+      // 팝업·드로어·티커 안에서 시작한 손짓은 그쪽 몫이다
+      if (el && el.closest('[id$="-modal"], #sidebar, #nav-scrim, #ticker-viewport')) return false;
+      // 스스로 세로 스크롤되는 상자(팝업 본문 등) 안이면 그 스크롤을 방해하지 않는다
+      for (let n = el; n && n !== document.body; n = n.parentElement) {
+        const oy = getComputedStyle(n).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1) return false;
+      }
+      return true;
+    }
+
+    // dist : 고리를 화면 위에서 얼마나 내릴지(px)
+    function paintPull(dist, dragging) {
+      const el = pullRefreshEl();
+      if (!el) return;
+      el.classList.toggle('is-dragging', !!dragging);
+      el.classList.toggle('is-ready', dist >= PULL_TRIGGER);
+      el.style.setProperty('--pr-y', dist + 'px');
+      el.style.setProperty('--pr-op', String(Math.min(1, dist / (PULL_TRIGGER * 0.6))));
+      el.style.setProperty('--pr-rot', (dist * 3) + 'deg');
+    }
+
+    function hidePull() {
+      const el = pullRefreshEl();
+      if (!el) return;
+      el.classList.remove('is-dragging', 'is-ready', 'is-refreshing');
+      el.style.setProperty('--pr-y', '0px');
+      el.style.setProperty('--pr-op', '0');
+      el.style.setProperty('--pr-rot', '0deg');
+    }
+
+    function onPullTouchStart(e) {
+      pullDrag = null;
+      if (e.touches.length !== 1) return;
+      const el = (e.target instanceof Element) ? e.target : null;
+      if (!canStartPull(el)) return;
+      const t = e.touches[0];
+      pullDrag = { x0: t.clientX, y0: t.clientY, active: false, dist: 0 };
+    }
+
+    function onPullTouchMove(e) {
+      if (!pullDrag || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const dx = t.clientX - pullDrag.x0;
+      const dy = t.clientY - pullDrag.y0;
+
+      if (!pullDrag.active) {
+        if (dy < PULL_SLOP) {
+          // 위로 올리거나 옆으로 미는 손짓이면 이번 터치는 포기한다
+          if (dy < -2 || Math.abs(dx) > PULL_SLOP) pullDrag = null;
+          return;
+        }
+        if (Math.abs(dx) > Math.abs(dy)) { pullDrag = null; return; }
+        if ((window.scrollY || document.documentElement.scrollTop || 0) > 0) { pullDrag = null; return; }
+        pullDrag.active = true;
+      }
+
+      pullDrag.dist = Math.min(PULL_MAX, (dy - PULL_SLOP) * 0.5);
+      paintPull(pullDrag.dist, true);
+      if (e.cancelable) e.preventDefault();   // 끌리는 동안 본문이 같이 움직이지 않게
+    }
+
+    function onPullTouchEnd(e) {
+      if (!pullDrag) return;
+      const d = pullDrag;
+      pullDrag = null;
+      if (!d.active) return;
+      if (e && e.type === 'touchcancel') { hidePull(); return; }
+      if (d.dist >= PULL_TRIGGER) startPullRefresh();
+      else hidePull();
+    }
+
+    async function startPullRefresh() {
+      if (pullRefreshing) return;
+      pullRefreshing = true;
+      const el = pullRefreshEl();
+      if (el) el.classList.add('is-refreshing');
+      paintPull(PULL_TRIGGER, false);   // 새로고침 위치에 고리를 붙잡아 둔다
+      const t0 = performance.now();
+      try {
+        await Promise.all([runSearch(), refreshIndexTicker()]);
+      } catch (err) {
+        console.error(err);
+      }
+      // 너무 빨리 끝나면 고리가 깜빡이기만 해서 새로고침된 걸 못 느낀다 → 최소 0.45초는 보여준다
+      const rest = 450 - (performance.now() - t0);
+      if (rest > 0) await new Promise((r) => setTimeout(r, rest));
+      pullRefreshing = false;
+      hidePull();
     }
 
     // [추가] 모바일 : 제목 바 오른쪽 필터(노출건수/기간/정렬) 접기·펴기
