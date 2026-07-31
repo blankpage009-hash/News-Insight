@@ -628,9 +628,10 @@
       <span class="font-mono bg-ink2 border border-line px-3 py-1.5 rounded-full text-muted flex items-center gap-1.5">
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> LIVE
       </span>
-      <div class="hidden sm:flex flex-col items-end leading-tight font-mono">
+      <!-- [수정] 날짜·시간 : 1pt 축소, 시간은 볼드 해제 -->
+      <div class="hidden sm:flex flex-col items-end leading-tight font-mono text-[0.91rem]">
         <span id="current-date" class="text-muted"></span>
-        <span id="current-time" class="font-semibold text-gold tabular-nums"></span>
+        <span id="current-time" class="text-gold tabular-nums"></span>
       </div>
       <!-- [추가] 화면 설정(테마·기본 노출 건수) : 관리자가 아니어도 누구나 쓸 수 있다 -->
       <button id="prefs-btn" onclick="openPrefsModal()" aria-label="화면 설정" title="화면 설정 (테마 · 기본 노출 건수)"
@@ -676,7 +677,7 @@
 
         <!-- 제목(영문) : 기존 1.18rem → 3pt(=4px) 크게 (이후 1pt 축소) -->
         <div class="flex items-center justify-between gap-2">
-          <h2 class="font-semibold text-muted uppercase tracking-[0.2em] text-[1.37rem]">SECTION</h2>
+          <h2 class="font-semibold text-muted uppercase tracking-[0.14em] text-[1.28rem]">SECTION</h2>
           <!-- [추가] 데스크톱 : 사이드바 접기 («) -->
           <button id="sidebar-collapse-btn" onclick="toggleSidebar()" aria-controls="sidebar" aria-expanded="true"
             aria-label="사이드바 접기" title="사이드바 접기 (Ctrl+\)"
@@ -3621,7 +3622,7 @@
           const list = sortItemsByCurrent(decorateItems(items, currentCategory));
           currentResults = list;
           document.getElementById('status-line').textContent =
-            `${categoryLabels[currentCategory]} 하위 섹션에서 가장 중요한 뉴스 ${list.length}건을 골랐습니다. (최근 ${hoursLabel()} 이내)`;
+            `${categoryLabels[currentCategory]} 섹션에서 가장 중요한 뉴스 ${list.length}건을 골랐습니다. (최근 ${hoursLabel()} 이내)`;
           renderNews(list);
           if (!list.length) showFallbackBanner(`최근 ${hoursLabel()} 이내 기사를 찾지 못했습니다. 게재 기간을 늘려보세요.`);
 
