@@ -626,6 +626,13 @@
         <span id="current-date" class="text-muted"></span>
         <span id="current-time" class="font-semibold text-gold tabular-nums"></span>
       </div>
+      <!-- [추가] 화면 설정(테마·기본 노출 건수) : 관리자가 아니어도 누구나 쓸 수 있다 -->
+      <button id="prefs-btn" onclick="openPrefsModal()" aria-label="화면 설정" title="화면 설정 (테마 · 기본 노출 건수)"
+        class="-mr-1 p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/>
+        </svg>
+      </button>
     </div>
   </header>
 
@@ -728,7 +735,7 @@
         <div>
           <button id="setting-toggle-btn" onclick="toggleSettingPanel()"
             class="cat-btn text-[1.25rem] flex items-center justify-between px-4 py-3 rounded-xl transition w-full text-muted hover:bg-ink3">
-            <span>Setting</span>
+            <span>Administrator Setting</span>
             <span class="flex items-center gap-1.5" id="setting-toggle-icons"></span>
           </button>
         </div>
@@ -900,7 +907,7 @@
           style="top: calc(var(--stick-top, 121px) - 1px)">
           <div class="flex items-center gap-2.5 min-w-0">
             <span class="text-gold shrink-0" id="setting-view-icon"></span>
-            <h2 class="font-sans font-bold text-gold text-xl truncate">설정</h2>
+            <h2 class="font-sans font-bold text-gold text-xl truncate">Administrator Setting</h2>
           </div>
           <!-- [수정] 저장/기본값 버튼을 제목 옆(헤더)으로 이동 -->
           <div class="flex items-center gap-2 shrink-0">
@@ -918,32 +925,14 @@
         </header>
         <div class="p-5 space-y-3">
 
-          <!-- [추가] 테마 설정 (화이트 / 다크 / 시스템) · 누르는 즉시 적용되고 이 기기에 저장된다 -->
-          <div class="bg-ink/40 border border-line rounded-lg px-3 py-3 space-y-2">
-            <div class="flex items-center gap-2">
-              <span class="text-gold2 shrink-0" id="theme-setting-icon"></span>
-              <span class="font-semibold text-paper text-[1.15rem]">테마</span>
-              <span class="font-mono text-muted text-[0.8rem]">화면 밝기 · 이 기기에만 적용</span>
-            </div>
-            <div class="flex items-center gap-2 flex-wrap" id="theme-buttons"></div>
-          </div>
-
-          <!-- [추가] 기본 노출 건수 : 섹션을 처음 열 때 보여줄 기사 수 · 이 기기에 저장 -->
-          <div class="bg-ink/40 border border-line rounded-lg px-3 py-3 space-y-2">
-            <div class="flex items-center gap-2">
-              <span class="text-gold2 shrink-0" id="count-setting-icon"></span>
-              <span class="font-semibold text-paper text-[1.15rem]">기본 노출 건수</span>
-              <span class="font-mono text-muted text-[0.8rem]">처음 열 때 보여줄 기사 수 · 이 기기에만 적용</span>
-            </div>
-            <div id="count-setting-selects" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
-          </div>
+          <!-- [수정] 테마·기본 노출 건수는 누구나 쓰는 설정이라 헤더의 ⋮(화면 설정) 팝업으로 옮겼다. -->
 
           <!-- [추가] 설정 비밀번호 변경 -->
           <div class="bg-ink/40 border border-line rounded-lg px-3 py-3 space-y-2">
             <div class="flex items-center gap-2">
               <span class="text-gold2 shrink-0" id="pw-setting-icon"></span>
               <span class="font-semibold text-paper text-[1.15rem]">설정 비밀번호</span>
-              <span class="font-mono text-muted text-[0.8rem]">Setting 진입 시 요구 (기본 7780)</span>
+              <span class="font-mono text-muted text-[0.8rem]">Administrator Setting 진입 시 요구 (기본 7780)</span>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
               <input type="password" id="new-password-input" placeholder="새 비밀번호"
@@ -972,7 +961,44 @@
     </section>
   </main>
 
-  <!-- [추가] 설정 비밀번호 확인 모달 : Setting 을 누르면 먼저 여기서 확인한다 -->
+  <!-- [추가] 화면 설정 팝업 : 헤더 오른쪽 ⋮ 버튼으로 연다.
+       테마와 기본 노출 건수는 '이 기기에만' 저장되는 개인 취향이라 비밀번호를 요구하지 않는다. -->
+  <div id="prefs-modal" class="hidden fixed inset-0 z-[85] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 pt-16 sm:pt-4 overflow-y-auto" onclick="closePrefsOnBackdrop(event)">
+    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-md" onclick="event.stopPropagation()">
+      <header class="flex items-center gap-2.5 px-5 py-3.5 border-b border-line bg-gradient-to-r from-gold/15 via-ink2 to-ink2 rounded-t-2xl">
+        <span class="text-gold shrink-0" id="prefs-modal-icon"></span>
+        <h2 class="font-sans font-bold text-gold text-xl">화면 설정</h2>
+        <button onclick="closePrefsModal()" title="닫기" class="ml-auto text-muted hover:text-paper transition">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </header>
+      <div class="p-5 space-y-3">
+
+        <!-- 테마 설정 (화이트 / 다크 / 시스템) · 누르는 즉시 적용되고 이 기기에 저장된다 -->
+        <div class="bg-ink/40 border border-line rounded-lg px-3 py-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-gold2 shrink-0" id="theme-setting-icon"></span>
+            <span class="font-semibold text-paper text-[1.15rem]">테마</span>
+            <span class="font-mono text-muted text-[0.8rem]">화면 밝기 · 이 기기에만 적용</span>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap" id="theme-buttons"></div>
+        </div>
+
+        <!-- 기본 노출 건수 : 섹션을 처음 열 때 보여줄 기사 수 · 이 기기에 저장 -->
+        <div class="bg-ink/40 border border-line rounded-lg px-3 py-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-gold2 shrink-0" id="count-setting-icon"></span>
+            <span class="font-semibold text-paper text-[1.15rem]">기본 노출 건수</span>
+            <span class="font-mono text-muted text-[0.8rem]">처음 열 때 보여줄 기사 수 · 이 기기에만 적용</span>
+          </div>
+          <div id="count-setting-selects" class="grid grid-cols-1 gap-2"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- [추가] 설정 비밀번호 확인 모달 : Administrator Setting 을 누르면 먼저 여기서 확인한다 -->
   <div id="password-modal" class="hidden fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onclick="closePasswordOnBackdrop(event)">
     <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-sm p-6 space-y-4" onclick="event.stopPropagation()">
       <div class="flex items-center gap-2.5">
@@ -2091,8 +2117,6 @@
       if (!wrap) return;
       const iconEl = document.getElementById('theme-setting-icon');
       if (iconEl) iconEl.innerHTML = icon('sun', 'w-4 h-4');
-      const pwIconEl = document.getElementById('pw-setting-icon');
-      if (pwIconEl) pwIconEl.innerHTML = icon('lock', 'w-4 h-4');
 
       const pref = readThemePref();
       wrap.innerHTML = THEME_OPTIONS.map((o) => {
@@ -2189,12 +2213,41 @@
         </div>`).join('');
     }
 
+    // ---------------------------------------------------------------
+    // [추가] 화면 설정 팝업 (헤더 오른쪽 ⋮)
+    //   테마 · 기본 노출 건수만 담는다. 이 두 가지는 이 기기에만 저장되는
+    //   개인 취향이라 관리자 비밀번호 없이 누구나 바꿀 수 있다.
+    // ---------------------------------------------------------------
+    function openPrefsModal() {
+      closeNav();                        // 모바일 : 드로어가 열려 있으면 닫는다
+      const el = document.getElementById('prefs-modal');
+      if (!el) return;
+      const iconEl = document.getElementById('prefs-modal-icon');
+      if (iconEl) iconEl.innerHTML = icon('sliders', 'w-5 h-5');
+      renderThemeButtons();              // 현재 선택 상태로 갱신
+      renderCountSetting();
+      el.classList.remove('hidden');
+    }
+
+    function closePrefsModal() {
+      const el = document.getElementById('prefs-modal');
+      if (!el || el.classList.contains('hidden')) return;
+      el.classList.add('hidden');
+      // 기본 노출 건수를 바꿨으면 팝업을 닫을 때 새 건수로 다시 불러온다.
+      // (설정 화면이 열려 있으면 그 화면을 닫을 때 처리하므로 여기서는 건드리지 않는다)
+      if (countDefaultsDirty && !settingMode) {
+        countDefaultsDirty = false;
+        runSearch();
+      }
+    }
+    function closePrefsOnBackdrop(e) { if (e.target.id === 'prefs-modal') closePrefsModal(); }
+
     // 오른쪽(기사 영역)에 키워드 설정 화면을 연다.
     function openSettingView() {
       settingMode = true;
-      renderThemeButtons();                          // [추가] 테마 버튼(현재 선택 상태) 갱신
-      renderCountSetting();                          // [추가] 기본 노출 건수 셀렉트 갱신
       renderKeywordSettings();                       // 최신 값으로 입력칸 다시 그림
+      const pwIconEl = document.getElementById('pw-setting-icon');
+      if (pwIconEl) pwIconEl.innerHTML = icon('lock', 'w-4 h-4');
       const pwMsg = document.getElementById('password-change-msg');
       if (pwMsg) pwMsg.textContent = '';
       hideFallbackBanner();
@@ -4201,7 +4254,7 @@
         const el = document.getElementById(id);
         return el && !el.classList.contains('hidden');
       });
-      if (!open.length) { closePasswordModal(); return; }
+      if (!open.length) { closePrefsModal(); closePasswordModal(); return; }
       open.sort((a, b) => {
         const z = (id) => parseInt(document.getElementById(id).style.zIndex || '0', 10);
         return z(b[0]) - z(a[0]);
