@@ -2779,6 +2779,10 @@ const INDEX_CHART_TARGETS = {
   sp500:  { name: 'S&P 500',   yahoo: '^GSPC', world: true,  naverCode: '.INX' },
   nasdaq: { name: 'NASDAQ',    yahoo: '^IXIC', world: true,  naverCode: '.IXIC' },
   dow:    { name: 'DOW JONES', yahoo: '^DJI',  world: true,  naverCode: '.DJI' },
+  // 환율은 지수가 아니지만 같은 화면·같은 응답 형식으로 보여준다.
+  //   야후는 24시간 시세라 시차를 런던(BST)으로 준다 → 한국 시각으로 읽도록 gmtoffset 을 고정한다.
+  usdkrw: { name: '원/달러 환율', yahoo: 'KRW=X', world: true, fx: true,
+            naverCode: 'FX_USDKRW', gmtoffset: 9 * 3600 },
 };
 
 // days = 화면에 보여줄 기간(일). 폴백에서 '어디서 잘라낼지' 기준으로도 쓴다.
@@ -2829,7 +2833,9 @@ async function fetchIndexChartFromYahoo(target, rangeKey) {
   return {
     points,
     prevClose: Number.isFinite(r.meta?.chartPreviousClose) ? r.meta.chartPreviousClose : null,
-    gmtoffset: Number.isFinite(r.meta?.gmtoffset) ? r.meta.gmtoffset : 0,
+    // 환율처럼 시차를 따로 정해 둔 대상은 그 값을 쓴다 (야후가 주는 거래소 시차를 무시)
+    gmtoffset: Number.isFinite(target.gmtoffset) ? target.gmtoffset
+      : Number.isFinite(r.meta?.gmtoffset) ? r.meta.gmtoffset : 0,
     source: 'Yahoo Finance',
   };
 }
@@ -2946,8 +2952,53 @@ async function fetchIndexChartFromNaverForeign(target, rangeKey) {
   };
 }
 
-// 지수 5개 × 기간 7개 = 35칸. 기사 응답 캐시(respCache)에 섞으면 그쪽을 밀어내므로 따로 둔다.
-const INDEX_CHART_CACHE_MAX = 40;
+// [2순위 · 환율] 원/달러
+//   네이버 환율에는 분봉 경로가 없고, 일별 시세를 한 페이지에 10일치씩만 준다.
+//   → 필요한 만큼 페이지를 나눠 받되 상한을 둔다. 그보다 긴 기간은 야후가 살아나야 그려진다.
+const FX_NAVER_PAGE_ROWS = 10;
+const FX_NAVER_MAX_PAGES = 10;
+
+async function fetchIndexChartFromNaverFx(target, rangeKey) {
+  const range = INDEX_CHART_RANGES[rangeKey];
+  if (rangeKey === '1d') throw new Error('환율은 분봉 대체 경로가 없음');
+
+  // 주말·공휴일에는 시세가 없어 달력 날짜보다 행이 적다 → 영업일 비율(5/7)로 필요한 장수를 잡는다.
+  const pages = Math.ceil((range.days * 5) / 7 / FX_NAVER_PAGE_ROWS) + 1;
+  if (pages > FX_NAVER_MAX_PAGES) throw new Error('네이버 환율로는 이 기간을 채울 수 없음');
+
+  const lists = await Promise.all(
+    Array.from({ length: pages }, async (_, i) => {
+      const url = `https://api.stock.naver.com/marketindex/exchange/${encodeURIComponent(target.naverCode)}`
+        + `/prices?page=${i + 1}`;
+      const res = await fetchWithTimeout(url, { headers: naverStockHeaders() }, 8000);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const rows = await res.json();
+      return Array.isArray(rows) ? rows : [];
+    })
+  );
+
+  // 페이지를 동시에 받는 사이 오늘 시세가 갱신되면 같은 날짜가 두 번 들어올 수 있다 → 날짜별로 하나만 남긴다.
+  const byDay = new Map();
+  lists.flat().forEach((row) => {
+    const day = String(row?.localTradedAt || '').replace(/-/g, '');   // 'YYYY-MM-DD'
+    const value = toNum(String(row?.closePrice ?? '').replace(/,/g, ''));
+    if (day.length !== 8 || !Number.isFinite(value)) return;
+    const t = dayStampToEpoch(day);
+    if (Number.isFinite(t)) byDay.set(day, { t, value });
+  });
+  const points = [...byDay.values()];
+  if (points.length < 2) throw new Error('네이버 환율 시세에 값이 부족함');
+  points.sort((a, b) => a.t - b.t);
+  return {
+    points: trimToRange(points, range.days),
+    prevClose: null,
+    gmtoffset: 9 * 3600,
+    source: '네이버 환율',
+  };
+}
+
+// 대상 6개 × 기간 7개 = 42칸. 기사 응답 캐시(respCache)에 섞으면 그쪽을 밀어내므로 따로 둔다.
+const INDEX_CHART_CACHE_MAX = 48;
 const indexChartCache = new Map();   // "지수:기간" -> { ts, payload }
 
 function indexChartTtl(rangeKey) {
@@ -2963,7 +3014,8 @@ async function buildIndexChart(key, rangeKey) {
     return { ...head, ...(await fetchIndexChartFromYahoo(target, rangeKey)) };
   } catch (e) {
     console.error(`[지수 차트] 야후 실패 (${key}/${rangeKey}):`, e.message);
-    const fallback = target.world ? fetchIndexChartFromNaverForeign : fetchIndexChartFromNaverDomestic;
+    const fallback = target.fx ? fetchIndexChartFromNaverFx
+      : target.world ? fetchIndexChartFromNaverForeign : fetchIndexChartFromNaverDomestic;
     return { ...head, ...(await fallback(target, rangeKey)) };
   }
 }
