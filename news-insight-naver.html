@@ -191,16 +191,30 @@
   @keyframes pulse-soft { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
   .skeleton { animation: pulse-soft 1.6s ease-in-out infinite; }
 
-  /* 검색 중 : 목록 자리 가운데에서 빙글빙글 도는 고리
-     바깥 고리(연한 선) 위에 금색 원호 하나를 얹고 통째로 돌린다. */
+  /* 시계 방향으로 도는 눈금 고리 (검색 중 · 끌어서 새로고침 공용)
+     - 색은 conic-gradient 로 '진한 금색 → 옅은 금색' 꼬리를 만든다
+       (이음매가 눈금 사이 빈틈에 오도록 from 15deg 에서 시작한다)
+     - 그 위에 끝이 둥근 막대 12개 모양의 SVG 마스크를 씌워 막대만 남긴다 */
   @keyframes spin-ring { to { transform: rotate(360deg); } }
+  .loading-ring, .pr-ring {
+    --ring-head: var(--c-gold2);
+    --ring-tail: var(--c-gold);
+    --ring-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='%23000'%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(30 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(60 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(90 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(120 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(150 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(180 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(210 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(240 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(270 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(300 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(330 50 50)'/%3E%3C/g%3E%3C/svg%3E");
+    background: conic-gradient(from 15deg,
+      rgb(var(--ring-head)) 0deg,
+      rgb(var(--ring-tail)) 60deg,
+      rgb(var(--ring-tail) / .55) 150deg,
+      rgb(var(--ring-tail) / .28) 240deg,
+      rgb(var(--ring-tail) / .14) 300deg,
+      rgb(var(--ring-tail) / .14) 360deg);
+    -webkit-mask: var(--ring-mask) center / 100% 100% no-repeat;
+    mask: var(--ring-mask) center / 100% 100% no-repeat;
+  }
+  /* 눈금이 12개뿐이라 steps(12) 로 한 칸씩 딸깍딸깍 돌린다(이 모양의 원래 움직임) */
   .loading-ring {
-    width: 46px;
-    height: 46px;
-    border-radius: 999px;
-    border: 3px solid rgb(var(--c-line));
-    border-top-color: rgb(var(--c-gold));
-    animation: spin-ring .8s linear infinite;
+    width: 52px;
+    height: 52px;
+    animation: spin-ring 1.2s steps(12, end) infinite;
   }
 
   /* ---------------------------------------------------------------
@@ -241,18 +255,15 @@
   /* 끌고 있는 동안에는 손가락을 그대로 따라오게(전환 효과 없음) */
   #pull-refresh.is-dragging { transition: none; }
   .pr-ring {
-    width: 20px;
-    height: 20px;
-    border-radius: 999px;
-    border: 2.5px solid rgb(var(--c-line));
-    border-top-color: rgb(var(--c-gold));
+    width: 26px;
+    height: 26px;
     transform: rotate(var(--pr-rot, 0deg));
   }
-  /* 놓으면 새로고침되는 지점까지 끌었을 때 : 색을 밝게 바꿔 알려준다 */
-  #pull-refresh.is-ready .pr-ring { border-top-color: rgb(var(--c-gold2)); }
+  /* 놓으면 새로고침되는 지점까지 끌었을 때 : 꼬리까지 진한 색으로 바꿔 알려준다 */
+  #pull-refresh.is-ready .pr-ring { --ring-tail: var(--c-gold2); }
   #pull-refresh.is-refreshing .pr-ring {
     transform: none;
-    animation: spin-ring .8s linear infinite;
+    animation: spin-ring 1.2s steps(12, end) infinite;
   }
 
   @keyframes modal-in {
@@ -460,7 +471,8 @@
   @media (prefers-reduced-motion: reduce) {
     .skeleton, .modal-pop { animation: none; }
     /* 로딩 고리는 '아직 도는 중'을 알려야 해서 끄지 않고 아주 느리게만 돌린다 */
-    .loading-ring { animation-duration: 2.4s; }
+    .loading-ring,
+    #pull-refresh.is-refreshing .pr-ring { animation-duration: 3.2s; }
     /* 티커 자동 흐름은 JS에서 멈춘다(드래그는 그대로 동작) */
   }
 
@@ -4045,7 +4057,7 @@
       const changeStr = Math.abs(item.change).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const pctStr = Math.abs(item.changePercent).toFixed(2);
       return `<span class="flex items-center gap-2">
-        <span class="text-gold font-semibold tracking-wider">${item.name}</span>
+        <span class="text-gold tracking-wider">${item.name}</span>
         <span class="tabular-nums text-paper">${priceStr}</span>
         <span class="${colorClass} tabular-nums">${arrow}${changeStr} (${arrow}${pctStr}%)</span></span>`;
     }
@@ -4068,7 +4080,7 @@
           ? `${arrow}${Math.abs(item.change).toFixed(2)} (${arrow}${Math.abs(item.changePercent).toFixed(2)}%)`
           : `(${arrow}${Math.abs(item.change).toFixed(2)}%p)`;
       return `<span class="flex items-center gap-2">
-        <span class="text-gold font-semibold tracking-wider">${item.name}</span>
+        <span class="text-gold tracking-wider">${item.name}</span>
         <span class="tabular-nums text-paper">${item.priceStr}</span>
         <span class="${colorClass} tabular-nums">${changeText}</span></span>`;
     }
