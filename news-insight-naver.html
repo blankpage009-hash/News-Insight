@@ -302,7 +302,7 @@
      [추가] 모바일(<1024px) 전용 조정
        데스크톱 레이아웃은 건드리지 않고 이 블록 안에서만 다르게 잡는다.
        1) 좌측 SECTION 목록 → 화면 밖에 숨겨두는 슬라이드 패널(드로어)
-       2) 스크롤을 내리면 상단 고정바(헤더+티커)를 축소해 읽는 영역을 넓힌다
+       2) 상단 여백·기사 제목 크기를 좁은 화면에 맞춰 한 단계 줄인다
      --------------------------------------------------------------- */
   #nav-scrim { display: none; }
 
@@ -312,7 +312,7 @@
       position: fixed;
       top: 0; left: 0; bottom: 0;
       z-index: 60;
-      width: min(86vw, 340px);
+      width: min(74vw, 288px);
       padding: 12px;
       padding-bottom: max(12px, env(safe-area-inset-bottom));
       overflow-y: auto;
@@ -335,19 +335,16 @@
     }
     body.nav-open #nav-scrim { opacity: 1; pointer-events: auto; }
 
-    /* --- 2) 스크롤 시 상단바 축소 (body.tb-compact) ---
-       [수정] 로고(아이콘 + 'Beyond News')와 헤더 자체는 절대 건드리지 않는다.
-              스크롤할 때 제목이 작아지거나 위로 움찔거리는 것처럼 보이던 원인이라
-              이제는 그 아래 지수 티커만 접어서 읽는 영역을 넓힌다. */
-    #top-bar .ticker-viewport {
-      transition: max-height .2s ease, opacity .2s ease, padding .2s ease;
-    }
-    body.tb-compact .ticker-viewport {
-      max-height: 0; opacity: 0;
-      padding-top: 0; padding-bottom: 0;
-      border-bottom-width: 0;
-      overflow: hidden;
-    }
+    /* --- 2) 티커바 아래 첫 문구까지의 여백 축소 ---
+       기본값은 space-y-6(24px) + pt-6(24px) = 48px 라 폰 화면에서 너무 비어 보인다.
+       (id 선택자라 Tailwind 유틸리티보다 우선순위가 높아 !important 없이 이긴다) */
+    #status-bar { margin-top: 0; padding-top: .5rem; }
+
+    /* --- 3) 기사 제목 1pt 축소 (1pt ≈ 0.085rem) ---
+       Tailwind CDN 스타일이 이 <style> 뒤에 붙으므로, 클래스 두 개짜리 선택자로
+       우선순위를 올려야 text-[1.46rem] 을 이긴다. */
+    .news-row .row-title { font-size: 1.375rem; }                    /* 1.46rem → -1pt */
+    .news-row .row-title.row-title-sm { font-size: 1.215rem; }       /* 1.3rem  → -1pt (관련기사 팝업) */
 
     /* --- 카테고리 제목 바 --- */
     #cat-header > div { padding: .25rem .25rem .5rem; gap: .375rem .5rem; }
@@ -852,7 +849,7 @@
       <!-- [수정] 상태 줄(안내 문구)은 스크롤하면 위로 같이 사라지고,
            카테고리 제목 바만 상단에 틀고정된다. -->
       <!-- 상태 바 (틀고정 아님 · 스크롤하면 같이 숨겨짐) -->
-      <div class="pt-6 px-1">
+      <div id="status-bar" class="pt-6 px-1">
         <p class="text-muted" id="status-line">주요 뉴스를 불러오는 중입니다...</p>
       </div>
 
@@ -1557,15 +1554,12 @@
       //   아래 틀고정 요소들이 상단바에 파묻힌다. 높이 변화를 계속 지켜보고 즉시 다시 잰다.
       const topBarEl = document.getElementById('top-bar');
       if (topBarEl && window.ResizeObserver) new ResizeObserver(updateStickTop).observe(topBarEl);
-      if (topBarEl) topBarEl.addEventListener('transitionend', updateStickTop);   // 모바일 상단바 축소가 끝났을 때
       window.addEventListener('load', updateStickTop);
       window.addEventListener('resize', renderMobileSubnav);   // [추가] 회전/리사이즈 시 모바일 칩 갱신
 
-      // [추가] 모바일 드로어 / 상단바 축소
-      window.addEventListener('scroll', updateTopBarCompact, { passive: true });
+      // [추가] 모바일 드로어
       window.addEventListener('resize', () => {
         if (!isMobileLayout()) closeNav();   // 데스크톱 폭으로 넓히면 드로어 상태 해제
-        updateTopBarCompact();
       });
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && document.body.classList.contains('nav-open')) closeNav();
@@ -1575,7 +1569,6 @@
           toggleSidebar();
         }
       });
-      updateTopBarCompact();
 
       // [추가] 모바일 : 왼쪽 가장자리 스와이프로 드로어 열기 / 왼쪽으로 밀어 닫기
       document.addEventListener('touchstart', onNavTouchStart, { passive: true });
@@ -1909,36 +1902,9 @@
       closeAllFilterDropdowns();
     }
 
-    // ---------------------------------------------------------------
-    // [추가] 모바일에서 스크롤을 내리면 상단 고정바(헤더+티커)를 축소한다.
-    //   임계값을 위/아래로 벌려(120 / 60) 경계에서 깜빡이지 않게 한다.
-    // ---------------------------------------------------------------
-    function updateTopBarCompact() {
-      const before = document.body.classList.contains('tb-compact');
-      if (!isMobileLayout()) {
-        document.body.classList.remove('tb-compact');
-      } else {
-        const y = window.scrollY || 0;
-        if (y > 120) document.body.classList.add('tb-compact');
-        else if (y < 60) document.body.classList.remove('tb-compact');
-      }
-      // 축소/복원이 실제로 일어났으면, 애니메이션(0.2s)이 끝날 때까지 상단바 높이를
-      // 계속 다시 재서 아래 제목 바(cat-header)가 뜨거나 겹치지 않게 맞춘다.
-      if (document.body.classList.contains('tb-compact') !== before) syncStickTopDuringTransition();
-    }
-
-    let stickSyncUntil = 0, stickSyncRunning = false;
-    function syncStickTopDuringTransition() {
-      stickSyncUntil = performance.now() + 300;
-      if (stickSyncRunning) return;
-      stickSyncRunning = true;
-      const step = () => {
-        updateStickTop();
-        if (performance.now() < stickSyncUntil) requestAnimationFrame(step);
-        else stickSyncRunning = false;
-      };
-      requestAnimationFrame(step);
-    }
+    // [삭제] 모바일에서 스크롤을 내리면 지수 티커를 접던 기능(body.tb-compact)은
+    //   "스크롤해도 티커가 그대로 보여야 한다"는 요청에 따라 없앴다.
+    //   상단바 높이가 더 이상 변하지 않으므로 --stick-top 재계산 루프도 필요 없다.
 
     // ---------------------------------------------------------------
     // 키워드 검색 토글 (카테고리 메뉴 항목)
@@ -3820,7 +3786,7 @@
             <span class="text-muted font-mono text-[0.72rem]">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
           </div>
           <div class="flex flex-col sm:flex-row sm:items-start gap-3">
-            <h3 class="row-title flex-1 min-w-0 font-sans text-[1.3rem] font-bold text-paper transition leading-snug break-keep">${item.title}</h3>
+            <h3 class="row-title row-title-sm flex-1 min-w-0 font-sans text-[1.3rem] font-bold text-paper transition leading-snug break-keep">${item.title}</h3>
             ${actionsHtml(item, false)}
           </div>
         </article>`;
