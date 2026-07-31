@@ -204,13 +204,24 @@
   }
 
   /* ---------------------------------------------------------------
-     [추가] 모바일 '끌어서 새로고침' 표시등
-       화면 맨 위에서 아래로 끄는 만큼(--pr-y) 고리가 따라 내려오고,
-       손을 놓아 새로고침이 시작되면 그 자리에서 빙글빙글 돈다.
+     [추가] 모바일 '끌어서 새로고침'
+       [수정] 고리만 내려오던 방식 → 화면(상단바 + 본문) 전체를 끄는 만큼
+              아래로 밀어 위쪽에 여백을 만들고, 그 여백 맨 위에 고리를 띄운다.
+       --pull-shift : 화면을 아래로 민 거리(px)
      --------------------------------------------------------------- */
+  body.pulling #top-bar,
+  body.pulling main {
+    transform: translateY(var(--pull-shift, 0px));
+  }
+  /* 손을 뗀 뒤(새로고침 시작 / 되돌아가기)에는 스르륵 움직인다 */
+  body.pulling.pull-smooth #top-bar,
+  body.pulling.pull-smooth main {
+    transition: transform .3s ease;
+  }
+
   #pull-refresh {
     position: fixed;
-    top: 0;
+    top: 9px;                                   /* 여백이 생기는 화면 맨 위에 자리잡는다 */
     left: 50%;
     z-index: 70;
     display: flex;
@@ -224,8 +235,8 @@
     box-shadow: 0 6px 16px rgb(0 0 0 / .28);
     pointer-events: none;                       /* 표시만 하는 요소 : 터치를 가로채지 않는다 */
     opacity: var(--pr-op, 0);
-    transform: translate(-50%, var(--pr-y, 0px)) translateY(-46px);
-    transition: transform .24s ease, opacity .24s ease;
+    transform: translateX(-50%) scale(var(--pr-scale, .6));
+    transition: transform .2s ease, opacity .2s ease;
   }
   /* 끌고 있는 동안에는 손가락을 그대로 따라오게(전환 효과 없음) */
   #pull-refresh.is-dragging { transition: none; }
@@ -1704,13 +1715,16 @@
     // ---------------------------------------------------------------
     // [추가] 모바일 '끌어서 새로고침'
     //   맨 위(스크롤 0)에서 화면을 잡고 아래로 끌면 대시보드를 통째로 다시 불러온다.
-    //   - 끌린 거리는 절반만 반영해(고무줄 느낌) 고리가 PULL_TRIGGER 까지 내려오면 실행
+    //   - 끄는 만큼 화면 전체가 아래로 밀려 위쪽에 여백이 생기고, 그 여백 맨 위에서 고리가 돈다.
+    //   - 끌린 거리는 절반만 반영(고무줄)하고, PULL_TRIGGER 까지 밀렸을 때 놓으면 실행
     //   - 기사 목록(runSearch) 과 상단 지수 티커를 함께 갱신한다
     // ---------------------------------------------------------------
     const PULL_SLOP = 8;         // 이 정도 움직임은 그냥 스크롤로 본다
-    const PULL_TRIGGER = 70;     // 고리가 여기까지 내려온 뒤 놓으면 새로고침
-    const PULL_MAX = 110;        // 더 끌어도 고리는 여기까지만 내려온다
-    let pullDrag = null, pullRefreshing = false;
+    const PULL_DAMP = 0.5;       // 손가락이 움직인 거리의 절반만 화면에 반영 (고무줄 느낌)
+    const PULL_TRIGGER = 105;    // 화면이 여기까지 밀린 뒤 놓으면 새로고침 (손가락 기준 약 218px)
+    const PULL_MAX = 160;        // 더 끌어도 화면은 여기까지만 밀린다
+    const PULL_HOLD = 66;        // 새로고침이 도는 동안 남겨 두는 위쪽 여백
+    let pullDrag = null, pullRefreshing = false, pullResetTimer = 0;
 
     function pullRefreshEl() { return document.getElementById('pull-refresh'); }
 
@@ -1729,24 +1743,37 @@
       return true;
     }
 
-    // dist : 고리를 화면 위에서 얼마나 내릴지(px)
+    // dist : 화면을 아래로 얼마나 밀지(px). 그만큼 위쪽에 여백이 생긴다.
     function paintPull(dist, dragging) {
       const el = pullRefreshEl();
       if (!el) return;
+      clearTimeout(pullResetTimer);
+      document.body.classList.add('pulling');
+      document.body.classList.toggle('pull-smooth', !dragging);   // 끄는 중에는 손가락을 그대로 따라온다
+      document.documentElement.style.setProperty('--pull-shift', dist + 'px');
+
       el.classList.toggle('is-dragging', !!dragging);
       el.classList.toggle('is-ready', dist >= PULL_TRIGGER);
-      el.style.setProperty('--pr-y', dist + 'px');
-      el.style.setProperty('--pr-op', String(Math.min(1, dist / (PULL_TRIGGER * 0.6))));
-      el.style.setProperty('--pr-rot', (dist * 3) + 'deg');
+      // 여백이 조금만 벌어져도 고리가 먼저 또렷해지도록 40px 안에서 다 나타난다
+      el.style.setProperty('--pr-op', String(Math.min(1, Math.max(0, (dist - 6) / 40))));
+      el.style.setProperty('--pr-scale', String(0.6 + 0.4 * Math.min(1, dist / 46)));
+      el.style.setProperty('--pr-rot', (dist * 2.4) + 'deg');
     }
 
+    // 화면을 원래 자리로 되돌린다. (전환 효과가 끝난 뒤에 pulling 상태를 푼다)
     function hidePull() {
       const el = pullRefreshEl();
       if (!el) return;
+      document.body.classList.add('pull-smooth');
+      document.documentElement.style.setProperty('--pull-shift', '0px');
       el.classList.remove('is-dragging', 'is-ready', 'is-refreshing');
-      el.style.setProperty('--pr-y', '0px');
       el.style.setProperty('--pr-op', '0');
+      el.style.setProperty('--pr-scale', '0.6');
       el.style.setProperty('--pr-rot', '0deg');
+      clearTimeout(pullResetTimer);
+      pullResetTimer = setTimeout(() => {
+        document.body.classList.remove('pulling', 'pull-smooth');
+      }, 320);
     }
 
     function onPullTouchStart(e) {
@@ -1775,7 +1802,7 @@
         pullDrag.active = true;
       }
 
-      pullDrag.dist = Math.min(PULL_MAX, (dy - PULL_SLOP) * 0.5);
+      pullDrag.dist = Math.min(PULL_MAX, (dy - PULL_SLOP) * PULL_DAMP);
       paintPull(pullDrag.dist, true);
       if (e.cancelable) e.preventDefault();   // 끌리는 동안 본문이 같이 움직이지 않게
     }
@@ -1795,7 +1822,7 @@
       pullRefreshing = true;
       const el = pullRefreshEl();
       if (el) el.classList.add('is-refreshing');
-      paintPull(PULL_TRIGGER, false);   // 새로고침 위치에 고리를 붙잡아 둔다
+      paintPull(PULL_HOLD, false);   // 고리가 보일 만큼만 여백을 남기고 붙잡아 둔다
       const t0 = performance.now();
       try {
         await Promise.all([runSearch(), refreshIndexTicker()]);
