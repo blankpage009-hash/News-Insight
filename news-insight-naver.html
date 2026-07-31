@@ -275,10 +275,15 @@
       margin-top: 1.5rem;
       top: calc(var(--stick-top, 121px) + 1.5rem);
       max-height: calc(100vh - var(--stick-top, 121px) - 3rem);
+      /* 구분선이 목록 길이에 따라 중간에서 끊기지 않도록 높이를 화면 끝까지 채운다 */
+      min-height: calc(100vh - var(--stick-top, 121px) - 3rem);
       overflow-y: auto;
       overscroll-behavior: contain;   /* 사이드바 끝에 닿아도 본문이 따라 움직이지 않음 */
       scrollbar-gutter: stable;
-      padding-right: 4px;
+      /* [수정] 사이드바 박스를 없애고, 기사 영역과는 세로 구분선 하나로만 나눈다.
+         선을 안쪽 div 가 아니라 스크롤 컨테이너에 두어야 목록이 짧아도 선이 끝까지 내려온다. */
+      padding-right: 1.25rem;
+      border-right: 1px solid rgb(var(--c-line));
     }
   }
 
@@ -409,40 +414,41 @@
   }
 
   /* ---------------------------------------------------------------
-     [추가] 데스크톱(≥1024px) : 좌측 사이드바 숨김 / 펼치기
+     [추가] 데스크톱(≥1024px) : 좌측 사이드바 폭 / 접기·펼치기
        body.side-collapsed 하나로만 상태를 관리한다.
-         · 사이드바를 접고, 기사 영역이 4칸을 모두 쓰도록 그리드를 1칸으로 바꾼다.
+         · 접으면 사이드바를 완전히 없애지 않고, 구분선과 펼치기 버튼만 남는
+           좁은 띠로 줄인다. (선이 사라졌다 나타나면 화면이 출렁여 보인다)
          · 모바일(<1024px)에서는 사이드바가 이미 드로어라서 이 상태를 무시한다.
      --------------------------------------------------------------- */
   @media (min-width: 1024px) {
-    body.side-collapsed #sidebar { display: none; }
-    body.side-collapsed #main-grid { grid-template-columns: minmax(0, 1fr); }
-    body.side-collapsed #content-col { grid-column: span 1 / span 1; }
+    /* [수정] 폭 : 화면의 1/4 대신 고정 폭으로 잡아 기사 영역을 넓힌다 */
+    #main-grid { grid-template-columns: 264px minmax(0, 1fr); }
+    #content-col { grid-column: span 1 / span 1; }
+
+    body.side-collapsed #main-grid { grid-template-columns: 46px minmax(0, 1fr); }
+    body.side-collapsed #sidebar > div { display: none; }
+    body.side-collapsed .side-scroll {
+      padding-right: 0;
+      overflow: hidden;
+      scrollbar-gutter: auto;
+    }
   }
-  /* 펼치기(») 탭 : 사이드바가 접혀 있는 동안만 화면 왼쪽 가장자리에 붙어 나온다 */
+  /* 펼치기(») 버튼 : 접혀 있는 동안 남은 띠의 맨 위에 놓인다 */
   #sidebar-expand-btn { display: none; }
   @media (min-width: 1024px) {
     body.side-collapsed #sidebar-expand-btn {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      position: fixed;
-      left: 0;
-      top: calc(var(--stick-top, 121px) + 18px);
-      z-index: 30;
-      padding: .6rem .4rem;
+      padding: .45rem;
+      margin-right: .5rem;
       color: rgb(var(--c-muted));
-      background: rgb(var(--c-ink2));
-      border: 1px solid rgb(var(--c-line));
-      border-left: 0;
-      border-radius: 0 .75rem .75rem 0;
-      box-shadow: 0 6px 18px rgb(0 0 0 / .3);
-      transition: color .15s ease, background-color .15s ease, padding .15s ease;
+      border-radius: .5rem;
+      transition: color .15s ease, background-color .15s ease;
     }
     body.side-collapsed #sidebar-expand-btn:hover {
       color: rgb(var(--c-gold));
       background: rgb(var(--c-ink3));
-      padding-right: .6rem;
     }
   }
 
@@ -651,12 +657,6 @@
   <!-- [추가] 모바일 : 화면을 아래로 끌어 새로고침할 때 따라 내려오는 고리 -->
   <div id="pull-refresh" aria-hidden="true"><div class="pr-ring"></div></div>
 
-  <!-- [추가] 데스크톱 : 사이드바가 접혀 있을 때만 화면 왼쪽에 나타나는 펼치기 탭 (») -->
-  <button id="sidebar-expand-btn" onclick="toggleSidebar()" aria-controls="sidebar" aria-expanded="false"
-    aria-label="사이드바 펼치기" title="사이드바 펼치기 (Ctrl+\)">
-    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg>
-  </button>
-
   <!-- 메인 -->
   <!-- [수정] 위쪽 padding 제거 : 상단바와 본문 사이 여백은 안쪽의 '틀고정 요소' 들이
        각자 자기 padding/margin 으로 만든다. (그래야 스크롤해도 그 간격이 변하지 않는다) -->
@@ -664,11 +664,19 @@
 
     <!-- 좌측 사이드바 (모바일에서는 햄버거로 여는 슬라이드 드로어) -->
     <aside id="sidebar" class="lg:col-span-1 side-scroll">
-      <div class="bg-ink2/70 border border-line rounded-2xl p-5 space-y-3">
+      <!-- [수정] 데스크톱 : 사이드바가 접혀 있을 때만 띠 맨 위에 나타나는 펼치기 버튼 (»)
+           (화면 왼쪽 가장자리에 띄우던 것을 사이드바 안으로 옮겨, 남은 구분선과 나란히 보이게 했다) -->
+      <button id="sidebar-expand-btn" onclick="toggleSidebar()" aria-controls="sidebar" aria-expanded="false"
+        aria-label="사이드바 펼치기" title="사이드바 펼치기 (Ctrl+\)">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg>
+      </button>
 
-        <!-- 제목(영문) : 기존 1.18rem → 3pt(=4px) 크게 -->
+      <!-- [수정] 카드 박스(배경/테두리/둥근 모서리) 제거 : 구분선만으로 구획을 나눈다 -->
+      <div class="space-y-2">
+
+        <!-- 제목(영문) : 기존 1.18rem → 3pt(=4px) 크게 (이후 1pt 축소) -->
         <div class="flex items-center justify-between gap-2">
-          <h2 class="font-semibold text-muted uppercase tracking-[0.2em] text-[1.45rem]">SECTION</h2>
+          <h2 class="font-semibold text-muted uppercase tracking-[0.2em] text-[1.37rem]">SECTION</h2>
           <!-- [추가] 데스크톱 : 사이드바 접기 («) -->
           <button id="sidebar-collapse-btn" onclick="toggleSidebar()" aria-controls="sidebar" aria-expanded="true"
             aria-label="사이드바 접기" title="사이드바 접기 (Ctrl+\)"
@@ -714,7 +722,7 @@
           </select>
         </div>
 
-        <div class="flex flex-col gap-2" id="category-filters"></div>
+        <div class="flex flex-col gap-1" id="category-filters"></div>
 
         <!-- 카테고리 목록과 키워드 검색 구분선 -->
         <div class="border-t border-line my-2"></div>
@@ -722,7 +730,7 @@
         <!-- 키워드 검색 (누르면 오른쪽 기사 영역에 팝업으로 열린다) -->
         <div>
           <button id="search-toggle-btn" onclick="toggleSearchPanel()"
-            class="cat-btn text-[1.25rem] flex items-center justify-between px-4 py-3 rounded-xl transition w-full text-muted hover:bg-ink3">
+            class="cat-btn text-[1.17rem] flex items-center justify-between px-4 py-2.5 rounded-xl transition w-full text-muted hover:bg-ink3">
             <span>키워드 검색</span>
             <span class="flex items-center gap-1.5" id="search-toggle-icons"></span>
           </button>
@@ -734,8 +742,8 @@
         <!-- [수정] Setting : 누르면 오른쪽(기사 영역)에서 키워드를 설정한다 -->
         <div>
           <button id="setting-toggle-btn" onclick="toggleSettingPanel()"
-            class="cat-btn text-[1.25rem] flex items-center justify-between px-4 py-3 rounded-xl transition w-full text-muted hover:bg-ink3">
-            <span>Administrator Setting</span>
+            class="cat-btn text-[1.17rem] flex items-center justify-between px-4 py-2.5 rounded-xl transition w-full text-muted hover:bg-ink3">
+            <span>관리자 Setting</span>
             <span class="flex items-center gap-1.5" id="setting-toggle-icons"></span>
           </button>
         </div>
@@ -907,7 +915,7 @@
           style="top: calc(var(--stick-top, 121px) - 1px)">
           <div class="flex items-center gap-2.5 min-w-0">
             <span class="text-gold shrink-0" id="setting-view-icon"></span>
-            <h2 class="font-sans font-bold text-gold text-xl truncate">Administrator Setting</h2>
+            <h2 class="font-sans font-bold text-gold text-xl truncate">관리자 Setting</h2>
           </div>
           <!-- [수정] 저장/기본값 버튼을 제목 옆(헤더)으로 이동 -->
           <div class="flex items-center gap-2 shrink-0">
@@ -932,7 +940,7 @@
             <div class="flex items-center gap-2">
               <span class="text-gold2 shrink-0" id="pw-setting-icon"></span>
               <span class="font-semibold text-paper text-[1.15rem]">설정 비밀번호</span>
-              <span class="font-mono text-muted text-[0.8rem]">Administrator Setting 진입 시 요구 (기본 7780)</span>
+              <span class="font-mono text-muted text-[0.8rem]">관리자 Setting 진입 시 요구 (기본 7780)</span>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
               <input type="password" id="new-password-input" placeholder="새 비밀번호"
@@ -2435,7 +2443,7 @@
         html += `<div>`;
         html += `
           <button onclick="${exp ? `onExpandableClick('${cat}')` : `selectCategory('${cat}')`}" data-cat="${cat}"
-            class="cat-btn ${isBriefing ? 'text-[1.15rem]' : 'text-[1.25rem]'} flex items-center justify-between px-4 py-3 rounded-xl transition w-full ${isActive ? 'bg-gold text-ink font-semibold' : 'text-muted hover:bg-ink3'} ${isBriefing && !isActive ? 'border border-gold/40 text-gold2' : ''}">
+            class="cat-btn ${isBriefing ? 'text-[1.07rem]' : 'text-[1.17rem]'} flex items-center justify-between px-4 py-2.5 rounded-xl transition w-full ${isActive ? 'bg-gold text-ink font-semibold' : 'text-muted hover:bg-ink3'} ${isBriefing && !isActive ? 'border border-gold/40 text-gold2' : ''}">
             <span>${categoryLabels[cat]}</span>
             <span class="flex items-center gap-1.5">
               ${icon(categoryIcons[cat], 'w-5 h-5')}
@@ -2450,14 +2458,14 @@
           //   상위 전체 기사로 바로 가는 항목을 따로 둔다.
           html += `
             <button onclick="selectCategory('${cat}')"
-              class="cat-btn lg:hidden text-[1.1rem] text-left px-3 py-2.5 rounded-lg transition ${isActive ? 'bg-gold/90 text-ink font-semibold' : 'text-muted hover:bg-ink3'}">
+              class="cat-btn lg:hidden text-[1.02rem] text-left px-3 py-2 rounded-lg transition ${isActive ? 'bg-gold/90 text-ink font-semibold' : 'text-muted hover:bg-ink3'}">
               전체 보기
             </button>`;
           exp.subs.forEach((sub) => {
             const subActive = currentCategory === sub.key;
             html += `
               <button onclick="selectCategory('${sub.key}')" data-cat="${sub.key}"
-                class="cat-btn text-[1.1rem] text-left px-3 py-2.5 rounded-lg transition ${subActive ? 'bg-gold/90 text-ink font-semibold' : 'text-muted hover:bg-ink3'}">
+                class="cat-btn text-[1.02rem] text-left px-3 py-2 rounded-lg transition ${subActive ? 'bg-gold/90 text-ink font-semibold' : 'text-muted hover:bg-ink3'}">
                 ${sub.label}
               </button>`;
           });
