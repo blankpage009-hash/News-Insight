@@ -212,8 +212,8 @@
   }
   /* 눈금이 12개뿐이라 steps(12) 로 한 칸씩 딸깍딸깍 돌린다(이 모양의 원래 움직임) */
   .loading-ring {
-    width: 52px;
-    height: 52px;
+    width: 44px;
+    height: 44px;
     animation: spin-ring 1.2s steps(12, end) infinite;
   }
 
@@ -466,9 +466,22 @@
   }
 
   ::-webkit-scrollbar { width: 10px; height: 10px; }
+  /* 사이드바(하위 섹션을 펼치면 생기는 세로 막대)는 본문 옆에 바짝 붙어 있어 더 가늘게 */
+  .side-scroll::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgb(var(--c-scrollbar)); border-radius: 999px; }
   ::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-scrollbar-hover)); }
+
+  /* ---------------------------------------------------------------
+     [추가] 관리자 Setting 화면 : 왼쪽 '제목', 세로 구분선, 오른쪽 '내용'
+       좁은 화면(<768px)에서는 세로로 쌓아 그대로 읽히게 둔다.
+     --------------------------------------------------------------- */
+  .setting-row { display: grid; grid-template-columns: 1fr; gap: .75rem; }
+  .setting-row + .setting-row { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgb(var(--c-line)); }
+  @media (min-width: 768px) {
+    .setting-row { grid-template-columns: 13rem 1fr; gap: 1.5rem; }
+    .setting-row-body { padding-left: 1.5rem; border-left: 1px solid rgb(var(--c-line)); }
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .skeleton, .modal-pop { animation: none; }
@@ -947,35 +960,49 @@
               class="flex items-center justify-center text-muted hover:text-gold border border-line rounded-lg px-3 py-2 transition text-[0.9rem] whitespace-nowrap">닫기</button>
           </div>
         </header>
-        <div class="px-1 pt-4 pb-5 space-y-3">
+        <div class="px-1 pt-4 pb-5">
 
           <!-- [수정] 테마·기본 노출 건수는 누구나 쓰는 설정이라 헤더의 ⋮(화면 설정) 팝업으로 옮겼다. -->
 
-          <!-- [추가] 설정 비밀번호 변경 -->
-          <div class="bg-ink/40 border border-line rounded-lg px-3 py-3 space-y-2">
-            <div class="flex items-center gap-2">
-              <span class="text-gold2 shrink-0" id="pw-setting-icon"></span>
-              <span class="font-semibold text-paper text-[1.15rem]">설정 비밀번호</span>
-              <span class="font-mono text-muted text-[0.8rem]">관리자 Setting 진입 시 요구 (기본 7780)</span>
+          <!-- [수정] 설정 비밀번호 : 왼쪽 제목 · 오른쪽 입력란 -->
+          <div class="setting-row">
+            <div class="flex items-start gap-2 pt-1">
+              <span class="text-gold2 shrink-0 mt-0.5" id="pw-setting-icon"></span>
+              <div class="min-w-0">
+                <div class="font-semibold text-paper text-[1.15rem]">설정 비밀번호</div>
+                <p class="font-mono text-muted text-[0.8rem] mt-1 leading-relaxed">관리자 Setting 진입 시 요구 (기본 7780)</p>
+              </div>
             </div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <input type="password" id="new-password-input" placeholder="새 비밀번호"
-                class="bg-ink border border-line rounded-lg px-2.5 py-2 text-paper font-mono text-[1rem] w-40 focus:outline-none focus:border-gold/70">
-              <input type="password" id="new-password-confirm" placeholder="새 비밀번호 확인"
-                class="bg-ink border border-line rounded-lg px-2.5 py-2 text-paper font-mono text-[1rem] w-40 focus:outline-none focus:border-gold/70">
-              <button onclick="changeSettingPassword()"
-                class="text-muted hover:text-gold border border-line rounded-lg px-3 py-2 transition text-[0.9rem] whitespace-nowrap">변경</button>
-              <span id="password-change-msg" class="text-muted text-[0.9rem]"></span>
+            <div class="setting-row-body">
+              <div class="flex items-center gap-2 flex-wrap">
+                <input type="password" id="new-password-input" placeholder="새 비밀번호"
+                  class="bg-ink border border-line rounded-lg px-2.5 py-2 text-paper font-mono text-[1rem] w-40 focus:outline-none focus:border-gold/70">
+                <input type="password" id="new-password-confirm" placeholder="새 비밀번호 확인"
+                  class="bg-ink border border-line rounded-lg px-2.5 py-2 text-paper font-mono text-[1rem] w-40 focus:outline-none focus:border-gold/70">
+                <button onclick="changeSettingPassword()"
+                  class="text-muted hover:text-gold border border-line rounded-lg px-3 py-2 transition text-[0.9rem] whitespace-nowrap">변경</button>
+                <span id="password-change-msg" class="text-muted text-[0.9rem]"></span>
+              </div>
             </div>
           </div>
 
-          <p class="text-muted leading-relaxed text-[1.05rem] bg-ink/60 border border-line rounded-lg px-3 py-2.5">
-            섹션별로 <span class="text-gold2 font-semibold">포함</span>·<span class="text-gold2 font-semibold">제외</span> 키워드를 정하면
-            항상 이 값을 기준으로 기사를 가져옵니다. 여러 개는 <span class="text-gold2 font-semibold">콤마(,)</span>로 구분하세요.
-          </p>
-
-          <!-- 섹션별 포함/제외 키워드 입력칸 (JS가 그려 넣음) -->
-          <div id="keyword-settings" class="space-y-2"></div>
+          <!-- [수정] 키워드 설정 : 왼쪽 제목·설명 · 오른쪽 섹션별 입력칸 -->
+          <div class="setting-row">
+            <div class="flex items-start gap-2 pt-1">
+              <span class="text-gold2 shrink-0 mt-0.5" id="kw-setting-icon"></span>
+              <div class="min-w-0">
+                <div class="font-semibold text-paper text-[1.15rem]">키워드 설정</div>
+                <p class="text-muted text-[0.8rem] mt-1 leading-relaxed">
+                  섹션별 <span class="text-gold2 font-semibold">포함</span>·<span class="text-gold2 font-semibold">제외</span> 키워드를 정하면
+                  항상 이 값을 기준으로 기사를 가져옵니다. 여러 개는 <span class="text-gold2 font-semibold">콤마(,)</span>로 구분하세요.
+                </p>
+              </div>
+            </div>
+            <div class="setting-row-body">
+              <!-- 섹션별 포함/제외 키워드 입력칸 (JS가 그려 넣음) -->
+              <div id="keyword-settings" class="space-y-2"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2241,6 +2268,8 @@
       renderKeywordSettings();                       // 최신 값으로 입력칸 다시 그림
       const pwIconEl = document.getElementById('pw-setting-icon');
       if (pwIconEl) pwIconEl.innerHTML = icon('lock', 'w-4 h-4');
+      const kwIconEl = document.getElementById('kw-setting-icon');
+      if (kwIconEl) kwIconEl.innerHTML = icon('search', 'w-4 h-4');
       const pwMsg = document.getElementById('password-change-msg');
       if (pwMsg) pwMsg.textContent = '';
       hideFallbackBanner();
@@ -2282,7 +2311,7 @@
       const inc = esc((kwv.include || []).join(', '));
       const exc = esc((kwv.exclude || []).join(', '));
       return `
-        <div class="space-y-2">
+        <div class="grid gap-2 sm:grid-cols-2">
           <div>
             <label class="text-muted text-[0.9rem] block mb-1">포함 키워드</label>
             <textarea data-kw-key="${key}" data-kw-type="include" rows="2" class="${taClass}" placeholder="예: 물류, 택배">${inc}</textarea>
