@@ -3820,7 +3820,7 @@
             ${badgesHtml(item)}
             <span class="text-muted font-mono text-[0.72rem]">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
           </div>
-          <div class="flex flex-col sm:flex-row sm:items-start gap-3">
+          <div class="flex flex-col sm:flex-row sm:items-end gap-3">
             <h3 class="row-title row-title-sm flex-1 min-w-0 font-sans text-[1.3rem] font-bold text-paper transition leading-snug break-keep">${item.title}</h3>
             ${actionsHtml(item, false)}
           </div>
@@ -3839,7 +3839,7 @@
             ${badges}
             <span class="text-muted font-mono text-[0.8rem]">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
           </div>
-          <div class="flex flex-col sm:flex-row sm:items-start gap-3">
+          <div class="flex flex-col sm:flex-row sm:items-end gap-3">
             <h3 class="row-title flex-1 min-w-0 font-sans text-[1.46rem] font-bold text-paper transition leading-snug break-keep">${item.title}</h3>
             ${actionsHtml(item)}
           </div>
@@ -3871,7 +3871,7 @@
                       ${badgesHtml(it)}
                       <span class="text-muted font-mono text-[0.72rem]">${it.source}${it.datetime ? ' · ' + formatDate(it.datetime) : ''}</span>
                     </div>
-                    <div class="flex flex-col sm:flex-row sm:items-start gap-3">
+                    <div class="flex flex-col sm:flex-row sm:items-end gap-3">
                       <h3 class="row-title flex-1 min-w-0 font-sans text-[1.46rem] font-bold text-paper leading-snug break-keep">${it.title}</h3>
                       ${actionsHtml(it)}
                     </div>
