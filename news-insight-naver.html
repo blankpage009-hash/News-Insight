@@ -182,6 +182,12 @@
     cursor: grab;
   }
   .ticker-viewport.is-dragging { cursor: grabbing; }
+  /* [추가] 차트가 있는 항목(코스피·코스닥·환율 등)은 눌러서 팝업을 열 수 있다 */
+  .ticker-item.is-chart { cursor: pointer; border-radius: 6px; padding: 1px 5px; margin: 0 -5px; }
+  .ticker-viewport.is-dragging .ticker-item.is-chart { cursor: grabbing; }
+  @media (hover: hover) {
+    .ticker-item.is-chart:hover { background: rgb(var(--c-gold) / .13); }
+  }
   .ticker-track {
     display: flex;
     width: max-content;
@@ -213,10 +219,27 @@
   }
   /* 눈금이 12개뿐이라 steps(12) 로 한 칸씩 딸깍딸깍 돌린다(이 모양의 원래 움직임) */
   .loading-ring {
-    width: 44px;
-    height: 44px;
+    width: 36px;
+    height: 36px;
     animation: spin-ring 1.2s steps(12, end) infinite;
   }
+
+  /* [추가] 기사 로딩 표시를 화면(뷰포트) 한가운데에 띄운다.
+     position:fixed + inset:0 이라 PC·아이폰·아이패드 모두 같은 자리에 오고,
+     iOS 에서 주소창이 접혔다 펴져도 알아서 따라온다.
+     (본문 <main> 안에 두면 '끌어서 새로고침'의 transform 때문에 기준점이 흔들린다) */
+  #load-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 35;            /* 본문 위, 상단바(z-40)·팝업(z-60~) 아래 */
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.9rem;
+    pointer-events: none;   /* 화면 위에 떠 있기만 하고 클릭은 가로채지 않는다 */
+  }
+  #load-overlay.is-on { display: flex; }
 
   /* ---------------------------------------------------------------
      [추가] 모바일 '끌어서 새로고침'
@@ -685,6 +708,12 @@
 
   <!-- [추가] 모바일 : 화면을 아래로 끌어 새로고침할 때 따라 내려오는 고리 -->
   <div id="pull-refresh" aria-hidden="true"><div class="pr-ring"></div></div>
+
+  <!-- [추가] 기사 로딩 표시 (화면 정중앙에 고정) -->
+  <div id="load-overlay" role="status" aria-live="polite" aria-hidden="true">
+    <div class="loading-ring"></div>
+    <p class="text-sm text-muted">뉴스를 불러오는 중입니다...</p>
+  </div>
 
   <!-- 메인 -->
   <!-- [수정] 위쪽 padding 제거 : 상단바와 본문 사이 여백은 안쪽의 '틀고정 요소' 들이
@@ -1223,8 +1252,8 @@
     const topLevelCategories = ['briefing', 'all', 'breaking', 'logistics', 'economy', 'society', 'global', 'ai', 'stock', 'sports'];
 
     const stockSubcategories = [
-      // [추가] '지수 차트'는 기사를 가져오지 않는다. 주요 지수 카드 + 기간별 차트만 보여준다.
-      { key: 'stock_chart', label: '지수 차트' },
+      // [추가] '시황'은 기사를 가져오지 않는다. 주요 지수 카드 + 기간별 차트만 보여준다.
+      { key: 'stock_chart', label: '시황' },
       { key: 'stock_domestic', label: '국내' },
       { key: 'stock_us', label: '해외' },
       { key: 'stock_issue', label: '이슈 섹터' },
@@ -1262,7 +1291,7 @@
       logistics_domestic: '국내 물류', logistics_global: '글로벌 물류',
       logistics_freight: '운임지수',
       economy: '경제', society: '정치/사회', global: '글로벌', ai: 'AI', stock: '증시',
-      stock_chart: '지수 차트',
+      stock_chart: '시황',
       stock_domestic: '국내', stock_us: '해외', stock_issue: '이슈 섹터',
       economy_macro: '거시경제/시장',
       sports: '스포츠',
@@ -3720,6 +3749,7 @@
       } finally {
         isLoading = false;
         setSearchButtonLoading(false);
+        showLoadingOverlay(false);
         // 성공이든 오류든 검색이 끝나면 상태줄을 다시 보여준다(문구는 위에서 이미 채워둠).
         document.getElementById('status-line').classList.remove('invisible');
         // [추가] 모바일 : 필터를 바꿔 검색이 끝나면 펼쳐 뒀던 필터를 다시 접는다.
@@ -3739,13 +3769,19 @@
     // ---------------------------------------------------------------
     // 렌더링
     // ---------------------------------------------------------------
-    // 검색 중 화면. 빈 회색 상자 4개 대신 가운데에 도는 고리 하나만 보여준다.
+    // 검색 중 화면. 빈 회색 상자 4개 대신 도는 고리 하나만 보여준다.
+    //   [수정] 목록 안(py-24)이 아니라 화면 정중앙(#load-overlay)에 띄운다.
+    //          목록 위치는 기기·스크롤에 따라 달라져서 '가운데'가 매번 달랐다.
     function renderLoadingSkeleton() {
-      document.getElementById('news-list').innerHTML = `
-        <div class="py-24 flex flex-col items-center justify-center gap-4" role="status" aria-live="polite">
-          <div class="loading-ring"></div>
-          <p class="text-sm text-muted">뉴스를 불러오는 중입니다...</p>
-        </div>`;
+      document.getElementById('news-list').innerHTML = '';
+      showLoadingOverlay(true);
+    }
+
+    function showLoadingOverlay(on) {
+      const el = document.getElementById('load-overlay');
+      if (!el) return;
+      el.classList.toggle('is-on', !!on);
+      el.setAttribute('aria-hidden', on ? 'false' : 'true');
     }
 
     function renderError(message) {
@@ -4065,6 +4101,13 @@
     // ---------------------------------------------------------------
     // 지수 티커
     // ---------------------------------------------------------------
+    // [추가] 티커 항목 중 '증시 > 시황'에 차트가 있는 것은 눌러서 팝업을 열 수 있게 표시해 둔다.
+    //   (data-index-key 를 붙여 두면 setupTickerDrag 의 탭 처리가 그 키로 openIndexChart 를 부른다)
+    function tickerChartAttr(key) {
+      if (!key || !INDEX_CARDS.some((c) => c.key === key)) return { cls: '', attr: '' };
+      return { cls: ' ticker-item is-chart', attr: ` data-index-key="${key}" title="눌러서 차트 보기"` };
+    }
+
     function formatIndexEntry(item) {
       const isUp = item.change > 0, isDown = item.change < 0;
       const arrow = isUp ? '▲' : isDown ? '▼' : '－';
@@ -4072,7 +4115,8 @@
       const priceStr = item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const changeStr = Math.abs(item.change).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const pctStr = Math.abs(item.changePercent).toFixed(2);
-      return `<span class="flex items-center gap-2">
+      const chart = tickerChartAttr(item.key);
+      return `<span class="flex items-center gap-2${chart.cls}"${chart.attr}>
         <span class="text-gold tracking-wider">${item.name}</span>
         <span class="tabular-nums text-paper">${priceStr}</span>
         <span class="${colorClass} tabular-nums">${arrow}${changeStr} (${arrow}${pctStr}%)</span></span>`;
@@ -4087,6 +4131,9 @@
     let lastIndexItems = [];
     let indexItemsError = false;   // [추가] 지수 값을 못 받아왔는지 ('지수 차트' 카드 화면 안내용)
 
+    // 시장지표 항목에는 지수 키가 없어서 이름으로 차트 키를 찾는다 (기준금리는 차트가 없다)
+    const EXTRA_CHART_KEYS = { '원/달러 환율': 'usdkrw' };
+
     function formatExtraEntry(item) {
       const isUp = item.change > 0, isDown = item.change < 0;
       const arrow = isUp ? '▲' : isDown ? '▼' : '－';
@@ -4096,7 +4143,8 @@
         : item.changePercent !== undefined
           ? `${arrow}${Math.abs(item.change).toFixed(2)} (${arrow}${Math.abs(item.changePercent).toFixed(2)}%)`
           : `(${arrow}${Math.abs(item.change).toFixed(2)}%p)`;
-      return `<span class="flex items-center gap-2">
+      const chart = tickerChartAttr(EXTRA_CHART_KEYS[item.name]);
+      return `<span class="flex items-center gap-2${chart.cls}"${chart.attr}>
         <span class="text-gold tracking-wider">${item.name}</span>
         <span class="tabular-nums text-paper">${item.priceStr}</span>
         <span class="${colorClass} tabular-nums">${changeText}</span></span>`;
@@ -4209,7 +4257,7 @@
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         measureTicker();
         tickerVelocity = 0;
-        tickerDrag = { id: e.pointerId, x: e.clientX, t: performance.now() };
+        tickerDrag = { id: e.pointerId, x: e.clientX, t: performance.now(), moved: 0 };
         try { vp.setPointerCapture(e.pointerId); } catch (_) {}
         vp.classList.add('is-dragging');
       });
@@ -4224,11 +4272,22 @@
         tickerVelocity = Math.max(-TICKER_MAX_FLICK, Math.min(TICKER_MAX_FLICK, dx / dt));
         tickerDrag.x = e.clientX;
         tickerDrag.t = now;
+        tickerDrag.moved += Math.abs(dx);
         drawTicker();
         e.preventDefault();
       });
 
-      vp.addEventListener('pointerup', endDrag);
+      // 끌지 않고 톡 눌렀을 때(=탭)만 차트 팝업을 연다.
+      //   포인터를 붙잡아 두는 동안(setPointerCapture)에는 이벤트 대상이 티커 상자로 고정되므로
+      //   손을 뗀 좌표에서 실제로 눌린 항목을 다시 찾는다.
+      vp.addEventListener('pointerup', (e) => {
+        const isTap = !!tickerDrag && e.pointerId === tickerDrag.id && tickerDrag.moved < 6;
+        endDrag(e);
+        if (!isTap) return;
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const hit = el && el.closest && el.closest('[data-index-key]');
+        if (hit) openIndexChart(hit.dataset.indexKey);
+      });
       vp.addEventListener('pointercancel', endDrag);
       vp.addEventListener('lostpointercapture', endDrag);
 
