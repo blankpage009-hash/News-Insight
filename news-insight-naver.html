@@ -224,13 +224,18 @@
     animation: spin-ring 1.2s steps(12, end) infinite;
   }
 
-  /* [추가] 기사 로딩 표시를 화면(뷰포트) 한가운데에 띄운다.
-     position:fixed + inset:0 이라 PC·아이폰·아이패드 모두 같은 자리에 오고,
-     iOS 에서 주소창이 접혔다 펴져도 알아서 따라온다.
+  /* [추가] 기사 로딩 표시를 기사 목록 영역(#content-col) 한가운데에 띄운다.
+     세로는 화면 정중앙, 가로는 기사 목록 칸의 가운데다.
+     ([수정] 화면 전체 기준으로 두면 PC·아이패드에서 왼쪽 사이드바 폭만큼 왼쪽으로 치우쳤다)
+     --load-left / --load-width 는 목록 칸을 재서 showLoadingOverlay() 가 채운다.
+     position:fixed 라 스크롤·iOS 주소창 접힘과 무관하게 늘 같은 자리에 온다.
      (본문 <main> 안에 두면 '끌어서 새로고침'의 transform 때문에 기준점이 흔들린다) */
   #load-overlay {
     position: fixed;
-    inset: 0;
+    top: 0;
+    bottom: 0;
+    left: var(--load-left, 0px);
+    width: var(--load-width, 100%);
     z-index: 35;            /* 본문 위, 상단바(z-40)·팝업(z-60~) 아래 */
     display: none;
     flex-direction: column;
@@ -3780,9 +3785,31 @@
     function showLoadingOverlay(on) {
       const el = document.getElementById('load-overlay');
       if (!el) return;
+      if (on) placeLoadingOverlay();
       el.classList.toggle('is-on', !!on);
       el.setAttribute('aria-hidden', on ? 'false' : 'true');
     }
+
+    // 기사 목록 칸(#content-col)의 가로 위치·폭을 재서 그 가운데에 오도록 맞춘다.
+    //   (사이드바를 접거나 창 크기를 바꾸면 폭이 달라지므로 띄울 때마다 다시 잰다)
+    function placeLoadingOverlay() {
+      const col = document.getElementById('content-col');
+      const r = col && col.getBoundingClientRect();
+      const style = document.documentElement.style;
+      if (r && r.width > 0) {
+        style.setProperty('--load-left', r.left + 'px');
+        style.setProperty('--load-width', r.width + 'px');
+      } else {
+        style.setProperty('--load-left', '0px');
+        style.setProperty('--load-width', '100%');
+      }
+    }
+
+    // 검색이 도는 중에 창 크기가 바뀌거나(태블릿 회전) 사이드바를 접으면 다시 맞춘다
+    window.addEventListener('resize', () => {
+      const el = document.getElementById('load-overlay');
+      if (el && el.classList.contains('is-on')) placeLoadingOverlay();
+    });
 
     function renderError(message) {
       document.getElementById('news-list').innerHTML = `
