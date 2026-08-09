@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
+<style>
+body{margin:0;background:#E6E4DE;font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#D9AE6A;text-decoration:none}a:hover{color:#EFC98D}
+@keyframes bn-pulse{0%,100%{opacity:1}50%{opacity:.3}}
+</style>
+</helmet>
+
+<section style="padding:56px 56px 80px;display:flex;flex-direction:column;gap:64px;box-sizing:border-box">
+
+  <header style="display:flex;flex-direction:column;gap:14px;max-width:900px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font:700 10px/1 'JetBrains Mono',monospace;letter-spacing:.18em;padding:5px 8px;background:#14171C;color:#D9AE6A;border-radius:3px">1A · REDESIGN</span>
+      <span style="font:500 12px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(20,23,28,.45)">BEYOND NEWS · WIRE DESK</span>
+    </div>
+    <h1 style="margin:0;font:750 34px/1.2 'Pretendard Variable',sans-serif;letter-spacing:-.02em;color:#14171C">전면 재구성한 Beyond News</h1>
+    <p style="margin:0;font:400 14.5px/1.7 'Pretendard Variable',sans-serif;color:rgba(20,23,28,.62);text-wrap:pretty">티커를 헤더에서 빼 우측 마켓 레일로 옮기고, 좌측 섹션 · 본문 · 우측 데이터의 3단 구조로 재편했습니다. 기사 카드는 제목이 먼저 읽히도록 액션을 아이콘 행으로 내렸고, 읽음 · 저장 상태를 왼쪽 레일에 표시합니다. 금색은 강조 한 곳에만 남기고 대비는 텍스트 계조로 처리했습니다.</p>
+    <div style="display:flex;gap:26px;flex-wrap:wrap;margin-top:6px;font:500 11px/1.4 'JetBrains Mono',monospace;letter-spacing:.06em;color:rgba(20,23,28,.5)">
+      <span>TYPE — Pretendard / JetBrains Mono</span>
+      <span>ACCENT — #D9AE6A</span>
+      <span>GRID — 224 / 1fr / 300</span>
+    </div>
+  </header>
+
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(20,23,28,.5)">01 — TODAY'S BRIEFING · DESKTOP 1440 · DARK</div>
+    <div style="width:1440px;background:#0A0D14;border-radius:10px;overflow:hidden;box-shadow:0 18px 50px -24px rgba(0,0,0,.5)">
+
+      <div style="display:flex;align-items:center;gap:20px;padding:0 22px;height:56px;border-bottom:1px solid rgba(232,230,225,.09);background:#0C1019">
+        <div style="display:flex;align-items:center;gap:9px">
+          <img src="rss-icon.png" alt="" style="display:block;height:22px;width:auto;object-fit:contain">
+          <span style="font:750 17px/1 'Pretendard Variable',sans-serif;letter-spacing:-.02em;color:#E8E6E1">Beyond News</span>
+        </div>
+        <span style="width:1px;height:18px;background:rgba(232,230,225,.12)"></span>
+        <span style="font:500 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#5C6478">WIRE DESK</span>
+
+        <div style="flex:1;display:flex;justify-content:center">
+          <div style="display:flex;align-items:center;gap:9px;width:420px;height:32px;padding:0 12px;border:1px solid rgba(232,230,225,.1);background:#10141F;border-radius:7px">
+            <svg style="width:14px;height:14px;color:#5C6478;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <span style="font:400 12.5px/1 'Pretendard Variable',sans-serif;color:#5C6478">키워드 · 기업명 · 지수 검색</span>
+            <span style="margin-left:auto;font:500 10px/1 'JetBrains Mono',monospace;color:#8B93A7;border:1px solid rgba(232,230,225,.12);padding:3px 5px;border-radius:4px">⌘K</span>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:14px">
+          <span style="display:flex;align-items:center;gap:6px;font:500 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.12em;color:#7BC49A"><span style="width:5px;height:5px;border-radius:99px;background:#4ADE80;animation:bn-pulse 2s ease-in-out infinite"></span>LIVE</span>
+          <span style="font:500 12px/1 'JetBrains Mono',monospace;color:#8B93A7;font-variant-numeric:tabular-nums">08.09 (일) 13:04</span>
+          <span style="width:1px;height:18px;background:rgba(232,230,225,.12)"></span>
+          <button style="all:unset;display:flex;cursor:pointer;color:#8B93A7;padding:5px;border-radius:6px" style-hover="background:#151A27;color:#E8E6E1"><svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+          <button style="all:unset;display:flex;cursor:pointer;color:#8B93A7;padding:5px;border-radius:6px" style-hover="background:#151A27;color:#E8E6E1"><svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/></svg></button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:224px minmax(0,1fr) 300px;align-items:start;min-height:940px">
+
+        <nav style="padding:20px 14px 28px;border-right:1px solid rgba(232,230,225,.07);display:flex;flex-direction:column;gap:2px;position:sticky;top:0">
+          <div style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#6C7488;padding:0 10px 10px">SECTION</div>
+
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:7px;background:rgba(217,174,106,.13);color:#D9AE6A;font:600 13.5px/1 'Pretendard Variable',sans-serif;position:relative">
+            <span style="position:absolute;left:0;top:9px;bottom:9px;width:2px;background:#D9AE6A;border-radius:2px"></span>
+            <svg style="width:15px;height:15px;flex:none;margin-left:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+            Today's Briefing
+          </button>
+
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:7px;color:#8B93A7;font:450 13.5px/1 'Pretendard Variable',sans-serif" style-hover="background:#10141F;color:#E8E6E1">
+            <svg style="width:15px;height:15px;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>전체 보기
+            <span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#8B93A7">128</span>
+          </button>
+
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:7px;color:#8B93A7;font:450 13.5px/1 'Pretendard Variable',sans-serif" style-hover="background:#10141F;color:#E8E6E1">
+            <svg style="width:15px;height:15px;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M7 18v-6a5 5 0 1 1 10 0v6"/><path d="M4 19h3v2H4zM17 19h3v2h-3z"/></svg>속보
+            <span style="margin-left:auto;width:5px;height:5px;border-radius:99px;background:#F2555A"></span>
+          </button>
+
+          <div style="height:9px"></div>
+          <div style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#6C7488;padding:0 12px 8px">CATEGORY</div>
+
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:7px;color:#E8E6E1;background:#10141F;font:500 13.5px/1 'Pretendard Variable',sans-serif">
+            <svg style="width:15px;height:15px;flex:none;color:#8B93A7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>물류
+            <span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#8B93A7">42</span>
+          </button>
+          <div style="display:flex;flex-direction:column;gap:1px;padding:3px 0 3px 34px">
+            <span style="font:450 12.5px/1 'Pretendard Variable',sans-serif;color:#D9AE6A;padding:6px 0">해운 · 항만</span>
+            <span style="font:450 12.5px/1 'Pretendard Variable',sans-serif;color:#6C7488;padding:6px 0">택배 · 라스트마일</span>
+            <span style="font:450 12.5px/1 'Pretendard Variable',sans-serif;color:#6C7488;padding:6px 0">항공화물</span>
+          </div>
+
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:7px;color:#8B93A7;font:450 13.5px/1 'Pretendard Variable',sans-serif" style-hover="background:#10141F;color:#E8E6E1"><svg style="width:15px;height:15px;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>경제<span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#8B93A7">31</span></button>
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:7px;color:#8B93A7;font:450 13.5px/1 'Pretendard Variable',sans-serif" style-hover="background:#10141F;color:#E8E6E1"><svg style="width:15px;height:15px;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/></svg>정치 / 사회<span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#8B93A7">18</span></button>
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:7px;color:#8B93A7;font:450 13.5px/1 'Pretendard Variable',sans-serif" style-hover="background:#10141F;color:#E8E6E1"><svg style="width:15px;height:15px;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 3a14 14 0 0 0 0 18 14 14 0 0 0 0-18M3 12h18"/></svg>글로벌<span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#8B93A7">24</span></button>
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:7px;color:#8B93A7;font:450 13.5px/1 'Pretendard Variable',sans-serif" style-hover="background:#10141F;color:#E8E6E1"><svg style="width:15px;height:15px;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2.5"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>AI<span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#8B93A7">27</span></button>
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:7px;color:#8B93A7;font:450 13.5px/1 'Pretendard Variable',sans-serif" style-hover="background:#10141F;color:#E8E6E1"><svg style="width:15px;height:15px;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><rect x="7" y="9" width="4" height="6" rx="1"/><rect x="15" y="5" width="4" height="10" rx="1"/></svg>증시<span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#8B93A7">16</span></button>
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:7px;color:#8B93A7;font:450 13.5px/1 'Pretendard Variable',sans-serif" style-hover="background:#10141F;color:#E8E6E1"><svg style="width:15px;height:15px;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M18 2H6v7a6 6 0 0 0 12 0Z"/></svg>스포츠<span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#8B93A7">9</span></button>
+
+          <div style="margin-top:auto;padding-top:20px;display:flex;flex-direction:column;gap:2px">
+            <div style="height:1px;background:rgba(232,230,225,.07);margin:0 6px 10px"></div>
+            <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:7px;color:#6C7488;font:450 13px/1 'Pretendard Variable',sans-serif" style-hover="color:#E8E6E1"><svg style="width:15px;height:15px;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>저장한 기사<span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#8B93A7">7</span></button>
+            <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:7px;color:#6C7488;font:450 13px/1 'Pretendard Variable',sans-serif" style-hover="color:#E8E6E1"><svg style="width:15px;height:15px;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>관리자 Setting</button>
+          </div>
+        </nav>
+
+        <main style="padding:24px 26px 40px;display:flex;flex-direction:column;gap:22px;min-width:0">
+
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px">
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#D9AE6A">TODAY'S BRIEFING</span>
+                <span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span>
+                <span style="font:500 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#5C6478">2026.08.09 · 12건 · 최근 24시간</span>
+              </div>
+              <h2 style="margin:0;font:700 25px/1.25 'Pretendard Variable',sans-serif;letter-spacing:-.022em;color:#E8E6E1">오늘 아침 확인해야 할 것</h2>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="display:flex;background:#10141F;border:1px solid rgba(232,230,225,.09);border-radius:7px;padding:2px">
+                <span style="font:500 11.5px/1 'Pretendard Variable',sans-serif;color:#0A0D14;background:#D9AE6A;padding:6px 11px;border-radius:5px">정확도</span>
+                <span style="font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#8B93A7;padding:6px 11px">최신</span>
+              </div>
+              <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:6px;height:30px;padding:0 11px;border:1px solid rgba(232,230,225,.09);border-radius:7px;color:#8B93A7;font:450 11.5px/1 'Pretendard Variable',sans-serif" style-hover="color:#E8E6E1;border-color:rgba(232,230,225,.2)"><svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18M7 12h10M10 18h4"/></svg>필터</button>
+            </div>
+          </div>
+
+          <article style="display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:24px;padding:22px;background:linear-gradient(180deg,#131826 0%,#10141F 100%);border:1px solid rgba(217,174,106,.22);border-radius:12px">
+            <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#0A0D14;background:#D9AE6A;padding:4px 7px;border-radius:3px">TOP STORY</span>
+                <span style="font:450 11.5px/1 'JetBrains Mono',monospace;color:#6C7488">물류 · 증시</span>
+                <span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span>
+                <span style="font:450 11.5px/1 'JetBrains Mono',monospace;color:#6C7488">조선비즈 · 12:41</span>
+              </div>
+              <h3 style="margin:0;font:700 30px/1.32 'Pretendard Variable',sans-serif;letter-spacing:-.028em;color:#F2F0EB;word-break:keep-all;text-wrap:pretty">쿠팡, 대구 풀필먼트센터 증설… 새벽배송 권역 영남권 전역으로 확대</h3>
+              <p style="margin:0;font:400 14px/1.75 'Pretendard Variable',sans-serif;color:#9AA2B4;word-break:keep-all;text-wrap:pretty">3,200억원을 투입해 대구 국가산단 부지에 3만 평 규모 센터를 짓는다. 내년 하반기 가동 시 영남권 새벽배송 커버리지가 현재 41%에서 90% 이상으로 올라간다.</p>
+              <div style="display:flex;align-items:center;gap:7px;margin-top:4px">
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:6px;height:32px;padding:0 13px;border-radius:7px;background:#D9AE6A;color:#0A0D14;font:600 12.5px/1 'Pretendard Variable',sans-serif" style-hover="background:#EFC98D"><svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>주요 내용</button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:6px;height:32px;padding:0 13px;border-radius:7px;border:1px solid rgba(122,196,154,.35);background:rgba(74,222,128,.07);color:#7BC49A;font:500 12.5px/1 'Pretendard Variable',sans-serif" style-hover="background:rgba(74,222,128,.14)"><svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5A5.9 5.9 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5M9 18h6M10 22h4"/></svg>Insight</button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:6px;height:32px;padding:0 13px;border-radius:7px;border:1px solid rgba(232,230,225,.11);color:#8B93A7;font:450 12.5px/1 'Pretendard Variable',sans-serif" style-hover="color:#E8E6E1;border-color:rgba(232,230,225,.24)">원문 <svg style="width:12px;height:12px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:7px;border:1px solid rgba(232,230,225,.11);color:#8B93A7" style-hover="color:#D9AE6A;border-color:rgba(217,174,106,.4)"><svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg></button>
+              </div>
+            </div>
+
+            <aside style="border-left:1px solid rgba(232,230,225,.08);padding-left:22px;display:flex;flex-direction:column;gap:14px">
+              <div style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#6C7488">연관 지표</div>
+              <div style="display:flex;flex-direction:column;gap:11px">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <span style="font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488">쿠팡 (NYSE:CPNG)</span>
+                  <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 17px/1 'JetBrains Mono',monospace;color:#E8E6E1;font-variant-numeric:tabular-nums">28.42</span><span style="font:500 11.5px/1 'JetBrains Mono',monospace;color:#F2555A">▲ 3.18%</span></div>
+                </div>
+                <svg viewBox="0 0 220 44" preserveAspectRatio="none" style="width:100%;height:44px;display:block"><polyline points="0,34 20,31 40,35 60,28 80,30 100,22 120,25 140,18 160,20 180,12 200,14 220,6" fill="none" stroke="#F2555A" stroke-width="1.5"/></svg>
+                <div style="height:1px;background:rgba(232,230,225,.07)"></div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;justify-content:space-between;font:450 11.5px/1 'JetBrains Mono',monospace"><span style="color:#6C7488">SCFI</span><span style="color:#E8E6E1;font-variant-numeric:tabular-nums">1,884 <span style="color:#3B82F6">▼2.1%</span></span></div>
+                  <div style="display:flex;justify-content:space-between;font:450 11.5px/1 'JetBrains Mono',monospace"><span style="color:#6C7488">CJ대한통운</span><span style="color:#E8E6E1;font-variant-numeric:tabular-nums">92,300 <span style="color:#F2555A">▲1.4%</span></span></div>
+                  <div style="display:flex;justify-content:space-between;font:450 11.5px/1 'JetBrains Mono',monospace"><span style="color:#6C7488">한진</span><span style="color:#E8E6E1;font-variant-numeric:tabular-nums">21,450 <span style="color:#F2555A">▲0.7%</span></span></div>
+                </div>
+              </div>
+            </aside>
+          </article>
+
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#5C6478">나머지 브리핑</span>
+            <span style="flex:1;height:1px;background:rgba(232,230,225,.08)"></span>
+          </div>
+
+          <div style="display:flex;flex-direction:column">
+            <article style="display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:14px;align-items:start;padding:17px 12px 17px 4px;border-bottom:1px solid rgba(232,230,225,.06)" style-hover="background:#0E121C">
+              <span style="font:600 12px/1.5 'JetBrains Mono',monospace;color:#D9AE6A;text-align:right">02</span>
+              <div style="display:flex;flex-direction:column;gap:7px;min-width:0">
+                <h3 style="margin:0;font:650 18.5px/1.45 'Pretendard Variable',sans-serif;letter-spacing:-.018em;color:#E8E6E1;word-break:keep-all">한은, 기준금리 2.50% 동결… "환율·가계부채 흐름 더 지켜볼 것"</h3>
+                <div style="display:flex;align-items:center;gap:8px;font:450 11.5px/1 'JetBrains Mono',monospace;color:#6C7488"><span style="color:#8B93A7">경제</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>연합뉴스</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>11:58</span></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px">
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:6px;background:rgba(217,174,106,.11);color:#D9AE6A;font:500 11.5px/1 'Pretendard Variable',sans-serif" style-hover="background:rgba(217,174,106,.2)">주요 내용</button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:6px;color:#7BC49A;border:1px solid rgba(122,196,154,.28);font:500 11.5px/1 'Pretendard Variable',sans-serif" style-hover="background:rgba(74,222,128,.1)">Insight</button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:#5C6478" style-hover="color:#E8E6E1;background:#151A27"><svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:#5C6478" style-hover="color:#D9AE6A;background:#151A27"><svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg></button>
+              </div>
+            </article>
+
+            <article style="display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:14px;align-items:start;padding:17px 12px 17px 4px;border-bottom:1px solid rgba(232,230,225,.06)" style-hover="background:#0E121C">
+              <span style="font:600 12px/1.5 'JetBrains Mono',monospace;color:#D9AE6A;text-align:right">03</span>
+              <div style="display:flex;flex-direction:column;gap:7px;min-width:0">
+                <h3 style="margin:0;font:650 18.5px/1.45 'Pretendard Variable',sans-serif;letter-spacing:-.018em;color:#E8E6E1;word-break:keep-all">엔비디아, 차세대 추론 칩 공급 일정 앞당겨… 국내 HBM 업계 수혜 전망</h3>
+                <div style="display:flex;align-items:center;gap:8px;font:450 11.5px/1 'JetBrains Mono',monospace;color:#6C7488"><span style="color:#8B93A7">AI · 글로벌</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>전자신문</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>10:20</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span style="color:#D9AE6A;display:flex;align-items:center;gap:4px"><svg style="width:11px;height:11px" viewBox="0 0 24 24" fill="currentColor"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>저장됨</span></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px">
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:6px;background:rgba(217,174,106,.11);color:#D9AE6A;font:500 11.5px/1 'Pretendard Variable',sans-serif" style-hover="background:rgba(217,174,106,.2)">주요 내용</button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:6px;color:#7BC49A;border:1px solid rgba(122,196,154,.28);font:500 11.5px/1 'Pretendard Variable',sans-serif" style-hover="background:rgba(74,222,128,.1)">Insight</button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:#5C6478" style-hover="color:#E8E6E1;background:#151A27"><svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:#D9AE6A;background:#151A27"><svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="currentColor"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg></button>
+              </div>
+            </article>
+
+            <article style="display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:14px;align-items:start;padding:17px 12px 17px 4px;border-bottom:1px solid rgba(232,230,225,.06);opacity:.62" style-hover="background:#0E121C;opacity:1">
+              <span style="font:600 12px/1.5 'JetBrains Mono',monospace;color:#8B93A7;text-align:right">04</span>
+              <div style="display:flex;flex-direction:column;gap:7px;min-width:0">
+                <h3 style="margin:0;font:450 18.5px/1.45 'Pretendard Variable',sans-serif;letter-spacing:-.018em;color:#9AA2B4;word-break:keep-all">부산항 신항 3부두 크레인 가동 재개… 수출 컨테이너 적체 해소 국면</h3>
+                <div style="display:flex;align-items:center;gap:8px;font:450 11.5px/1 'JetBrains Mono',monospace;color:#5C6478"><span>속보 · 물류</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>뉴시스</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>09:33</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>읽음</span></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px">
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:6px;background:rgba(217,174,106,.11);color:#D9AE6A;font:500 11.5px/1 'Pretendard Variable',sans-serif">주요 내용</button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:6px;color:#7BC49A;border:1px solid rgba(122,196,154,.28);font:500 11.5px/1 'Pretendard Variable',sans-serif">Insight</button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:#5C6478"><svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:#5C6478"><svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg></button>
+              </div>
+            </article>
+
+            <article style="display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:14px;align-items:start;padding:17px 12px 17px 4px;border-bottom:1px solid rgba(232,230,225,.06)" style-hover="background:#0E121C">
+              <span style="font:600 12px/1.5 'JetBrains Mono',monospace;color:#D9AE6A;text-align:right">05</span>
+              <div style="display:flex;flex-direction:column;gap:7px;min-width:0">
+                <h3 style="margin:0;font:650 18.5px/1.45 'Pretendard Variable',sans-serif;letter-spacing:-.018em;color:#E8E6E1;word-break:keep-all">SCFI 4주 연속 하락… 미주 서안 운임 1,900달러선 아래로</h3>
+                <div style="display:flex;align-items:center;gap:8px;font:450 11.5px/1 'JetBrains Mono',monospace;color:#6C7488"><span style="color:#8B93A7">물류</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>한국경제</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>09:12</span></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px">
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:6px;background:rgba(217,174,106,.11);color:#D9AE6A;font:500 11.5px/1 'Pretendard Variable',sans-serif">주요 내용</button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:6px;color:#7BC49A;border:1px solid rgba(122,196,154,.28);font:500 11.5px/1 'Pretendard Variable',sans-serif">Insight</button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:#5C6478"><svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+                <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:#5C6478"><svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg></button>
+              </div>
+            </article>
+          </div>
+        </main>
+
+        <aside style="padding:24px 20px 40px;border-left:1px solid rgba(232,230,225,.07);display:flex;flex-direction:column;gap:22px;background:#0C1019">
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#5C6478">MARKETS</span>
+              <span style="font:450 10px/1 'JetBrains Mono',monospace;color:#8B93A7">13:04 KST</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0;border:1px solid rgba(232,230,225,.08);border-radius:9px;overflow:hidden;background:#10141F">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-bottom:1px solid rgba(232,230,225,.06)">
+                <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8B93A7">KOSPI</span><span style="font:600 15px/1 'JetBrains Mono',monospace;color:#E8E6E1;font-variant-numeric:tabular-nums">3,204.55</span></div>
+                <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 60 24" preserveAspectRatio="none" style="width:60px;height:24px"><polyline points="0,18 10,15 20,17 30,11 40,13 50,7 60,5" fill="none" stroke="#F2555A" stroke-width="1.4"/></svg><span style="font:500 11px/1.5 'JetBrains Mono',monospace;color:#F2555A;text-align:right;font-variant-numeric:tabular-nums">▲12.31<br>+0.39%</span></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-bottom:1px solid rgba(232,230,225,.06)">
+                <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8B93A7">KOSDAQ</span><span style="font:600 15px/1 'JetBrains Mono',monospace;color:#E8E6E1;font-variant-numeric:tabular-nums">812.40</span></div>
+                <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 60 24" preserveAspectRatio="none" style="width:60px;height:24px"><polyline points="0,7 10,10 20,8 30,13 40,12 50,17 60,19" fill="none" stroke="#3B82F6" stroke-width="1.4"/></svg><span style="font:500 11px/1.5 'JetBrains Mono',monospace;color:#3B82F6;text-align:right;font-variant-numeric:tabular-nums">▼3.08<br>-0.38%</span></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-bottom:1px solid rgba(232,230,225,.06)">
+                <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8B93A7">NASDAQ</span><span style="font:600 15px/1 'JetBrains Mono',monospace;color:#E8E6E1;font-variant-numeric:tabular-nums">20,118.72</span></div>
+                <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 60 24" preserveAspectRatio="none" style="width:60px;height:24px"><polyline points="0,16 10,14 20,15 30,10 40,12 50,8 60,6" fill="none" stroke="#F2555A" stroke-width="1.4"/></svg><span style="font:500 11px/1.5 'JetBrains Mono',monospace;color:#F2555A;text-align:right;font-variant-numeric:tabular-nums">▲96.44<br>+0.48%</span></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 13px">
+                <div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#8B93A7">S&amp;P 500</span><span style="font:600 15px/1 'JetBrains Mono',monospace;color:#E8E6E1;font-variant-numeric:tabular-nums">6,042.11</span></div>
+                <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 60 24" preserveAspectRatio="none" style="width:60px;height:24px"><polyline points="0,15 10,16 20,12 30,13 40,9 50,10 60,7" fill="none" stroke="#F2555A" stroke-width="1.4"/></svg><span style="font:500 11px/1.5 'JetBrains Mono',monospace;color:#F2555A;text-align:right;font-variant-numeric:tabular-nums">▲18.02<br>+0.30%</span></div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <div style="flex:1;padding:10px 12px;border:1px solid rgba(232,230,225,.08);border-radius:9px;background:#10141F;display:flex;flex-direction:column;gap:5px"><span style="font:500 10px/1 'JetBrains Mono',monospace;color:#6C7488">원/달러</span><span style="font:600 14px/1 'JetBrains Mono',monospace;color:#E8E6E1;font-variant-numeric:tabular-nums">1,378.20</span><span style="font:500 10.5px/1 'JetBrains Mono',monospace;color:#3B82F6">▼4.10</span></div>
+              <div style="flex:1;padding:10px 12px;border:1px solid rgba(232,230,225,.08);border-radius:9px;background:#10141F;display:flex;flex-direction:column;gap:5px"><span style="font:500 10px/1 'JetBrains Mono',monospace;color:#6C7488">기준금리</span><span style="font:600 14px/1 'JetBrains Mono',monospace;color:#E8E6E1;font-variant-numeric:tabular-nums">2.50%</span><span style="font:500 10.5px/1 'JetBrains Mono',monospace;color:#6C7488">동결</span></div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <span style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#5C6478">키워드 랭킹</span>
+            <div style="display:flex;flex-direction:column;gap:1px">
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(232,230,225,.05)"><span style="font:600 11px/1 'JetBrains Mono',monospace;color:#D9AE6A;width:14px">1</span><span style="font:500 13px/1 'Pretendard Variable',sans-serif;color:#E8E6E1">기준금리 동결</span><span style="margin-left:auto;font:500 10.5px/1 'JetBrains Mono',monospace;color:#F2555A">▲6</span></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(232,230,225,.05)"><span style="font:600 11px/1 'JetBrains Mono',monospace;color:#D9AE6A;width:14px">2</span><span style="font:500 13px/1 'Pretendard Variable',sans-serif;color:#E8E6E1">HBM4</span><span style="margin-left:auto;font:500 10.5px/1 'JetBrains Mono',monospace;color:#F2555A">▲3</span></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(232,230,225,.05)"><span style="font:600 11px/1 'JetBrains Mono',monospace;color:#6C7488;width:14px">3</span><span style="font:500 13px/1 'Pretendard Variable',sans-serif;color:#9AA2B4">새벽배송</span><span style="margin-left:auto;font:500 10.5px/1 'JetBrains Mono',monospace;color:#5C6478">—</span></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(232,230,225,.05)"><span style="font:600 11px/1 'JetBrains Mono',monospace;color:#6C7488;width:14px">4</span><span style="font:500 13px/1 'Pretendard Variable',sans-serif;color:#9AA2B4">SCFI</span><span style="margin-left:auto;font:500 10.5px/1 'JetBrains Mono',monospace;color:#3B82F6">▼2</span></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 4px"><span style="font:600 11px/1 'JetBrains Mono',monospace;color:#6C7488;width:14px">5</span><span style="font:500 13px/1 'Pretendard Variable',sans-serif;color:#9AA2B4">부산항 적체</span><span style="margin-left:auto;font:500 10.5px/1 'JetBrains Mono',monospace;color:#3B82F6">▼1</span></div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid rgba(217,174,106,.18);border-radius:9px;background:rgba(217,174,106,.05)">
+            <span style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#D9AE6A">이어보기</span>
+            <p style="margin:0;font:450 12.5px/1.65 'Pretendard Variable',sans-serif;color:#9AA2B4;word-break:keep-all">어제 저장한 기사 3건이 오늘 후속 보도로 이어졌습니다.</p>
+            <button style="all:unset;box-sizing:border-box;cursor:pointer;font:600 11.5px/1 'Pretendard Variable',sans-serif;color:#D9AE6A;display:flex;align-items:center;gap:5px">확인하기 <svg style="width:11px;height:11px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(20,23,28,.5)">02 — 전체 보기 · 섹션 스트림</div>
+    <div style="width:1116px;background:#0A0D14;border-radius:10px;padding:26px;box-sizing:border-box;display:flex;flex-direction:column;gap:30px;box-shadow:0 18px 50px -24px rgba(0,0,0,.5)">
+
+      <section style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="display:flex;color:#D9AE6A"><svg style="width:15px;height:15px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 18v-6a5 5 0 1 1 10 0v6"/><path d="M4 19h3v2H4zM17 19h3v2h-3z"/></svg></span>
+          <h2 style="margin:0;font:700 15px/1 'Pretendard Variable',sans-serif;letter-spacing:-.01em;color:#E8E6E1">속보</h2>
+          <span style="font:500 11px/1 'JetBrains Mono',monospace;color:#5C6478">5</span>
+          <span style="flex:1;height:1px;background:rgba(232,230,225,.08)"></span>
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#6C7488;display:flex;align-items:center;gap:5px" style-hover="color:#E8E6E1">더보기 <svg style="width:11px;height:11px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+          <article style="display:flex;flex-direction:column;gap:8px;padding:15px 16px;background:#10141F;border:1px solid rgba(232,230,225,.07);border-left:2px solid #F2555A;border-radius:9px" style-hover="border-color:rgba(232,230,225,.18);border-left-color:#F2555A">
+            <h3 style="margin:0;font:600 15.5px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.015em;color:#E8E6E1;word-break:keep-all">부산항 신항 3부두 크레인 가동 재개… 수출 컨테이너 적체 해소 국면</h3>
+            <div style="display:flex;align-items:center;gap:8px;font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488"><span style="color:#F2555A">속보</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>뉴시스 · 12:55</span></div>
+          </article>
+          <article style="display:flex;flex-direction:column;gap:8px;padding:15px 16px;background:#10141F;border:1px solid rgba(232,230,225,.07);border-left:2px solid #F2555A;border-radius:9px">
+            <h3 style="margin:0;font:600 15.5px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.015em;color:#E8E6E1;word-break:keep-all">정부, 하반기 물류 인프라 예산 1조 2천억 추가 편성 발표</h3>
+            <div style="display:flex;align-items:center;gap:8px;font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488"><span style="color:#F2555A">속보</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>연합뉴스 · 12:31</span></div>
+          </article>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="display:flex;color:#D9AE6A"><svg style="width:15px;height:15px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></span>
+          <h2 style="margin:0;font:700 15px/1 'Pretendard Variable',sans-serif;letter-spacing:-.01em;color:#E8E6E1">물류</h2>
+          <span style="font:500 11px/1 'JetBrains Mono',monospace;color:#5C6478">42</span>
+          <span style="flex:1;height:1px;background:rgba(232,230,225,.08)"></span>
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="font:450 11px/1 'JetBrains Mono',monospace;color:#5C6478;padding:5px 9px;border:1px solid rgba(232,230,225,.08);border-radius:6px">10개</span>
+            <span style="font:450 11px/1 'JetBrains Mono',monospace;color:#5C6478;padding:5px 9px;border:1px solid rgba(232,230,225,.08);border-radius:6px">1일</span>
+            <span style="font:450 11px/1 'JetBrains Mono',monospace;color:#D9AE6A;padding:5px 9px;border:1px solid rgba(217,174,106,.3);border-radius:6px">정확도순</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+          <article style="display:flex;flex-direction:column;gap:8px;padding:15px 16px;background:#10141F;border:1px solid rgba(232,230,225,.07);border-radius:9px">
+            <h3 style="margin:0;font:600 15.5px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.015em;color:#E8E6E1;word-break:keep-all">SCFI 4주 연속 하락… 미주 서안 운임 1,900달러선 아래로</h3>
+            <div style="display:flex;align-items:center;gap:8px;font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488"><span>한국경제 · 09:12</span></div>
+          </article>
+          <article style="display:flex;flex-direction:column;gap:8px;padding:15px 16px;background:#10141F;border:1px solid rgba(232,230,225,.07);border-radius:9px;opacity:.6">
+            <h3 style="margin:0;font:450 15.5px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.015em;color:#9AA2B4;word-break:keep-all">CJ대한통운, 로봇 분류 라인 5개 터미널로 확대 적용</h3>
+            <div style="display:flex;align-items:center;gap:8px;font:450 11px/1 'JetBrains Mono',monospace;color:#5C6478"><span>매일경제 · 08:40</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>읽음</span></div>
+          </article>
+          <article style="display:flex;flex-direction:column;gap:8px;padding:15px 16px;background:#10141F;border:1px solid rgba(232,230,225,.07);border-radius:9px">
+            <h3 style="margin:0;font:600 15.5px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.015em;color:#E8E6E1;word-break:keep-all">인천공항 항공화물 물동량 7월 기준 역대 최대</h3>
+            <div style="display:flex;align-items:center;gap:8px;font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488"><span>조선비즈 · 08:02</span></div>
+          </article>
+          <article style="display:flex;flex-direction:column;gap:8px;padding:15px 16px;background:#10141F;border:1px solid rgba(232,230,225,.07);border-radius:9px">
+            <h3 style="margin:0;font:600 15.5px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.015em;color:#E8E6E1;word-break:keep-all">HMM, 중동 항로 운항 스케줄 정상화… 지연 3일로 축소</h3>
+            <div style="display:flex;align-items:center;gap:8px;font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488"><span>한국일보 · 07:35</span></div>
+          </article>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start">
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(20,23,28,.5)">03 — 키워드 검색</div>
+      <div style="width:660px;background:#0A0D14;border-radius:10px;padding:22px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;box-shadow:0 18px 50px -24px rgba(0,0,0,.5)">
+        <div style="display:flex;align-items:center;gap:10px;height:42px;padding:0 14px;border:1px solid rgba(217,174,106,.35);background:#10141F;border-radius:9px">
+          <svg style="width:16px;height:16px;color:#D9AE6A;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <span style="font:500 14px/1 'Pretendard Variable',sans-serif;color:#E8E6E1">새벽배송</span>
+          <span style="width:1px;height:16px;background:rgba(232,230,225,.12)"></span>
+          <span style="font:450 13px/1 'Pretendard Variable',sans-serif;color:#5C6478">AND 풀필먼트</span>
+          <button style="all:unset;margin-left:auto;cursor:pointer;font:500 11px/1 'JetBrains Mono',monospace;color:#0A0D14;background:#D9AE6A;padding:6px 11px;border-radius:6px">검색</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+          <span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#6C7488;margin-right:2px">최근</span>
+          <span style="font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#8B93A7;padding:6px 10px;border:1px solid rgba(232,230,225,.09);border-radius:99px">HBM4</span>
+          <span style="font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#8B93A7;padding:6px 10px;border:1px solid rgba(232,230,225,.09);border-radius:99px">부산항 적체</span>
+          <span style="font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#8B93A7;padding:6px 10px;border:1px solid rgba(232,230,225,.09);border-radius:99px">기준금리</span>
+          <span style="font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#8B93A7;padding:6px 10px;border:1px solid rgba(232,230,225,.09);border-radius:99px">SCFI</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font:500 11px/1 'JetBrains Mono',monospace;color:#5C6478">결과 24건 · 최근 7일</span>
+          <span style="flex:1;height:1px;background:rgba(232,230,225,.08)"></span>
+          <span style="font:500 11px/1 'JetBrains Mono',monospace;color:#D9AE6A">정확도순</span>
+        </div>
+        <div style="display:flex;flex-direction:column">
+          <article style="display:flex;flex-direction:column;gap:7px;padding:14px 4px;border-bottom:1px solid rgba(232,230,225,.06)">
+            <h3 style="margin:0;font:600 16px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.015em;color:#E8E6E1;word-break:keep-all">쿠팡, 대구 <span style="color:#D9AE6A;background:rgba(217,174,106,.13);border-radius:3px;padding:0 3px">풀필먼트</span>센터 증설… <span style="color:#D9AE6A;background:rgba(217,174,106,.13);border-radius:3px;padding:0 3px">새벽배송</span> 권역 확대</h3>
+            <div style="display:flex;align-items:center;gap:8px;font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488"><span>물류 · 조선비즈</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>08-09 12:41</span></div>
+          </article>
+          <article style="display:flex;flex-direction:column;gap:7px;padding:14px 4px;border-bottom:1px solid rgba(232,230,225,.06)">
+            <h3 style="margin:0;font:600 16px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.015em;color:#E8E6E1;word-break:keep-all">컬리, <span style="color:#D9AE6A;background:rgba(217,174,106,.13);border-radius:3px;padding:0 3px">새벽배송</span> 지역 4곳 추가… 수도권 밖 첫 진출</h3>
+            <div style="display:flex;align-items:center;gap:8px;font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488"><span>유통 · 서울경제</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>08-08 17:22</span></div>
+          </article>
+          <article style="display:flex;flex-direction:column;gap:7px;padding:14px 4px">
+            <h3 style="margin:0;font:600 16px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.015em;color:#E8E6E1;word-break:keep-all">국토부, <span style="color:#D9AE6A;background:rgba(217,174,106,.13);border-radius:3px;padding:0 3px">풀필먼트</span> 부지 규제 완화안 입법예고</h3>
+            <div style="display:flex;align-items:center;gap:8px;font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488"><span>정책 · 연합뉴스</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span>08-08 14:05</span></div>
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(20,23,28,.5)">04 — 증시 시황</div>
+      <div style="width:660px;background:#0A0D14;border-radius:10px;padding:22px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px;box-shadow:0 18px 50px -24px rgba(0,0,0,.5)">
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <h2 style="margin:0;font:700 19px/1 'Pretendard Variable',sans-serif;letter-spacing:-.02em;color:#E8E6E1">증시 시황</h2>
+          <span style="font:450 11px/1 'JetBrains Mono',monospace;color:#5C6478">2026.08.09 13:04 · 15분 지연</span>
+        </div>
+        <div style="padding:18px;border:1px solid rgba(232,230,225,.08);border-radius:10px;background:#10141F;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8B93A7">KOSPI</span>
+              <div style="display:flex;align-items:baseline;gap:10px"><span style="font:700 30px/1 'JetBrains Mono',monospace;color:#E8E6E1;font-variant-numeric:tabular-nums">3,204.55</span><span style="font:600 14px/1 'JetBrains Mono',monospace;color:#F2555A">▲ 12.31 (+0.39%)</span></div>
+            </div>
+            <div style="display:flex;gap:3px;background:#0A0D14;border:1px solid rgba(232,230,225,.08);border-radius:7px;padding:3px">
+              <span style="font:500 11px/1 'JetBrains Mono',monospace;color:#0A0D14;background:#D9AE6A;padding:5px 9px;border-radius:5px">1D</span>
+              <span style="font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488;padding:5px 9px">1W</span>
+              <span style="font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488;padding:5px 9px">1M</span>
+              <span style="font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488;padding:5px 9px">1Y</span>
+            </div>
+          </div>
+          <svg viewBox="0 0 600 140" preserveAspectRatio="none" style="width:100%;height:140px;display:block">
+            <line x1="0" y1="35" x2="600" y2="35" stroke="rgba(232,230,225,.06)" stroke-width="1"/>
+            <line x1="0" y1="70" x2="600" y2="70" stroke="rgba(232,230,225,.06)" stroke-width="1"/>
+            <line x1="0" y1="105" x2="600" y2="105" stroke="rgba(232,230,225,.06)" stroke-width="1"/>
+            <polyline points="0,108 40,96 80,104 120,88 160,92 200,74 240,80 280,62 320,68 360,50 400,58 440,40 480,46 520,30 560,34 600,20" fill="none" stroke="#F2555A" stroke-width="1.8"/>
+            <polygon points="0,108 40,96 80,104 120,88 160,92 200,74 240,80 280,62 320,68 360,50 400,58 440,40 480,46 520,30 560,34 600,20 600,140 0,140" fill="rgba(242,85,90,.08)"/>
+          </svg>
+          <div style="display:flex;justify-content:space-between;font:450 10px/1 'JetBrains Mono',monospace;color:#8B93A7"><span>09:00</span><span>10:30</span><span>12:00</span><span>13:04</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px">
+          <div style="padding:13px;border:1px solid rgba(232,230,225,.08);border-radius:9px;background:#10141F;display:flex;flex-direction:column;gap:6px"><span style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#6C7488">KOSDAQ</span><span style="font:600 16px/1 'JetBrains Mono',monospace;color:#E8E6E1;font-variant-numeric:tabular-nums">812.40</span><span style="font:500 10.5px/1 'JetBrains Mono',monospace;color:#3B82F6">▼3.08 (-0.38%)</span></div>
+          <div style="padding:13px;border:1px solid rgba(232,230,225,.08);border-radius:9px;background:#10141F;display:flex;flex-direction:column;gap:6px"><span style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#6C7488">NASDAQ</span><span style="font:600 16px/1 'JetBrains Mono',monospace;color:#E8E6E1;font-variant-numeric:tabular-nums">20,118.72</span><span style="font:500 10.5px/1 'JetBrains Mono',monospace;color:#F2555A">▲96.44 (+0.48%)</span></div>
+          <div style="padding:13px;border:1px solid rgba(232,230,225,.08);border-radius:9px;background:#10141F;display:flex;flex-direction:column;gap:6px"><span style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#6C7488">S&amp;P 500</span><span style="font:600 16px/1 'JetBrains Mono',monospace;color:#E8E6E1;font-variant-numeric:tabular-nums">6,042.11</span><span style="font:500 10.5px/1 'JetBrains Mono',monospace;color:#F2555A">▲18.02 (+0.30%)</span></div>
+          <div style="padding:13px;border:1px solid rgba(232,230,225,.08);border-radius:9px;background:#10141F;display:flex;flex-direction:column;gap:6px"><span style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#6C7488">DOW</span><span style="font:600 16px/1 'JetBrains Mono',monospace;color:#E8E6E1;font-variant-numeric:tabular-nums">44,921.30</span><span style="font:500 10.5px/1 'JetBrains Mono',monospace;color:#3B82F6">▼88.10 (-0.20%)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(20,23,28,.5)">05 — 주요 내용 팝업</div>
+      <div style="width:620px;background:#10141F;border:1px solid rgba(232,230,225,.1);border-radius:12px;overflow:hidden;box-shadow:0 24px 60px -20px rgba(0,0,0,.6)">
+        <div style="display:flex;align-items:flex-start;gap:14px;padding:20px 22px;border-bottom:1px solid rgba(232,230,225,.07)">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:9px">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#D9AE6A">주요 내용</span><span style="width:3px;height:3px;border-radius:99px;background:#3A4152"></span><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488">조선비즈 · 08-09 12:41</span></div>
+            <h3 style="margin:0;font:700 20px/1.45 'Pretendard Variable',sans-serif;letter-spacing:-.022em;color:#F2F0EB;word-break:keep-all">쿠팡, 대구 풀필먼트센터 증설… 새벽배송 권역 영남권 전역으로 확대</h3>
+          </div>
+          <button style="all:unset;cursor:pointer;display:flex;color:#5C6478;padding:6px;border-radius:6px" style-hover="color:#E8E6E1;background:#151A27"><svg style="width:15px;height:15px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div style="padding:20px 22px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;gap:11px"><span style="flex:none;width:18px;font:600 11px/1.7 'JetBrains Mono',monospace;color:#D9AE6A">01</span><p style="margin:0;font:400 14px/1.75 'Pretendard Variable',sans-serif;color:#C9CCD6;word-break:keep-all;text-wrap:pretty">대구 국가산단 3만 평 부지에 3,200억원을 투입, 2027년 하반기 가동을 목표로 착공한다.</p></div>
+            <div style="display:flex;gap:11px"><span style="flex:none;width:18px;font:600 11px/1.7 'JetBrains Mono',monospace;color:#D9AE6A">02</span><p style="margin:0;font:400 14px/1.75 'Pretendard Variable',sans-serif;color:#C9CCD6;word-break:keep-all;text-wrap:pretty">영남권 새벽배송 커버리지가 41%에서 90% 이상으로 확대되며, 대구·경북 신규 고용은 2,000명 규모로 추산된다.</p></div>
+            <div style="display:flex;gap:11px"><span style="flex:none;width:18px;font:600 11px/1.7 'JetBrains Mono',monospace;color:#D9AE6A">03</span><p style="margin:0;font:400 14px/1.75 'Pretendard Variable',sans-serif;color:#C9CCD6;word-break:keep-all;text-wrap:pretty">경쟁사 대비 지방 거점 확보가 1년 이상 앞서며, 내년 유통업계 지방 물류 투자 경쟁을 촉발할 전망이다.</p></div>
+          </div>
+          <div style="border:1px solid rgba(232,230,225,.07);border-radius:9px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:#151A27;font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#6C7488"><span style="padding:9px 12px">구분</span><span style="padding:9px 12px">현재</span><span style="padding:9px 12px">가동 후</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;font:450 12.5px/1 'JetBrains Mono',monospace;color:#C9CCD6;border-top:1px solid rgba(232,230,225,.06)"><span style="padding:10px 12px;color:#8B93A7">커버리지</span><span style="padding:10px 12px">41%</span><span style="padding:10px 12px;color:#D9AE6A">90%+</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;font:450 12.5px/1 'JetBrains Mono',monospace;color:#C9CCD6;border-top:1px solid rgba(232,230,225,.06)"><span style="padding:10px 12px;color:#8B93A7">센터 수</span><span style="padding:10px 12px">4개</span><span style="padding:10px 12px;color:#D9AE6A">5개</span></div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:14px 22px;border-top:1px solid rgba(232,230,225,.07);background:#0E121C">
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:6px;height:32px;padding:0 13px;border-radius:7px;border:1px solid rgba(122,196,154,.35);color:#7BC49A;font:500 12.5px/1 'Pretendard Variable',sans-serif">Insight 보기</button>
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:6px;height:32px;padding:0 13px;border-radius:7px;border:1px solid rgba(232,230,225,.11);color:#8B93A7;font:450 12.5px/1 'Pretendard Variable',sans-serif">원문 보기</button>
+          <button style="all:unset;box-sizing:border-box;cursor:pointer;margin-left:auto;display:flex;align-items:center;gap:6px;height:32px;padding:0 13px;border-radius:7px;background:#D9AE6A;color:#0A0D14;font:600 12.5px/1 'Pretendard Variable',sans-serif">저장</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(20,23,28,.5)">06 — Insight 팝업</div>
+      <div style="width:620px;background:#10141F;border:1px solid rgba(122,196,154,.22);border-radius:12px;overflow:hidden;box-shadow:0 24px 60px -20px rgba(0,0,0,.6)">
+        <div style="display:flex;align-items:flex-start;gap:14px;padding:20px 22px;border-bottom:1px solid rgba(232,230,225,.07);background:rgba(74,222,128,.04)">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:9px">
+            <div style="display:flex;align-items:center;gap:7px;color:#7BC49A"><svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5A5.9 5.9 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5M9 18h6M10 22h4"/></svg><span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em">INSIGHT · AI 분석</span></div>
+            <h3 style="margin:0;font:700 20px/1.45 'Pretendard Variable',sans-serif;letter-spacing:-.022em;color:#F2F0EB;word-break:keep-all">지방 물류 거점 경쟁의 시작점</h3>
+          </div>
+          <button style="all:unset;cursor:pointer;display:flex;color:#5C6478;padding:6px;border-radius:6px"><svg style="width:15px;height:15px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div style="padding:20px 22px;display:flex;flex-direction:column;gap:18px">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#5C6478">핵심 판단</span>
+            <p style="margin:0;font:400 14.5px/1.8 'Pretendard Variable',sans-serif;color:#C9CCD6;word-break:keep-all;text-wrap:pretty">수도권 포화 이후 성장 여력을 지방에서 찾는 전환으로 읽힌다. 커버리지 확대는 매출보다 이탈 방어 효과가 크며, 경쟁사는 2027년 이전에 대응 투자를 결정해야 하는 상황에 놓인다.</p>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div style="padding:13px 14px;border:1px solid rgba(232,230,225,.07);border-radius:9px;background:#0E121C;display:flex;flex-direction:column;gap:7px"><span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#7BC49A">기회</span><span style="font:450 12.5px/1.65 'Pretendard Variable',sans-serif;color:#C9CCD6;word-break:keep-all">지방 셀러 유입, 창고 자동화 설비 발주 확대</span></div>
+            <div style="padding:13px 14px;border:1px solid rgba(232,230,225,.07);border-radius:9px;background:#0E121C;display:flex;flex-direction:column;gap:7px"><span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#F2555A">리스크</span><span style="font:450 12.5px/1.65 'Pretendard Variable',sans-serif;color:#C9CCD6;word-break:keep-all">초기 3년 고정비 부담, 지방 물동량 밀도 미달 가능성</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#5C6478">주목할 지표</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span style="font:450 11.5px/1 'JetBrains Mono',monospace;color:#8B93A7;padding:7px 11px;border:1px solid rgba(232,230,225,.09);border-radius:99px">영남권 물동량</span>
+              <span style="font:450 11.5px/1 'JetBrains Mono',monospace;color:#8B93A7;padding:7px 11px;border:1px solid rgba(232,230,225,.09);border-radius:99px">CPNG 분기 CAPEX</span>
+              <span style="font:450 11.5px/1 'JetBrains Mono',monospace;color:#8B93A7;padding:7px 11px;border:1px solid rgba(232,230,225,.09);border-radius:99px">경쟁사 착공 공시</span>
+            </div>
+          </div>
+          <p style="margin:0;font:450 11px/1.6 'JetBrains Mono',monospace;color:#8B93A7">AI 생성 요약 · 투자 판단의 근거로 사용하지 마세요</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(20,23,28,.5)">07 — 화면 설정 팝업</div>
+      <div style="width:420px;background:#10141F;border:1px solid rgba(232,230,225,.1);border-radius:12px;overflow:hidden;box-shadow:0 24px 60px -20px rgba(0,0,0,.6)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(232,230,225,.07)">
+          <span style="font:700 15px/1 'Pretendard Variable',sans-serif;letter-spacing:-.01em;color:#E8E6E1">화면 설정</span>
+          <button style="all:unset;cursor:pointer;display:flex;color:#5C6478;padding:5px"><svg style="width:15px;height:15px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div style="padding:18px 20px;display:flex;flex-direction:column;gap:20px">
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#5C6478">테마</span>
+            <div style="display:flex;gap:7px">
+              <div style="flex:1;padding:11px;border:1px solid rgba(217,174,106,.45);background:rgba(217,174,106,.08);border-radius:8px;display:flex;flex-direction:column;gap:8px;cursor:pointer"><span style="height:26px;border-radius:4px;background:#0A0D14;border:1px solid rgba(232,230,225,.12)"></span><span style="font:500 11.5px/1 'Pretendard Variable',sans-serif;color:#D9AE6A">다크</span></div>
+              <div style="flex:1;padding:11px;border:1px solid rgba(232,230,225,.09);border-radius:8px;display:flex;flex-direction:column;gap:8px;cursor:pointer"><span style="height:26px;border-radius:4px;background:#F4F3EF"></span><span style="font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#8B93A7">화이트</span></div>
+              <div style="flex:1;padding:11px;border:1px solid rgba(232,230,225,.09);border-radius:8px;display:flex;flex-direction:column;gap:8px;cursor:pointer"><span style="height:26px;border-radius:4px;background:linear-gradient(90deg,#0A0D14 50%,#F4F3EF 50%)"></span><span style="font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#8B93A7">시스템</span></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;justify-content:space-between"><span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#5C6478">본문 크기</span><span style="font:500 11px/1 'JetBrains Mono',monospace;color:#D9AE6A">보통 · 15px</span></div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="font:500 11px/1 'Pretendard Variable',sans-serif;color:#6C7488">가</span>
+              <div style="flex:1;height:3px;background:#22283A;border-radius:99px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:50%;background:#D9AE6A;border-radius:99px"></span><span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:99px;background:#E8E6E1"></span></div>
+              <span style="font:500 17px/1 'Pretendard Variable',sans-serif;color:#8B93A7">가</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid rgba(232,230,225,.06)"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 13.5px/1 'Pretendard Variable',sans-serif;color:#E8E6E1">읽은 기사 흐리게</span><span style="font:400 11.5px/1 'Pretendard Variable',sans-serif;color:#5C6478">목록에서 투명도 낮춤</span></div><span style="width:38px;height:22px;border-radius:99px;background:#D9AE6A;position:relative;flex:none"><span style="position:absolute;right:2px;top:2px;width:18px;height:18px;border-radius:99px;background:#0A0D14"></span></span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid rgba(232,230,225,.06)"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 13.5px/1 'Pretendard Variable',sans-serif;color:#E8E6E1">마켓 레일 표시</span><span style="font:400 11.5px/1 'Pretendard Variable',sans-serif;color:#5C6478">우측 지수 · 키워드 영역</span></div><span style="width:38px;height:22px;border-radius:99px;background:#D9AE6A;position:relative;flex:none"><span style="position:absolute;right:2px;top:2px;width:18px;height:18px;border-radius:99px;background:#0A0D14"></span></span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 13.5px/1 'Pretendard Variable',sans-serif;color:#E8E6E1">기사 자동 새로고침</span><span style="font:400 11.5px/1 'Pretendard Variable',sans-serif;color:#5C6478">5분 간격</span></div><span style="width:38px;height:22px;border-radius:99px;background:#22283A;position:relative;flex:none"><span style="position:absolute;left:2px;top:2px;width:18px;height:18px;border-radius:99px;background:#5C6478"></span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(20,23,28,.5)">08 — 관리자 Setting</div>
+      <div style="width:820px;background:#0A0D14;border-radius:10px;padding:24px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;box-shadow:0 18px 50px -24px rgba(0,0,0,.5)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#D9AE6A">ADMIN</span>
+            <h2 style="margin:0;font:700 21px/1 'Pretendard Variable',sans-serif;letter-spacing:-.02em;color:#E8E6E1">섹션 · 키워드 관리</h2>
+          </div>
+          <div style="display:flex;gap:7px">
+            <button style="all:unset;box-sizing:border-box;cursor:pointer;height:32px;padding:0 13px;border-radius:7px;border:1px solid rgba(232,230,225,.11);color:#8B93A7;font:450 12.5px/1 'Pretendard Variable',sans-serif">가져오기</button>
+            <button style="all:unset;box-sizing:border-box;cursor:pointer;height:32px;padding:0 13px;border-radius:7px;background:#D9AE6A;color:#0A0D14;font:600 12.5px/1 'Pretendard Variable',sans-serif">저장</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:240px minmax(0,1fr);gap:18px;align-items:start">
+          <div style="border:1px solid rgba(232,230,225,.08);border-radius:10px;background:#10141F;overflow:hidden">
+            <div style="padding:11px 14px;font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#5C6478;border-bottom:1px solid rgba(232,230,225,.06)">섹션 순서</div>
+            <div style="display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid rgba(232,230,225,.05);background:rgba(217,174,106,.07)"><svg style="width:12px;height:12px;color:#5C6478;flex:none" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg><span style="font:500 13px/1 'Pretendard Variable',sans-serif;color:#D9AE6A">물류</span><span style="margin-left:auto;font:500 10.5px/1 'JetBrains Mono',monospace;color:#8B93A7">42</span></div>
+              <div style="display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid rgba(232,230,225,.05)"><svg style="width:12px;height:12px;color:#3A4152;flex:none" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg><span style="font:450 13px/1 'Pretendard Variable',sans-serif;color:#9AA2B4">경제</span><span style="margin-left:auto;font:500 10.5px/1 'JetBrains Mono',monospace;color:#8B93A7">31</span></div>
+              <div style="display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid rgba(232,230,225,.05)"><svg style="width:12px;height:12px;color:#3A4152;flex:none" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg><span style="font:450 13px/1 'Pretendard Variable',sans-serif;color:#9AA2B4">AI</span><span style="margin-left:auto;font:500 10.5px/1 'JetBrains Mono',monospace;color:#8B93A7">27</span></div>
+              <div style="display:flex;align-items:center;gap:9px;padding:10px 14px"><svg style="width:12px;height:12px;color:#3A4152;flex:none" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg><span style="font:450 13px/1 'Pretendard Variable',sans-serif;color:#9AA2B4">글로벌</span><span style="margin-left:auto;font:500 10.5px/1 'JetBrains Mono',monospace;color:#8B93A7">24</span></div>
+            </div>
+            <button style="all:unset;box-sizing:border-box;cursor:pointer;width:100%;padding:11px 14px;border-top:1px solid rgba(232,230,225,.06);font:500 12px/1 'Pretendard Variable',sans-serif;color:#6C7488">+ 섹션 추가</button>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div style="border:1px solid rgba(232,230,225,.08);border-radius:10px;background:#10141F;padding:16px 18px;display:flex;flex-direction:column;gap:14px">
+              <div style="display:flex;align-items:center;gap:9px"><span style="font:700 14px/1 'Pretendard Variable',sans-serif;color:#E8E6E1">물류</span><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#5C6478">3개 하위 섹션</span></div>
+              <div style="display:flex;flex-direction:column;gap:9px">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span style="width:110px;flex:none;font:450 12px/1 'JetBrains Mono',monospace;color:#8B93A7">해운 · 항만</span>
+                  <div style="flex:1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 10px;border:1px solid rgba(232,230,225,.08);border-radius:7px;background:#0A0D14">
+                    <span style="font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#D9AE6A;background:rgba(217,174,106,.12);padding:5px 9px;border-radius:5px">부산항</span>
+                    <span style="font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#D9AE6A;background:rgba(217,174,106,.12);padding:5px 9px;border-radius:5px">SCFI</span>
+                    <span style="font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#D9AE6A;background:rgba(217,174,106,.12);padding:5px 9px;border-radius:5px">HMM</span>
+                    <span style="font:400 11.5px/1 'Pretendard Variable',sans-serif;color:#6C7488">키워드 입력…</span>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span style="width:110px;flex:none;font:450 12px/1 'JetBrains Mono',monospace;color:#8B93A7">택배 · 라스트마일</span>
+                  <div style="flex:1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 10px;border:1px solid rgba(232,230,225,.08);border-radius:7px;background:#0A0D14">
+                    <span style="font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#D9AE6A;background:rgba(217,174,106,.12);padding:5px 9px;border-radius:5px">새벽배송</span>
+                    <span style="font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#D9AE6A;background:rgba(217,174,106,.12);padding:5px 9px;border-radius:5px">풀필먼트</span>
+                    <span style="font:400 11.5px/1 'Pretendard Variable',sans-serif;color:#6C7488">키워드 입력…</span>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span style="width:110px;flex:none;font:450 12px/1 'JetBrains Mono',monospace;color:#8B93A7">항공화물</span>
+                  <div style="flex:1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 10px;border:1px solid rgba(232,230,225,.08);border-radius:7px;background:#0A0D14">
+                    <span style="font:450 11.5px/1 'Pretendard Variable',sans-serif;color:#D9AE6A;background:rgba(217,174,106,.12);padding:5px 9px;border-radius:5px">인천공항 화물</span>
+                    <span style="font:400 11.5px/1 'Pretendard Variable',sans-serif;color:#6C7488">키워드 입력…</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="border:1px solid rgba(232,230,225,.08);border-radius:10px;background:#10141F;padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+              <span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#5C6478">수집 규칙</span>
+              <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+                <div style="display:flex;flex-direction:column;gap:6px"><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488">기사 수</span><span style="font:500 13px/1 'Pretendard Variable',sans-serif;color:#E8E6E1;padding:9px 11px;border:1px solid rgba(232,230,225,.08);border-radius:7px;background:#0A0D14">10개</span></div>
+                <div style="display:flex;flex-direction:column;gap:6px"><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488">기간</span><span style="font:500 13px/1 'Pretendard Variable',sans-serif;color:#E8E6E1;padding:9px 11px;border:1px solid rgba(232,230,225,.08);border-radius:7px;background:#0A0D14">1일</span></div>
+                <div style="display:flex;flex-direction:column;gap:6px"><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488">정렬</span><span style="font:500 13px/1 'Pretendard Variable',sans-serif;color:#E8E6E1;padding:9px 11px;border:1px solid rgba(232,230,225,.08);border-radius:7px;background:#0A0D14">정확도순</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(20,23,28,.5)">09 — 라이트 테마</div>
+    <div style="width:1116px;background:#F4F3EF;border:1px solid rgba(20,23,28,.1);border-radius:10px;overflow:hidden;box-shadow:0 18px 50px -30px rgba(0,0,0,.35)">
+      <div style="display:flex;align-items:center;gap:20px;padding:0 22px;height:56px;border-bottom:1px solid rgba(20,23,28,.09);background:#FFFFFF">
+        <div style="display:flex;align-items:center;gap:9px">
+          <img src="rss-icon.png" alt="" style="display:block;height:22px;width:auto;object-fit:contain">
+          <span style="font:750 17px/1 'Pretendard Variable',sans-serif;letter-spacing:-.02em;color:#14171C">Beyond News</span>
+        </div>
+        <span style="width:1px;height:18px;background:rgba(20,23,28,.12)"></span>
+        <span style="font:500 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#656C7A">WIRE DESK</span>
+        <div style="flex:1;display:flex;justify-content:center">
+          <div style="display:flex;align-items:center;gap:9px;width:380px;height:32px;padding:0 12px;border:1px solid rgba(20,23,28,.12);background:#F4F3EF;border-radius:7px">
+            <svg style="width:14px;height:14px;color:#656C7A;flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <span style="font:400 12.5px/1 'Pretendard Variable',sans-serif;color:#656C7A">키워드 · 기업명 · 지수 검색</span>
+          </div>
+        </div>
+        <span style="display:flex;align-items:center;gap:6px;font:500 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.12em;color:#2E8B57"><span style="width:5px;height:5px;border-radius:99px;background:#2E8B57"></span>LIVE</span>
+        <span style="font:500 12px/1 'JetBrains Mono',monospace;color:#656C7A;font-variant-numeric:tabular-nums">08.09 (일) 13:04</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:200px minmax(0,1fr) 260px;align-items:start">
+        <nav style="padding:18px 12px;border-right:1px solid rgba(20,23,28,.08);display:flex;flex-direction:column;gap:2px;min-height:420px">
+          <div style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#656C7A;padding:0 10px 10px">SECTION</div>
+          <span style="display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:7px;background:#8A6420;color:#FFFFFF;font:600 13px/1 'Pretendard Variable',sans-serif">Today's Briefing</span>
+          <span style="display:flex;align-items:center;gap:10px;height:32px;padding:0 12px;border-radius:7px;color:#656C7A;font:450 13px/1 'Pretendard Variable',sans-serif">전체 보기<span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#656C7A">128</span></span>
+          <span style="display:flex;align-items:center;gap:10px;height:32px;padding:0 12px;border-radius:7px;color:#656C7A;font:450 13px/1 'Pretendard Variable',sans-serif">속보<span style="margin-left:auto;width:5px;height:5px;border-radius:99px;background:#D6323A"></span></span>
+          <div style="height:10px"></div>
+          <span style="display:flex;align-items:center;gap:10px;height:32px;padding:0 12px;border-radius:7px;background:#EAE8E2;color:#14171C;font:500 13px/1 'Pretendard Variable',sans-serif">물류<span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#656C7A">42</span></span>
+          <span style="display:flex;align-items:center;gap:10px;height:32px;padding:0 12px;border-radius:7px;color:#656C7A;font:450 13px/1 'Pretendard Variable',sans-serif">경제<span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#656C7A">31</span></span>
+          <span style="display:flex;align-items:center;gap:10px;height:32px;padding:0 12px;border-radius:7px;color:#656C7A;font:450 13px/1 'Pretendard Variable',sans-serif">AI<span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#656C7A">27</span></span>
+          <span style="display:flex;align-items:center;gap:10px;height:32px;padding:0 12px;border-radius:7px;color:#656C7A;font:450 13px/1 'Pretendard Variable',sans-serif">글로벌<span style="margin-left:auto;font:500 11px/1 'JetBrains Mono',monospace;color:#656C7A">24</span></span>
+        </nav>
+
+        <main style="padding:22px 24px 30px;display:flex;flex-direction:column;gap:18px;min-width:0">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#8A6420">TODAY'S BRIEFING</span>
+            <h2 style="margin:0;font:700 23px/1.25 'Pretendard Variable',sans-serif;letter-spacing:-.022em;color:#14171C">오늘 아침 확인해야 할 것</h2>
+          </div>
+          <article style="padding:20px;background:#FFFFFF;border:1px solid rgba(138,100,32,.28);border-radius:12px;display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#FFFFFF;background:#8A6420;padding:4px 7px;border-radius:3px">TOP STORY</span><span style="font:450 11.5px/1 'JetBrains Mono',monospace;color:#656C7A">물류 · 조선비즈 · 12:41</span></div>
+            <h3 style="margin:0;font:700 26px/1.35 'Pretendard Variable',sans-serif;letter-spacing:-.028em;color:#14171C;word-break:keep-all">쿠팡, 대구 풀필먼트센터 증설… 새벽배송 권역 영남권 전역으로 확대</h3>
+            <p style="margin:0;font:400 13.5px/1.75 'Pretendard Variable',sans-serif;color:#5A6070;word-break:keep-all;text-wrap:pretty">3,200억원을 투입해 대구 국가산단 부지에 3만 평 규모 센터를 짓는다. 내년 하반기 가동 시 영남권 새벽배송 커버리지가 41%에서 90% 이상으로 올라간다.</p>
+            <div style="display:flex;gap:7px;margin-top:3px">
+              <span style="height:30px;display:flex;align-items:center;padding:0 12px;border-radius:7px;background:#8A6420;color:#FFF;font:600 12px/1 'Pretendard Variable',sans-serif">주요 내용</span>
+              <span style="height:30px;display:flex;align-items:center;padding:0 12px;border-radius:7px;border:1px solid rgba(46,139,87,.4);color:#2E8B57;font:500 12px/1 'Pretendard Variable',sans-serif">Insight</span>
+              <span style="height:30px;display:flex;align-items:center;padding:0 12px;border-radius:7px;border:1px solid rgba(20,23,28,.14);color:#656C7A;font:450 12px/1 'Pretendard Variable',sans-serif">원문</span>
+            </div>
+          </article>
+          <div style="display:flex;flex-direction:column">
+            <article style="display:grid;grid-template-columns:26px minmax(0,1fr);gap:12px;padding:14px 4px;border-bottom:1px solid rgba(20,23,28,.08)">
+              <span style="font:600 11.5px/1.5 'JetBrains Mono',monospace;color:#8A6420;text-align:right">02</span>
+              <div style="display:flex;flex-direction:column;gap:6px"><h3 style="margin:0;font:650 17px/1.45 'Pretendard Variable',sans-serif;letter-spacing:-.018em;color:#14171C;word-break:keep-all">한은, 기준금리 2.50% 동결… "환율·가계부채 흐름 더 지켜볼 것"</h3><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#656C7A">경제 · 연합뉴스 · 11:58</span></div>
+            </article>
+            <article style="display:grid;grid-template-columns:26px minmax(0,1fr);gap:12px;padding:14px 4px;border-bottom:1px solid rgba(20,23,28,.08)">
+              <span style="font:600 11.5px/1.5 'JetBrains Mono',monospace;color:#8A6420;text-align:right">03</span>
+              <div style="display:flex;flex-direction:column;gap:6px"><h3 style="margin:0;font:650 17px/1.45 'Pretendard Variable',sans-serif;letter-spacing:-.018em;color:#14171C;word-break:keep-all">엔비디아, 차세대 추론 칩 공급 일정 앞당겨… 국내 HBM 업계 수혜 전망</h3><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#656C7A">AI · 전자신문 · 10:20</span></div>
+            </article>
+          </div>
+        </main>
+
+        <aside style="padding:22px 18px;border-left:1px solid rgba(20,23,28,.08);display:flex;flex-direction:column;gap:14px;background:#FFFFFF;min-height:420px">
+          <span style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#656C7A">MARKETS</span>
+          <div style="border:1px solid rgba(20,23,28,.1);border-radius:9px;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-bottom:1px solid rgba(20,23,28,.07)"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#656C7A">KOSPI</span><span style="font:600 15px/1 'JetBrains Mono',monospace;color:#14171C;font-variant-numeric:tabular-nums">3,204.55</span></div><span style="font:500 11px/1.5 'JetBrains Mono',monospace;color:#D6323A;text-align:right">▲12.31<br>+0.39%</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-bottom:1px solid rgba(20,23,28,.07)"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#656C7A">KOSDAQ</span><span style="font:600 15px/1 'JetBrains Mono',monospace;color:#14171C;font-variant-numeric:tabular-nums">812.40</span></div><span style="font:500 11px/1.5 'JetBrains Mono',monospace;color:#1D4ED8;text-align:right">▼3.08<br>-0.38%</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 13px"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.08em;color:#656C7A">NASDAQ</span><span style="font:600 15px/1 'JetBrains Mono',monospace;color:#14171C;font-variant-numeric:tabular-nums">20,118.72</span></div><span style="font:500 11px/1.5 'JetBrains Mono',monospace;color:#D6323A;text-align:right">▲96.44<br>+0.48%</span></div>
+          </div>
+          <span style="font:600 10px/1 'JetBrains Mono',monospace;letter-spacing:.18em;color:#656C7A;margin-top:4px">키워드 랭킹</span>
+          <div style="display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid rgba(20,23,28,.07)"><span style="font:600 11px/1 'JetBrains Mono',monospace;color:#8A6420;width:12px">1</span><span style="font:500 12.5px/1 'Pretendard Variable',sans-serif;color:#14171C">기준금리 동결</span><span style="margin-left:auto;font:500 10.5px/1 'JetBrains Mono',monospace;color:#D6323A">▲6</span></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid rgba(20,23,28,.07)"><span style="font:600 11px/1 'JetBrains Mono',monospace;color:#8A6420;width:12px">2</span><span style="font:500 12.5px/1 'Pretendard Variable',sans-serif;color:#14171C">HBM4</span><span style="margin-left:auto;font:500 10.5px/1 'JetBrains Mono',monospace;color:#D6323A">▲3</span></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 2px"><span style="font:600 11px/1 'JetBrains Mono',monospace;color:#656C7A;width:12px">3</span><span style="font:500 12.5px/1 'Pretendard Variable',sans-serif;color:#5A6070">새벽배송</span><span style="margin-left:auto;font:500 10.5px/1 'JetBrains Mono',monospace;color:#656C7A">—</span></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:rgba(20,23,28,.5)">10 — 모바일 390</div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap">
+
+      <div style="width:390px;height:800px;background:#0A0D14;border-radius:22px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 18px 50px -24px rgba(0,0,0,.5)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px 0;font:600 12px/1 'JetBrains Mono',monospace;color:#E8E6E1"><span>13:04</span><span style="display:flex;gap:5px;color:#8B93A7">◦◦◦ ▮</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 12px">
+          <div style="display:flex;align-items:center;gap:8px"><img src="rss-icon.png" alt="" style="height:19px;width:auto"><span style="font:750 16px/1 'Pretendard Variable',sans-serif;letter-spacing:-.02em;color:#E8E6E1">Beyond News</span></div>
+          <div style="display:flex;gap:12px;color:#8B93A7"><svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></div>
+        </div>
+        <div style="display:flex;gap:7px;padding:0 18px 12px;overflow:hidden">
+          <span style="flex:none;font:600 12px/1 'Pretendard Variable',sans-serif;color:#0A0D14;background:#D9AE6A;padding:8px 13px;border-radius:99px">브리핑</span>
+          <span style="flex:none;font:450 12px/1 'Pretendard Variable',sans-serif;color:#8B93A7;border:1px solid rgba(232,230,225,.1);padding:8px 13px;border-radius:99px">속보</span>
+          <span style="flex:none;font:450 12px/1 'Pretendard Variable',sans-serif;color:#8B93A7;border:1px solid rgba(232,230,225,.1);padding:8px 13px;border-radius:99px">물류</span>
+          <span style="flex:none;font:450 12px/1 'Pretendard Variable',sans-serif;color:#8B93A7;border:1px solid rgba(232,230,225,.1);padding:8px 13px;border-radius:99px">경제</span>
+        </div>
+        <div style="display:flex;gap:14px;padding:10px 18px;background:#0C1019;border-top:1px solid rgba(232,230,225,.06);border-bottom:1px solid rgba(232,230,225,.06);overflow:hidden">
+          <div style="display:flex;flex-direction:column;gap:3px;flex:none"><span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#6C7488">KOSPI</span><span style="font:600 12.5px/1 'JetBrains Mono',monospace;color:#E8E6E1">3,204.55 <span style="color:#F2555A">+0.39%</span></span></div>
+          <span style="width:1px;background:rgba(232,230,225,.08);flex:none"></span>
+          <div style="display:flex;flex-direction:column;gap:3px;flex:none"><span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#6C7488">KOSDAQ</span><span style="font:600 12.5px/1 'JetBrains Mono',monospace;color:#E8E6E1">812.40 <span style="color:#3B82F6">-0.38%</span></span></div>
+        </div>
+        <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+          <article style="padding:18px;border-bottom:1px solid rgba(232,230,225,.06);display:flex;flex-direction:column;gap:9px">
+            <div style="display:flex;align-items:center;gap:7px"><span style="font:600 9px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#0A0D14;background:#D9AE6A;padding:4px 6px;border-radius:3px">TOP</span><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488">물류 · 조선비즈 · 12:41</span></div>
+            <h3 style="margin:0;font:700 20px/1.45 'Pretendard Variable',sans-serif;letter-spacing:-.025em;color:#F2F0EB;word-break:keep-all">쿠팡, 대구 풀필먼트센터 증설… 새벽배송 권역 영남권 전역으로 확대</h3>
+            <p style="margin:0;font:400 13px/1.7 'Pretendard Variable',sans-serif;color:#9AA2B4;word-break:keep-all">3,200억원 투입, 2027년 하반기 가동. 영남권 커버리지 41% → 90%.</p>
+            <div style="display:flex;gap:7px;margin-top:2px"><span style="font:600 12px/1 'Pretendard Variable',sans-serif;color:#0A0D14;background:#D9AE6A;padding:9px 14px;border-radius:7px">주요 내용</span><span style="font:500 12px/1 'Pretendard Variable',sans-serif;color:#7BC49A;border:1px solid rgba(122,196,154,.35);padding:9px 14px;border-radius:7px">Insight</span></div>
+          </article>
+          <article style="padding:16px 18px;border-bottom:1px solid rgba(232,230,225,.06);display:grid;grid-template-columns:24px minmax(0,1fr);gap:11px">
+            <span style="font:600 11.5px/1.5 'JetBrains Mono',monospace;color:#D9AE6A">02</span>
+            <div style="display:flex;flex-direction:column;gap:6px"><h3 style="margin:0;font:650 16px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.018em;color:#E8E6E1;word-break:keep-all">한은, 기준금리 2.50% 동결… "환율·가계부채 흐름 더 지켜볼 것"</h3><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488">경제 · 연합뉴스 · 11:58</span></div>
+          </article>
+          <article style="padding:16px 18px;border-bottom:1px solid rgba(232,230,225,.06);display:grid;grid-template-columns:24px minmax(0,1fr);gap:11px;opacity:.6">
+            <span style="font:600 11.5px/1.5 'JetBrains Mono',monospace;color:#8B93A7">03</span>
+            <div style="display:flex;flex-direction:column;gap:6px"><h3 style="margin:0;font:450 16px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.018em;color:#9AA2B4;word-break:keep-all">부산항 신항 3부두 크레인 가동 재개</h3><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#8B93A7">속보 · 뉴시스 · 09:33 · 읽음</span></div>
+          </article>
+          <article style="padding:16px 18px;border-bottom:1px solid rgba(232,230,225,.06);display:grid;grid-template-columns:24px minmax(0,1fr);gap:11px">
+            <span style="font:600 11.5px/1.5 'JetBrains Mono',monospace;color:#D9AE6A">04</span>
+            <div style="display:flex;flex-direction:column;gap:6px"><h3 style="margin:0;font:650 16px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.018em;color:#E8E6E1;word-break:keep-all">SCFI 4주 연속 하락… 미주 서안 운임 1,900달러선 아래로</h3><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#8B93A7">물류 · 한국경제 · 09:12</span></div>
+          </article>
+          <article style="padding:16px 18px;border-bottom:1px solid rgba(232,230,225,.06);display:grid;grid-template-columns:24px minmax(0,1fr);gap:11px">
+            <span style="font:600 11.5px/1.5 'JetBrains Mono',monospace;color:#D9AE6A">05</span>
+            <div style="display:flex;flex-direction:column;gap:6px"><h3 style="margin:0;font:650 16px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.018em;color:#E8E6E1;word-break:keep-all">인천공항 항공화물 물동량 7월 기준 역대 최대</h3><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#8B93A7">물류 · 조선비즈 · 08:02</span></div>
+          </article>
+          <article style="padding:16px 18px;display:grid;grid-template-columns:24px minmax(0,1fr);gap:11px;opacity:.6">
+            <span style="font:600 11.5px/1.5 'JetBrains Mono',monospace;color:#8B93A7">06</span>
+            <div style="display:flex;flex-direction:column;gap:6px"><h3 style="margin:0;font:450 16px/1.5 'Pretendard Variable',sans-serif;letter-spacing:-.018em;color:#9AA2B4;word-break:keep-all">CJ대한통운, 로봇 분류 라인 5개 터미널로 확대</h3><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#8B93A7">물류 · 매일경제 · 08:40 · 읽음</span></div>
+          </article>
+        </div>
+        <div style="display:flex;justify-content:space-around;padding:12px 0 22px;border-top:1px solid rgba(232,230,225,.08);background:#0C1019">
+          <span style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#D9AE6A;font:600 10px/1 'Pretendard Variable',sans-serif"><svg style="width:19px;height:19px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>브리핑</span>
+          <span style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#5C6478;font:450 10px/1 'Pretendard Variable',sans-serif"><svg style="width:19px;height:19px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>섹션</span>
+          <span style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#5C6478;font:450 10px/1 'Pretendard Variable',sans-serif"><svg style="width:19px;height:19px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><rect x="7" y="9" width="4" height="6" rx="1"/><rect x="15" y="5" width="4" height="10" rx="1"/></svg>증시</span>
+          <span style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#5C6478;font:450 10px/1 'Pretendard Variable',sans-serif"><svg style="width:19px;height:19px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>저장</span>
+        </div>
+      </div>
+
+      <div style="width:390px;height:800px;background:#0A0D14;border-radius:22px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 18px 50px -24px rgba(0,0,0,.5);position:relative">
+        <div style="position:absolute;inset:0;background:rgba(5,7,12,.72)"></div>
+        <div style="position:relative;background:#10141F;border-top:1px solid rgba(232,230,225,.1);border-radius:18px 18px 0 0;padding:14px 20px 26px;display:flex;flex-direction:column;gap:16px;max-height:78%">
+          <span style="width:38px;height:4px;border-radius:99px;background:#2A3145;align-self:center"></span>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:7px"><span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:#D9AE6A">주요 내용</span><span style="font:450 11px/1 'JetBrains Mono',monospace;color:#6C7488">조선비즈 · 12:41</span></div>
+            <h3 style="margin:0;font:700 19px/1.45 'Pretendard Variable',sans-serif;letter-spacing:-.022em;color:#F2F0EB;word-break:keep-all">쿠팡, 대구 풀필먼트센터 증설… 새벽배송 권역 영남권 전역으로 확대</h3>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;gap:10px"><span style="flex:none;width:16px;font:600 10.5px/1.7 'JetBrains Mono',monospace;color:#D9AE6A">01</span><p style="margin:0;font:400 13.5px/1.75 'Pretendard Variable',sans-serif;color:#C9CCD6;word-break:keep-all">대구 국가산단 3만 평 부지에 3,200억원을 투입, 2027년 하반기 가동 목표로 착공한다.</p></div>
+            <div style="display:flex;gap:10px"><span style="flex:none;width:16px;font:600 10.5px/1.7 'JetBrains Mono',monospace;color:#D9AE6A">02</span><p style="margin:0;font:400 13.5px/1.75 'Pretendard Variable',sans-serif;color:#C9CCD6;word-break:keep-all">영남권 새벽배송 커버리지 41% → 90% 이상, 신규 고용 2,000명 규모.</p></div>
+            <div style="display:flex;gap:10px"><span style="flex:none;width:16px;font:600 10.5px/1.7 'JetBrains Mono',monospace;color:#D9AE6A">03</span><p style="margin:0;font:400 13.5px/1.75 'Pretendard Variable',sans-serif;color:#C9CCD6;word-break:keep-all">경쟁사 대비 지방 거점 확보가 1년 이상 앞선다.</p></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:2px">
+            <span style="flex:1;text-align:center;font:500 13px/1 'Pretendard Variable',sans-serif;color:#7BC49A;border:1px solid rgba(122,196,154,.35);padding:13px 0;border-radius:9px">Insight</span>
+            <span style="flex:1;text-align:center;font:450 13px/1 'Pretendard Variable',sans-serif;color:#8B93A7;border:1px solid rgba(232,230,225,.11);padding:13px 0;border-radius:9px">원문</span>
+            <span style="flex:none;width:48px;display:flex;align-items:center;justify-content:center;color:#0A0D14;background:#D9AE6A;border-radius:9px"><svg style="width:17px;height:17px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+</x-dc>
+</body>
+</html>
