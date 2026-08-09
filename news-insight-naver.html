@@ -28,6 +28,11 @@
           paper: 'rgb(var(--c-paper) / <alpha-value>)',
           muted: 'rgb(var(--c-muted) / <alpha-value>)',
           panel: 'rgb(var(--c-panel) / <alpha-value>)',
+          // [추가] 시안(Beyond News UI 개선안)에 있는데 여기 없던 계조 · 의미색
+          rail:   'rgb(var(--c-rail) / <alpha-value>)',   // 헤더 · 우측 마켓 레일 배경
+          muted2: 'rgb(var(--c-muted2) / <alpha-value>)', // muted 보다 한 단계 더 흐린 글자
+          up:     'rgb(var(--c-up) / <alpha-value>)',     // 상승(빨강)
+          down:   'rgb(var(--c-down) / <alpha-value>)',   // 하락(파랑)
         },
         fontFamily: {
           // [수정] Pretendard 는 이 PC에 설치돼 있을 때만 쓰인다. 없으면 그냥
@@ -87,22 +92,30 @@
 <style>
   /* 테마 색상 (다크 = 기본값) · tailwind.config의 rgb(var(--c-*)) 가 이 값을 읽는다 */
   :root {
-    --c-ink: 10 15 28;      --c-ink2: 17 26 44;    --c-ink3: 24 35 57;
-    --c-line: 34 49 77;     --c-gold: 212 160 84;  --c-gold2: 232 195 132;
-    --c-wire: 91 141 239;   --c-paper: 236 232 220;--c-muted: 136 145 166;
-    --c-panel: 42 59 95;
-    --c-scrollbar: 34 49 77;
-    --c-scrollbar-hover: 44 61 94;
+    /* [수정] 시안 01번(다크) 값으로 교체. 구분선(--c-line)을 크게 낮춰 격자가 튀지 않게 한다. */
+    --c-ink: 10 13 20;      --c-ink2: 16 20 31;    --c-ink3: 21 26 39;
+    --c-line: 26 31 44;     --c-gold: 217 174 106; --c-gold2: 239 201 141;
+    --c-wire: 59 130 246;   --c-paper: 232 230 225;--c-muted: 139 147 167;
+    --c-panel: 34 40 58;
+    --c-rail: 12 16 25;     --c-muted2: 108 116 136;
+    --c-up: 242 85 90;      --c-down: 59 130 246;
+    --c-scrollbar: 26 31 44;
+    --c-scrollbar-hover: 40 46 62;
   }
   /* 화이트 테마 */
   :root[data-theme="light"] {
-    --c-ink: 255 255 255;   --c-ink2: 245 246 248; --c-ink3: 229 233 240;
-    /* 화이트 테마에서는 금색 대신 채도를 낮춘 파랑을 쓴다 (강조 색은 --c-gold 하나로 모여 있음) */
-    --c-line: 210 216 226;  --c-gold: 47 101 175;  --c-gold2: 31 71 129;
-    --c-wire: 37 99 235;    --c-paper: 22 24 29;   --c-muted: 91 99 115;
+    /* [수정] 시안 09번 : 페이지는 크림(#F4F3EF), 카드·헤더는 흰색으로 한 단계 띄운다.
+       (기존에는 반대로 페이지가 흰색이고 카드가 회색이었다) */
+    --c-ink: 244 243 239;   --c-ink2: 255 255 255; --c-ink3: 234 232 226;
+    /* 화이트 테마에서는 금색 대신 채도를 낮춘 파랑을 쓴다 (강조 색은 --c-gold 하나로 모여 있음)
+       → 시안은 어두운 금색이지만, 파랑을 유지하기로 결정했다. */
+    --c-line: 218 217 212;  --c-gold: 47 101 175;  --c-gold2: 31 71 129;
+    --c-wire: 37 99 235;    --c-paper: 20 23 28;   --c-muted: 101 108 122;
     --c-panel: 236 240 247;
-    --c-scrollbar: 197 204 215;
-    --c-scrollbar-hover: 168 177 191;
+    --c-rail: 255 255 255;  --c-muted2: 138 144 156;
+    --c-up: 214 50 58;      --c-down: 29 78 216;
+    --c-scrollbar: 210 209 203;
+    --c-scrollbar-hover: 180 179 172;
   }
   /* 화이트 테마에서 어두운 배경을 전제로 한 amber 계열 배너 색 보정 */
   :root[data-theme="light"] .text-amber-200 { color: #92400e; }
@@ -146,6 +159,17 @@
 
   html { font-size: 15px; }
   body { font-family: 'Pretendard Variable', Pretendard, 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; }
+
+  /* [추가] 시안 타이포 : 한글 제목은 자간을 좁혀야 덩어리로 읽힌다.
+     시안은 큰 제목 -.022em / 기사 제목 -.018em 을 쓴다.
+     크기는 건드리지 않고 자간·줄간격만 맞춘다. */
+  h1, h2 { letter-spacing: -0.022em; }
+  h3, h4 { letter-spacing: -0.018em; }
+  .row-title { letter-spacing: -0.018em; line-height: 1.45; }
+  /* 라벨용 넓은 자간(시안 .16em)은 SECTION · MARKETS 같은 '영문 대문자'에만 쓴다.
+     현재 tracking-widest 가 붙어 있는 곳은 전부 한글 배지(속보 · 경제 …)라
+     넓히면 오히려 글자가 흩어져 보인다. 영문 라벨이 생길 때 이 클래스를 붙인다. */
+  .label-wide { letter-spacing: 0.16em; }
 
   /* [추가] 모바일에서 확대/축소·스크롤 중 화면이 좌우로 흔들리는 문제 방지
      - 가로 스크롤 자체를 없애고(가로로 밀 여지를 제거)
@@ -575,6 +599,9 @@
       --c-line: 199 205 214;  --c-gold: 150 105 25;  --c-gold2: 120 82 15;
       --c-wire: 30 78 190;    --c-paper: 20 22 27;   --c-muted: 92 99 112;
       --c-panel: 240 242 246;
+      /* [추가] 새로 생긴 토큰도 인쇄용(흰 종이) 값으로 덮어쓴다 */
+      --c-rail: 255 255 255;  --c-muted2: 130 137 150;
+      --c-up: 190 40 48;      --c-down: 25 65 180;
     }
     :root .text-amber-200 { color: #92400e; }
 
@@ -622,7 +649,7 @@
 
   <!-- 헤더 + 지수 티커 (스크롤해도 상단 고정) -->
   <div class="sticky top-0 z-40" id="top-bar">
-  <header id="app-header" class="border-b border-line bg-ink/90 backdrop-blur px-4 py-3 lg:px-6 lg:py-4 flex justify-between items-center">
+  <header id="app-header" class="border-b border-line bg-rail/90 backdrop-blur px-4 py-3 lg:px-6 lg:py-4 flex justify-between items-center">
     <div class="flex items-center gap-2 lg:gap-3 min-w-0">
       <!-- [추가] 모바일 전용 : 좌측 SECTION 드로어 열기 -->
       <button id="nav-toggle-btn" onclick="toggleNav()" aria-label="섹션 메뉴 열기" aria-expanded="false"
@@ -700,7 +727,7 @@
   </header>
 
   <!-- 지수 티커 -->
-  <div id="ticker-viewport" class="ticker-viewport bg-ink2 border-b border-line py-2 select-none">
+  <div id="ticker-viewport" class="ticker-viewport bg-rail border-b border-line py-2 select-none">
     <div class="ticker-track" id="ticker-track">
       <span id="ticker-content" class="flex items-center gap-12 pr-12 font-mono text-muted"></span>
       <span id="ticker-content-2" class="flex items-center gap-12 pr-12 font-mono text-muted" aria-hidden="true"></span>
@@ -2852,7 +2879,7 @@
       const d = scfiData;
       const isUp = d.change > 0, isDown = d.change < 0;
       const arrow = isUp ? '▲' : isDown ? '▼' : '－';
-      const colorClass = isUp ? 'text-rose-400' : isDown ? 'text-blue-400' : 'text-muted';
+      const colorClass = isUp ? 'text-up' : isDown ? 'text-down' : 'text-muted';
       const fmt = n => Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const changeText = d.change === 0
         ? '보합'
@@ -3071,7 +3098,7 @@
       const diffPct = first.value ? (diff / first.value) * 100 : 0;
       const up = diff > 0, down = diff < 0;
       const lineColor = up ? '#fb7185' : down ? '#60a5fa' : '#c8a45c';   // 상승 붉은색 / 하락 파란색 (국내 관행)
-      const sumClass = up ? 'text-rose-400' : down ? 'text-blue-400' : 'text-muted';
+      const sumClass = up ? 'text-up' : down ? 'text-down' : 'text-muted';
       const arrow = up ? '▲' : down ? '▼' : '－';
 
       // 가로 눈금선 4칸 + 왼쪽 값 라벨
@@ -3164,7 +3191,7 @@
         dot.setAttribute('opacity', '1');
 
         const prev = best > 0 ? pts[best - 1].value : null;
-        const wow = prev === null ? '' : `<br><span class="${p.value > prev ? 'text-rose-400' : p.value < prev ? 'text-blue-400' : 'text-muted'}">전주대비 ${p.value === prev ? '보합' : `${p.value > prev ? '▲' : '▼'}${numText(Math.abs(p.value - prev))}p`}</span>`;
+        const wow = prev === null ? '' : `<br><span class="${p.value > prev ? 'text-up' : p.value < prev ? 'text-down' : 'text-muted'}">전주대비 ${p.value === prev ? '보합' : `${p.value > prev ? '▲' : '▼'}${numText(Math.abs(p.value - prev))}p`}</span>`;
         tip.innerHTML = `<span class="text-muted">${p.date}</span><br>${numText(p.value)}${wow}`;
         tip.classList.remove('hidden');
 
@@ -3220,7 +3247,7 @@
       }
       const isUp = item.change > 0, isDown = item.change < 0;
       const arrow = isUp ? '▲' : isDown ? '▼' : '－';
-      const colorClass = isUp ? 'text-rose-400' : isDown ? 'text-blue-400' : 'text-muted';
+      const colorClass = isUp ? 'text-up' : isDown ? 'text-down' : 'text-muted';
       const changeText = item.change === 0
         ? '보합'
         : `${arrow}${numText(Math.abs(item.change))}${card.unit || 'p'} (${arrow}${Math.abs(item.changePercent).toFixed(2)}%)`;
@@ -3449,7 +3476,7 @@
       const diffPct = from ? (diff / from) * 100 : 0;
       const up = diff > 0, down = diff < 0;
       const lineColor = up ? '#fb7185' : down ? '#60a5fa' : '#c8a45c';   // 상승 붉은색 / 하락 파란색 (국내 관행)
-      const sumClass = up ? 'text-rose-400' : down ? 'text-blue-400' : 'text-muted';
+      const sumClass = up ? 'text-up' : down ? 'text-down' : 'text-muted';
       const arrow = up ? '▲' : down ? '▼' : '－';
 
       // 가로 눈금선 4칸 + 왼쪽 값 라벨
@@ -3549,7 +3576,7 @@
         dot.setAttribute('opacity', '1');
 
         const prev = best > 0 ? pts[best - 1].value : null;
-        const step = prev === null ? '' : `<br><span class="${p.value > prev ? 'text-rose-400' : p.value < prev ? 'text-blue-400' : 'text-muted'}">직전 대비 ${p.value === prev ? '보합' : `${p.value > prev ? '▲' : '▼'}${numText(Math.abs(p.value - prev))}${unit}`}</span>`;
+        const step = prev === null ? '' : `<br><span class="${p.value > prev ? 'text-up' : p.value < prev ? 'text-down' : 'text-muted'}">직전 대비 ${p.value === prev ? '보합' : `${p.value > prev ? '▲' : '▼'}${numText(Math.abs(p.value - prev))}${unit}`}</span>`;
         tip.innerHTML = `<span class="text-muted">${indexTipLabel(p.t, off, indexChartRange)}</span><br>${numText(p.value)}${step}`;
         tip.classList.remove('hidden');
 
@@ -4138,7 +4165,7 @@
     function formatIndexEntry(item) {
       const isUp = item.change > 0, isDown = item.change < 0;
       const arrow = isUp ? '▲' : isDown ? '▼' : '－';
-      const colorClass = isUp ? 'text-rose-400' : isDown ? 'text-blue-400' : 'text-muted';
+      const colorClass = isUp ? 'text-up' : isDown ? 'text-down' : 'text-muted';
       const priceStr = item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const changeStr = Math.abs(item.change).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const pctStr = Math.abs(item.changePercent).toFixed(2);
@@ -4164,7 +4191,7 @@
     function formatExtraEntry(item) {
       const isUp = item.change > 0, isDown = item.change < 0;
       const arrow = isUp ? '▲' : isDown ? '▼' : '－';
-      const colorClass = isUp ? 'text-rose-400' : isDown ? 'text-blue-400' : 'text-muted';
+      const colorClass = isUp ? 'text-up' : isDown ? 'text-down' : 'text-muted';
       const changeText = item.change === 0
         ? '(동결)'
         : item.changePercent !== undefined
@@ -4529,8 +4556,8 @@
       if (!Array.isArray(stocks) || !stocks.length) return '';
       // 지수 위젯과 같은 국내 증시 관례 : 수혜(오름)=빨강, 부담(내림)=파랑
       const tagStyle = {
-        '수혜': 'text-rose-400 border-rose-400/40 bg-rose-400/10',
-        '부담': 'text-blue-400 border-blue-400/40 bg-blue-400/10',
+        '수혜': 'text-up border-up/40 bg-up/10',
+        '부담': 'text-down border-down/40 bg-down/10',
       };
       const rows = stocks.map(s => {
         const tag = String(s.tag || '중립');
