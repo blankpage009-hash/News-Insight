@@ -217,12 +217,19 @@
   /* --- 데스크톱 : 우측 마켓 레일 --- */
   #market-rail { display: none; }
   @media (min-width: 1024px) {
+    /* 위 여백은 좌측 사이드바(.side-scroll)와 똑같은 규칙을 쓴다.
+       '가만히 있을 때 위치(margin-top)' 와 '틀고정 위치(top)' 를 같은 값으로 맞춰야
+       스크롤을 시작해도 상단바와의 간격이 변하지 않고, 좌측 SECTION · 본문과 윗선이 맞는다. */
     #market-rail {
       display: flex;
       flex-direction: column;
       gap: 0.85rem;
       position: sticky;
-      top: 1rem;
+      margin-top: 1.5rem;
+      top: calc(var(--stick-top, 121px) + 1.5rem);
+      max-height: calc(100vh - var(--stick-top, 121px) - 3rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
     }
   }
   /* 지수 목록 상자 : 칸을 나누는 건 테두리 하나뿐 (시안 240행) */
