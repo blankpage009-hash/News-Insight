@@ -494,6 +494,16 @@
   .pop-btn.is-gold { background: rgb(var(--c-gold)); color: rgb(var(--c-ink)); font-weight: 600; }
   .pop-btn.is-gold:hover { background: rgb(var(--c-gold2)); }
 
+  /* [추가] 저장(북마크) 버튼이 '담긴 상태'일 때.
+     Tailwind 유틸리티(text-muted 등)보다 선택자를 한 칸 더 구체적으로 써서 이긴다.
+     .pop-btn 규칙과는 특이도가 같으므로 반드시 그 아래에 둔다. */
+  .save-btn.is-saved {
+    color: rgb(var(--c-gold));
+    border-color: rgb(var(--c-gold) / .45);
+    background: rgb(var(--c-gold) / .12);
+  }
+  .save-btn.is-saved:hover { background: rgb(var(--c-gold) / .2); color: rgb(var(--c-gold2)); }
+
   /* 화면 설정(시안 07번) : 테마 3종 썸네일 + 설정 줄 */
   .theme-card {
     flex: 1; display: flex; flex-direction: column; gap: .5rem;
@@ -921,6 +931,12 @@
       border-radius: 99px;
       background: rgb(var(--c-panel));
     }
+
+    /* [추가] 아래로 쓸어서 닫기.
+       올라오는 애니메이션(sheet-in)은 transform 을 잡고 있어 인라인 transform 을 이긴다.
+       손으로 끄는 동안에는 그 애니메이션을 꺼야 손가락을 따라온다. */
+    [id$="-modal"] .modal-pop.sheet-dragging { animation: none; transition: none; }
+    [id$="-modal"] .modal-pop.sheet-settle   { animation: none; transition: transform .2s ease-out; }
   }
 
   /* 아주 좁은 화면(360px 미만, 예전 소형 폰)에서는 한 단계 더 줄여야 겨우 들어간다 */
@@ -1070,8 +1086,9 @@
         <span id="current-time" class="text-gold tabular-nums"></span>
       </div>
       <!-- [추가] 화면 설정(테마·기본 노출 건수) : 관리자가 아니어도 누구나 쓸 수 있다 -->
+      <!-- [수정] 모바일에서도 다시 보여준다. 하단 탭 바의 '설정' 자리를 '저장'에 내줬기 때문이다. (Phase 7 A1) -->
       <button id="prefs-btn" onclick="openPrefsModal()" aria-label="화면 설정" title="화면 설정 (테마 · 기본 노출 건수)"
-        class="hidden lg:inline-flex -mr-1 p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
+        class="inline-flex -mr-1 p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/>
         </svg>
@@ -1541,6 +1558,12 @@
             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             관련 기사
           </button>
+          <!-- [추가] 저장(북마크) : 이 브라우저의 보관함에 담는다 -->
+          <button id="brief-save-btn" onclick="toggleSave(currentBriefId)" data-save-style="pop" data-save-key=""
+            aria-pressed="false" aria-label="기사 저장" title="기사 저장" class="save-btn pop-btn is-plain">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>
+            저장
+          </button>
           <!-- 'PDF 저장' : 팝업 내용을 인쇄창(→ PDF로 저장)으로 넘긴다. 시안의 오른쪽 끝 채움 버튼 자리다. -->
           <button onclick="savePopupAsPdf('brief')" title="PDF 저장" class="pop-btn is-gold ml-auto">
             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
@@ -1575,6 +1598,12 @@
             원문 보기
             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
           </a>
+          <!-- [추가] 저장(북마크) -->
+          <button id="insight-save-btn" onclick="toggleSave(currentInsightId)" data-save-style="pop" data-save-key=""
+            aria-pressed="false" aria-label="기사 저장" title="기사 저장" class="save-btn pop-btn is-plain">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>
+            저장
+          </button>
           <button onclick="savePopupAsPdf('insight')" title="PDF 저장" class="pop-btn is-gold ml-auto">
             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
             PDF 저장
@@ -1705,7 +1734,8 @@
       economy_macro: '거시경제/시장',
       sports: '스포츠',
       sports_pohang: '포항스틸러스', sports_kfootball: '국내축구', sports_wfootball: '해외축구',
-      sports_baseball: '해외야구', sports_etc: '기타'
+      sports_baseball: '해외야구', sports_etc: '기타',
+      saved: '저장한 기사'   // [추가] 서버에서 받아오지 않는 화면. localStorage 보관함을 그대로 보여준다.
     };
     const categoryIcons = {
       briefing: 'sparkles', all: 'grid', breaking: 'siren', logistics: 'package',
@@ -1719,7 +1749,8 @@
       economy_macro: 'line-chart',
       sports: 'trophy',
       sports_pohang: 'trophy', sports_kfootball: 'trophy', sports_wfootball: 'trophy',
-      sports_baseball: 'trophy', sports_etc: 'trophy'
+      sports_baseball: 'trophy', sports_etc: 'trophy',
+      saved: 'bookmark'
     };
 
     const categoryQueryMap = {
@@ -1786,6 +1817,7 @@
       moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
       monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
       lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+      bookmark: '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/>',
       link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
       lightbulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
       'chevron-down': '<path d="m6 9 6 6 6-6"/>',
@@ -1798,6 +1830,138 @@
     }
 
     const NAVER_PROXY_BASE = '';
+
+    // ---------------------------------------------------------------
+    // [추가] 기사 저장(북마크) — Phase 7 A1
+    //   서버에 올리지 않고 이 브라우저에만 담는다(localStorage).
+    //   기사 id(nextId)는 새로고침하면 다시 0부터 매겨지므로 열쇠로 쓸 수 없다.
+    //   → '원문 보기'와 같은 주소(articleLink)를 열쇠로 삼는다. 같은 기사는 늘 같은 주소다.
+    // ---------------------------------------------------------------
+    const SAVED_STORAGE_KEY = 'newsinsight:saved:v1';
+    const SAVED_MAX = 300;          // 이보다 많이 담기면 오래된 것부터 버린다
+    let savedArticles = [];         // 최신순. { key, title, source, url, naverUrl, datetime, summary, cats, savedAt }
+
+    function savedKeyOf(item) {
+      if (!item) return '';
+      return articleLink(item) || item.naverUrl || item.url || item.title || '';
+    }
+
+    function loadSavedArticles() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(SAVED_STORAGE_KEY) || '[]');
+        savedArticles = Array.isArray(raw) ? raw.filter((x) => x && x.key) : [];
+      } catch { savedArticles = []; }
+    }
+
+    function persistSavedArticles() {
+      try { localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(savedArticles.slice(0, SAVED_MAX))); }
+      catch (e) { console.error('저장 목록을 기록하지 못했습니다.', e); }
+    }
+
+    function isSavedKey(key) { return !!key && savedArticles.some((x) => x.key === key); }
+
+    // 저장/해제를 한 번에 처리한다. 목록·팝업 어디서 눌러도 같은 함수를 쓴다.
+    function toggleSave(id) {
+      const item = findItem(id);
+      if (!item) return;
+      const key = savedKeyOf(item);
+      if (!key) return;
+
+      if (isSavedKey(key)) {
+        savedArticles = savedArticles.filter((x) => x.key !== key);
+      } else {
+        // 저장 화면은 원래 목록과 떨어져 있으므로 기사 내용을 통째로 복사해 둔다.
+        savedArticles.unshift({
+          key,
+          title: item.title || '',
+          source: item.source || '',
+          url: item.url || '',
+          naverUrl: item.naverUrl || '',
+          datetime: item.datetime || '',
+          summary: Array.isArray(item.summary) ? item.summary : [],
+          cats: Array.isArray(item.cats) ? [...item.cats] : [],
+          savedAt: Date.now(),
+        });
+        savedArticles = savedArticles.slice(0, SAVED_MAX);
+      }
+      persistSavedArticles();
+      syncSaveButtons(key);
+      renderSavedNav();
+      // 저장 화면을 보는 중에는 건수만 고쳐 준다. 줄을 바로 지우면 되돌릴 수가 없다.
+      if (!settingMode && currentCategory === 'saved') updateSavedCount();
+    }
+
+    // 담긴 상태에 맞춰 버튼 하나의 모양을 맞춘다.
+    //   style="pop" 은 팝업 아래 버튼 바용(글자 있음), 기본은 목록 행용(아이콘만)
+    function applySaveBtn(btn, on) {
+      const pop = btn.dataset.saveStyle === 'pop';
+      const label = on ? '저장됨' : '저장';
+      btn.classList.toggle('is-saved', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      btn.setAttribute('aria-label', on ? '저장 취소' : '기사 저장');
+      btn.setAttribute('title', on ? '저장 취소' : '기사 저장');
+      btn.innerHTML = pop
+        ? `${bookmarkSvg(on, 'w-3 h-3')}${label}`
+        : bookmarkSvg(on, 'w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0');
+    }
+
+    // 화면에 떠 있는 같은 기사 버튼(목록 · 팝업 · 관련 기사)을 한꺼번에 맞춘다.
+    function syncSaveButtons(key) {
+      const on = isSavedKey(key);
+      document.querySelectorAll('.save-btn').forEach((btn) => {
+        if (btn.dataset.saveKey === key) applySaveBtn(btn, on);
+      });
+    }
+
+    // 담긴 상태는 안을 채워서 표시한다. (테두리만으로는 켜졌는지 알기 어렵다)
+    function bookmarkSvg(on, cls) {
+      return `<svg class="${cls || ''}" viewBox="0 0 24 24" fill="${on ? 'currentColor' : 'none'}"
+        stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS.bookmark}</svg>`;
+    }
+
+    // 팝업(주요 내용 · Insight) 아래 버튼 바의 저장 버튼을 지금 기사 기준으로 맞춘다.
+    function setPopupSaveBtn(btnId, item) {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      const key = savedKeyOf(item);
+      btn.dataset.saveKey = key;
+      applySaveBtn(btn, isSavedKey(key));
+    }
+
+    // 좌측 사이드바 맨 아래 '저장한 기사 (n)' 줄
+    function renderSavedNav() {
+      const btn = document.getElementById('saved-nav-btn');
+      if (!btn) return;
+      const on = currentCategory === 'saved' && !settingMode;
+      btn.querySelector('[data-saved-count]').textContent = savedArticles.length ? String(savedArticles.length) : '';
+      btn.classList.toggle('bg-gold', on);
+      btn.classList.toggle('text-ink', on);
+      btn.classList.toggle('font-semibold', on);
+      btn.classList.toggle('text-muted', !on);
+      btn.classList.toggle('hover:bg-ink3', !on);
+    }
+
+    // 저장 화면의 제목 바 건수만 다시 쓴다 (목록은 그대로 둔다 → 방금 푼 저장을 되돌릴 수 있다)
+    function updateSavedCount() {
+      const el = document.getElementById('cat-header-count');
+      if (el) el.textContent = savedArticles.length + '건';
+    }
+
+    // 저장 화면 그리기. 보관함을 화면용 기사(id 부여)로 바꿔 목록과 똑같은 행으로 그린다.
+    function renderSavedView() {
+      // 정렬 셀렉트는 쓰지 않는다. 담은 순서(최신순)가 곧 이 화면의 순서다.
+      const list = decorateItems(savedArticles, 'saved');
+      currentResults = list;
+      document.getElementById('status-line').textContent = list.length
+        ? `이 브라우저에 저장한 기사 ${list.length}건입니다.`
+        : '저장한 기사가 없습니다.';
+      if (!list.length) {
+        document.getElementById('news-list').innerHTML =
+          emptyBoxHtml('저장한 기사가 없습니다. 기사 오른쪽 북마크 버튼을 눌러 담아 두세요.');
+        return;
+      }
+      renderNews(list);
+    }
 
     // ---------------------------------------------------------------
     // [추가] 기사 가져오기 키워드 설정 (Setting)
@@ -2011,6 +2175,7 @@
       seedKeywordsFromCache();
       loadDefaultCounts();          // [추가] 저장해 둔 기본 노출 건수 읽기
       applyDefaultCounts();         // [추가] 첫 화면(Briefing) 건수를 기본값으로 맞춤
+      loadSavedArticles();          // [추가] 저장한 기사 보관함 (사이드바 건수·북마크 표시에 필요)
       renderCategoryButtons();
       renderSearchToggle();
       renderSettingToggle();        // [추가]
@@ -3095,6 +3260,19 @@
         if (isBriefing) html += `<div class="border-t border-line my-2"></div>`;
       });
 
+      // [추가] 맨 아래 '저장한 기사' — 수집해 오는 섹션이 아니라 보관함이므로 목록과 줄을 그어 나눈다.
+      const savedOn = currentCategory === 'saved' && !settingMode;
+      html += `
+        <div class="border-t border-line my-2"></div>
+        <button id="saved-nav-btn" onclick="selectCategory('saved')" data-cat="saved"
+          class="cat-btn text-[1.17rem] flex items-center justify-between px-4 py-2.5 rounded-xl transition w-full ${savedOn ? 'bg-gold text-ink font-semibold' : 'text-muted hover:bg-ink3'}">
+          <span>${categoryLabels.saved}</span>
+          <span class="flex items-center gap-1.5">
+            <span data-saved-count class="font-mono text-[0.8rem] opacity-70">${savedArticles.length || ''}</span>
+            ${icon('bookmark', 'w-5 h-5')}
+          </span>
+        </button>`;
+
       wrap.innerHTML = html;
     }
 
@@ -3369,6 +3547,7 @@
       renderMobileSubnav();
       renderMobileCats();   // [추가] 상단 알약 줄·하단 탭 바도 같은 시점에 맞춘다
       renderTabBar();
+      renderSavedNav();     // [추가] 사이드바 '저장한 기사' 줄의 불·건수
 
       // [수정] 하위 섹션을 고른 경우엔 '상위>하위' 형태로 보여준다 (예: 물류>경쟁사)
       let label;
@@ -3386,9 +3565,12 @@
 
       // [추가] '지수 차트'는 기사 목록이 아니라서 건수·필터(노출 건수/게재 기간/정렬)가 의미 없다 → 감춘다
       const chartView = isIndexCardView();
+      // [추가] '저장한 기사'는 이미 담아 둔 것을 보여줄 뿐이라 수집 조건(건수·기간·정렬)이 통하지 않는다.
+      //   건수는 보여주고 필터 버튼만 감춘다.
+      const savedView = !keyword && currentCategory === 'saved';
       document.getElementById('cat-header-count').textContent = chartView ? '' : visibleCount() + '건';
       const filterBtn = document.getElementById('cat-header-filter-btn');
-      if (filterBtn) filterBtn.classList.toggle('hidden', chartView);
+      if (filterBtn) filterBtn.classList.toggle('hidden', chartView || savedView);
       if (chartView && document.body.classList.contains('hf-open')) toggleHeaderFilters();
 
       syncHeaderFilters();
@@ -4176,6 +4358,7 @@
       const parent = parentCategoryOf(currentCategory);
       const active = settingMode ? ''
         : currentCategory === 'briefing' ? 'briefing'
+        : currentCategory === 'saved' ? 'saved'
         : (currentCategory === 'stock' || parent === 'stock') ? 'stock'
         : '';
       bar.querySelectorAll('button[data-tab]').forEach((b) => {
@@ -4292,6 +4475,10 @@
           } else if (data.relaxed) {
             showFallbackBanner(`요청하신 기간(${data.requested})에 결과가 없어 "${data.relaxed}" 조건으로 넓혀 검색했습니다.`);
           }
+
+        } else if (currentCategory === 'saved') {
+          // [추가] 서버를 부르지 않는 유일한 기사 화면. 이 브라우저의 보관함을 그대로 그린다.
+          renderSavedView();
 
         } else if (currentCategory === 'briefing') {
           const items = await fetchBriefing({ dateFrom, dateTo });
@@ -4457,7 +4644,8 @@
     //  → 이 목록이 기사 제목 위에 표시할 '태그'가 된다. (요청 3·5)
     function tagCatsOf(item) {
       const mapped = catsOf(item).map((c) => parentCategoryOf(c) || c);
-      return [...new Set(mapped.filter(Boolean))];
+      // 'saved'(저장한 기사)는 수집 섹션이 아니라 보관함이므로 태그로 내보내지 않는다.
+      return [...new Set(mapped.filter((c) => c && c !== 'saved'))];
     }
 
     // [태그 표시] 모든 태그를 동일하게: 파란색 · 아이콘 없음 · 텍스트만 (요청 1·2)
@@ -4493,6 +4681,14 @@
             class="${base} ${h} ${plain}">
             ${icon('link', ic)} 관련 기사
           </button>` : '';
+      // [추가] 저장(북마크) — 시안 01번대로 글자 없이 아이콘만. 줄이 길어지지 않는다.
+      const savedOn = isSavedKey(savedKeyOf(item));
+      const saveBtn = `
+          <button onclick="toggleSave(${item.id})" data-save-key="${esc(savedKeyOf(item))}"
+            aria-pressed="${savedOn}" aria-label="${savedOn ? '저장 취소' : '기사 저장'}" title="${savedOn ? '저장 취소' : '기사 저장'}"
+            class="save-btn${savedOn ? ' is-saved' : ''} ${base} ${h} ${plain} !px-1.5 sm:!px-2">
+            ${bookmarkSvg(savedOn, 'w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0')}
+          </button>`;
       return `
         <div class="news-row-actions flex items-center gap-1.5 flex-wrap">
           <button onclick="openBrief(${item.id})" title="주요 내용"
@@ -4508,6 +4704,7 @@
             ${icon('external-link', ic)} 원문 보기
           </a>
           ${relatedBtn}
+          ${saveBtn}
         </div>`;
     }
 
@@ -4960,6 +5157,110 @@
     });
 
     // ---------------------------------------------------------------
+    // [추가] 모바일 바텀시트 : 아래로 쓸어내리면 닫는다
+    //   시트 맨 위의 회색 손잡이 막대는 원래 '여기를 잡아 내린다'는 표시였는데,
+    //   실제로 내릴 수는 없었다. 그 동작을 붙인다. (주요 내용 · Insight · 관련 기사)
+    //   - 시트 본문이 이미 아래로 스크롤돼 있으면 그건 본문 스크롤이다 → 손대지 않는다
+    //   - 세로로 조금(SHEET_SLOP) 내려야 '닫기'로 확정한다. 탭·가로 스와이프와 구분된다.
+    // ---------------------------------------------------------------
+    const SHEET_CLOSERS = {
+      'brief-modal': closeBrief,
+      'insight-modal': closeInsight,
+      'related-modal': closeRelated,
+    };
+    const SHEET_SLOP = 8;          // 이만큼 움직이기 전에는 방향을 정하지 않는다
+    const SHEET_CLOSE_DIST = 96;   // 여기까지 내리고 놓으면 닫는다
+    const SHEET_FLICK = 0.6;       // 짧게 튕겨도(px/ms) 닫는다
+    let sheetDrag = null;
+
+    // 바텀시트로 뜨는 폭인가? (CSS 의 시트 전환 기준과 같은 값이어야 한다)
+    function isSheetMode() { return window.matchMedia('(max-width: 639.98px)').matches; }
+
+    // 이 터치가 '시트 안'에서 시작했으면 그 시트를 돌려준다.
+    function sheetPopFrom(target) {
+      if (!isSheetMode() || !(target instanceof Element)) return null;
+      const modal = target.closest('[id$="-modal"]');
+      if (!modal || modal.classList.contains('hidden') || !SHEET_CLOSERS[modal.id]) return null;
+      const pop = modal.querySelector('.modal-pop');
+      return pop && pop.contains(target) ? pop : null;   // 뒷배경은 원래대로 눌러서 닫는다
+    }
+
+    // 인라인 transform 을 반드시 지운다. 남겨 두면 다음에 열 때 내려간 자리에서 시작한다.
+    function resetSheet(pop) {
+      pop.classList.remove('sheet-dragging', 'sheet-settle');
+      pop.style.transform = '';
+    }
+
+    function onSheetTouchStart(e) {
+      sheetDrag = null;
+      if (e.touches.length !== 1) return;
+      const pop = sheetPopFrom(e.target);
+      if (!pop || pop.scrollTop > 0) return;   // 본문을 내려 읽는 중이면 그 스크롤이 먼저다
+      const t = e.touches[0];
+      sheetDrag = { pop, x0: t.clientX, y0: t.clientY, t0: performance.now(), dist: 0, active: false };
+    }
+
+    function onSheetTouchMove(e) {
+      if (!sheetDrag || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const dy = t.clientY - sheetDrag.y0;
+      const dx = t.clientX - sheetDrag.x0;
+
+      if (!sheetDrag.active) {
+        if (dy < SHEET_SLOP) {
+          // 위로 올리거나 옆으로 미는 손짓이면 이번 터치는 포기한다
+          if (dy < -2 || Math.abs(dx) > SHEET_SLOP) sheetDrag = null;
+          return;
+        }
+        if (Math.abs(dx) > Math.abs(dy)) { sheetDrag = null; return; }
+        if (sheetDrag.pop.scrollTop > 0) { sheetDrag = null; return; }
+        sheetDrag.active = true;
+        sheetDrag.y0 = t.clientY;            // 방향 판정에 쓴 거리는 빼고 여기서부터 따라온다
+        sheetDrag.t0 = performance.now();
+        sheetDrag.pop.classList.add('sheet-dragging');
+        return;
+      }
+
+      sheetDrag.dist = Math.max(0, t.clientY - sheetDrag.y0);
+      sheetDrag.pop.style.transform = `translateY(${sheetDrag.dist}px)`;
+      if (e.cancelable) e.preventDefault();   // 시트가 끌리는 동안 뒷배경이 같이 움직이지 않게
+    }
+
+    function onSheetTouchEnd(e) {
+      if (!sheetDrag) return;
+      const d = sheetDrag;
+      sheetDrag = null;
+      if (!d.active) return;
+
+      const speed = d.dist / Math.max(1, performance.now() - d.t0);   // px/ms
+      const shouldClose = !(e && e.type === 'touchcancel')
+        && (d.dist >= SHEET_CLOSE_DIST || speed >= SHEET_FLICK);
+
+      d.pop.classList.remove('sheet-dragging');
+      d.pop.classList.add('sheet-settle');
+
+      if (!shouldClose) {
+        d.pop.style.transform = 'translateY(0)';       // 덜 내렸으면 제자리로 되돌린다
+        setTimeout(() => resetSheet(d.pop), 220);
+        return;
+      }
+      // 끝까지 미끄러뜨린 뒤에 닫는다. 그래야 '내가 내려서 닫혔다'로 보인다.
+      const modal = d.pop.closest('[id$="-modal"]');
+      d.pop.style.transform = 'translateY(100%)';
+      setTimeout(() => {
+        const close = modal && SHEET_CLOSERS[modal.id];
+        if (close) close();
+        resetSheet(d.pop);
+      }, 200);
+    }
+
+    // 끄는 동안 본문 스크롤을 막아야 해서 touchmove 만 passive:false 로 단다.
+    document.addEventListener('touchstart', onSheetTouchStart, { passive: true });
+    document.addEventListener('touchmove', onSheetTouchMove, { passive: false });
+    document.addEventListener('touchend', onSheetTouchEnd, { passive: true });
+    document.addEventListener('touchcancel', onSheetTouchEnd, { passive: true });
+
+    // ---------------------------------------------------------------
     // 주요 내용 모달 (AI 정리)
     // ---------------------------------------------------------------
     function esc(s) {
@@ -5026,6 +5327,7 @@
       document.getElementById('brief-meta').textContent =
         `${item.source || ''}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}`;
       document.getElementById('brief-note').textContent = '';
+      setPopupSaveBtn('brief-save-btn', item);   // [추가] 아래 버튼 바의 저장 상태를 이 기사 기준으로 맞춘다
       document.getElementById('brief-body').innerHTML = briefLoadingHtml();
       const briefModal = document.getElementById('brief-modal');
       briefModal.classList.remove('hidden');
@@ -5154,6 +5456,7 @@
       document.getElementById('insight-link').href = link;
       document.getElementById('insight-title').innerHTML = item.title;   // [추가] 시안 06번 머리말
       document.getElementById('insight-note').textContent = '';
+      setPopupSaveBtn('insight-save-btn', item);   // [추가]
       document.getElementById('insight-body').innerHTML = insightLoadingHtml();
       const insightModal = document.getElementById('insight-modal');
       insightModal.classList.remove('hidden');
@@ -5330,9 +5633,9 @@
     }
   </script>
 
-  <!-- [추가] 시안 10번 : 모바일 하단 탭 바.
-       시안의 네 번째 칸은 '저장'(북마크)이지만 그 기능이 아직 없어 '설정'으로 뒀다.
-       (헤더에서 숨긴 ⋮ 화면 설정이 여기로 온 셈이다) -->
+  <!-- [수정] 시안 10번 : 모바일 하단 탭 바.
+       Phase 7 A1 에서 저장(북마크)을 만들면서 네 번째 칸을 시안대로 '저장'으로 되돌렸다.
+       화면 설정은 다시 헤더 오른쪽 ⋮ 버튼에서 연다. -->
   <nav id="tab-bar" class="lg:hidden" aria-label="주요 화면">
     <button onclick="tabGo('briefing')" data-tab="briefing">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
@@ -5346,9 +5649,9 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><rect x="7" y="9" width="4" height="6" rx="1"/><rect x="15" y="5" width="4" height="10" rx="1"/></svg>
       증시
     </button>
-    <button onclick="openPrefsModal()" data-tab="prefs">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h10"/><path d="M18 6h2"/><path d="M4 12h4"/><path d="M12 12h8"/><path d="M4 18h10"/><path d="M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg>
-      설정
+    <button onclick="tabGo('saved')" data-tab="saved">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>
+      저장
     </button>
   </nav>
 
