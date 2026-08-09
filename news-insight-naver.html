@@ -677,6 +677,13 @@
     #content-col { grid-column: span 1 / span 1; }
 
     body.side-collapsed #main-grid { grid-template-columns: 46px minmax(0, 1fr) 300px; }
+    /* [추가] 마켓 레일도 접을 수 있다. 접으면 펼치기 버튼 하나만 남는 띠가 된다. */
+    body.rail-collapsed #main-grid { grid-template-columns: 224px minmax(0, 1fr) 34px; }
+    body.rail-collapsed.side-collapsed #main-grid { grid-template-columns: 46px minmax(0, 1fr) 34px; }
+    body.rail-collapsed #market-rail > :not(.rail-head) { display: none; }
+    body.rail-collapsed .rail-head > :not(#rail-toggle-btn) { display: none; }
+    body.rail-collapsed .rail-head { justify-content: center; }
+    body.rail-collapsed #rail-toggle-btn { margin-right: 0; }
     body.side-collapsed #sidebar > div { display: none; }
     body.side-collapsed .side-scroll {
       padding-right: 0;
@@ -714,6 +721,11 @@
      [추가] 관리자 Setting 화면 : 왼쪽 '제목', 세로 구분선, 오른쪽 '내용'
        좁은 화면(<768px)에서는 세로로 쌓아 그대로 읽히게 둔다.
      --------------------------------------------------------------- */
+  /* 시안 08번의 제목 크기(21px = 1.4rem · 700 · 자간 -.02em) */
+  .setting-row-title {
+    font-size: 1.4rem; font-weight: 700; letter-spacing: -.02em;
+    line-height: 1.25; color: rgb(var(--c-paper));
+  }
   .setting-row { display: grid; grid-template-columns: 1fr; gap: .75rem; }
   .setting-row + .setting-row { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgb(var(--c-line)); }
   @media (min-width: 768px) {
@@ -1276,10 +1288,9 @@
 
           <!-- [수정] 설정 비밀번호 : 왼쪽 제목 · 오른쪽 입력란 -->
           <div class="setting-row">
-            <div class="flex items-start gap-2 pt-1">
-              <span class="text-gold2 shrink-0 mt-0.5" id="pw-setting-icon"></span>
+            <div class="pt-1">
               <div class="min-w-0">
-                <div class="font-semibold text-paper text-[1.15rem]">설정 비밀번호</div>
+                <div class="setting-row-title">패스워드</div>
                 <p class="font-mono text-muted text-[0.8rem] mt-1 leading-relaxed">관리자 Setting 진입 시 요구 (기본 7780)</p>
               </div>
             </div>
@@ -1298,10 +1309,9 @@
 
           <!-- [수정] 시안 08번 : 위에 제목·설명, 아래에 2열(왼쪽 섹션 목록 · 오른쪽 키워드) -->
           <div class="setting-row is-wide">
-            <div class="flex items-start gap-2 pt-1">
-              <span class="text-gold2 shrink-0 mt-0.5" id="kw-setting-icon"></span>
+            <div class="pt-1">
               <div class="min-w-0">
-                <div class="font-semibold text-paper text-[1.15rem]">키워드 설정</div>
+                <div class="setting-row-title">섹션 · 키워드 관리</div>
                 <p class="text-muted text-[0.8rem] mt-1 leading-relaxed">
                   왼쪽에서 섹션을 고르고, <span class="text-gold2 font-semibold">포함</span>·<span class="text-gold2 font-semibold">제외</span> 키워드를 정하면
                   항상 이 값을 기준으로 기사를 가져옵니다.
@@ -1325,9 +1335,15 @@
     <!-- [추가] 우측 마켓 레일 (시안 01번) : 헤더에서 뺀 지수를 여기 세로로 세운다.
          1024px 미만에서는 숨기고, 대신 헤더 아래 #index-strip 이 그 역할을 한다. -->
     <aside id="market-rail" aria-label="시장 지표">
-      <div class="flex items-center justify-between">
+      <div class="rail-head flex items-center justify-between gap-2">
         <span class="font-mono text-[0.63rem] font-semibold label-wide text-muted2">MARKETS</span>
-        <span id="rail-time" class="font-mono text-[0.66rem] text-muted"></span>
+        <span id="rail-time" class="font-mono text-[0.66rem] text-muted ml-auto"></span>
+        <!-- [추가] 마켓 레일 접기(») / 펼치기(«) · 사이드바와 같은 방식으로 기억한다 -->
+        <button id="rail-toggle-btn" onclick="toggleRail()" aria-controls="market-rail" aria-expanded="true"
+          aria-label="마켓 레일 접기" title="마켓 레일 접기"
+          class="-mr-1 p-1 rounded-lg text-muted hover:text-gold hover:bg-ink3 transition shrink-0">
+          <svg id="rail-toggle-icon" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg>
+        </button>
       </div>
       <div id="rail-indices" class="rail-box"></div>
       <div id="rail-extra" class="grid grid-cols-2 gap-2"></div>
@@ -1900,6 +1916,7 @@
       renderThemeButtons();         // [추가] 테마 선택 버튼
       renderKeywordSettings();      // [추가]
       restoreSidebarCollapsed();    // [추가] 지난번 사이드바 접힘 상태 복원
+      restoreRailCollapsed();       // [추가] 지난번 마켓 레일 접힘 상태 복원
       updateStickTop();
       window.addEventListener('resize', updateStickTop);
       // [수정] 로고 이미지·웹폰트가 늦게 로드되면 상단바가 그만큼 높아지는데,
@@ -2016,6 +2033,40 @@
       let saved = '0';
       try { saved = localStorage.getItem(SIDEBAR_STORAGE_KEY) || '0'; } catch {}
       setSidebarCollapsed(saved === '1', false);
+    }
+
+    // [추가] 우측 마켓 레일 접기 · 사이드바와 같은 방식이다.
+    //   접으면 지수 목록이 사라지고 펼치기(«) 버튼만 남아, 기사 영역이 그만큼 넓어진다.
+    const RAIL_STORAGE_KEY = 'news-insight-rail-collapsed';
+    // 겹화살표 두 방향 : 접기는 오른쪽(»), 펼치기는 왼쪽(«)
+    const RAIL_ARROW = {
+      collapse: '<path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/>',
+      expand: '<path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>',
+    };
+
+    function setRailCollapsed(collapsed, persist = true) {
+      document.body.classList.toggle('rail-collapsed', collapsed);
+      const btn = document.getElementById('rail-toggle-btn');
+      const ic = document.getElementById('rail-toggle-icon');
+      if (btn) {
+        btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        const label = collapsed ? '마켓 레일 펼치기' : '마켓 레일 접기';
+        btn.setAttribute('aria-label', label);
+        btn.title = label;
+      }
+      if (ic) ic.innerHTML = collapsed ? RAIL_ARROW.expand : RAIL_ARROW.collapse;
+      if (persist) { try { localStorage.setItem(RAIL_STORAGE_KEY, collapsed ? '1' : '0'); } catch {} }
+      updateStickTop();
+    }
+
+    function toggleRail() {
+      setRailCollapsed(!document.body.classList.contains('rail-collapsed'));
+    }
+
+    function restoreRailCollapsed() {
+      let saved = '0';
+      try { saved = localStorage.getItem(RAIL_STORAGE_KEY) || '0'; } catch {}
+      setRailCollapsed(saved === '1', false);
     }
 
     // ---------------------------------------------------------------
@@ -2583,10 +2634,6 @@
     function openSettingView() {
       settingMode = true;
       renderKeywordSettings();                       // 최신 값으로 입력칸 다시 그림
-      const pwIconEl = document.getElementById('pw-setting-icon');
-      if (pwIconEl) pwIconEl.innerHTML = icon('lock', 'w-4 h-4');
-      const kwIconEl = document.getElementById('kw-setting-icon');
-      if (kwIconEl) kwIconEl.innerHTML = icon('search', 'w-4 h-4');
       const pwMsg = document.getElementById('password-change-msg');
       if (pwMsg) pwMsg.textContent = '';
       hideFallbackBanner();
