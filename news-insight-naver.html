@@ -204,6 +204,60 @@
   /* --- 모바일 : 헤더 아래 가로 지수 바 (손가락으로 밀어서 본다) --- */
   #index-strip { -webkit-overflow-scrolling: touch; }
   #index-strip::-webkit-scrollbar { height: 0; }
+
+  /* [추가] 시안 10번 : 모바일 카테고리 알약 줄 */
+  #mobile-cats { -webkit-overflow-scrolling: touch; }
+  #mobile-cats::-webkit-scrollbar { height: 0; }
+  .cat-pill {
+    flex: none;
+    padding: .5rem .85rem;
+    border-radius: 99px;
+    border: 1px solid rgb(var(--c-line));
+    font-size: .82rem;
+    color: rgb(var(--c-muted));
+    white-space: nowrap;
+    transition: background-color .15s, color .15s, border-color .15s;
+  }
+  .cat-pill.is-on {
+    background: rgb(var(--c-gold));
+    border-color: rgb(var(--c-gold));
+    color: rgb(var(--c-ink));
+    font-weight: 600;
+  }
+
+  /* [추가] 시안 10번 : 모바일 하단 탭 바
+     화면 아래에 고정한다. 안전영역(홈 바)만큼 아래 여백을 더 준다. */
+  /* display 는 여기서 직접 정한다.
+     Tailwind 의 lg:hidden 은 클래스라 #tab-bar(아이디)를 이기지 못한다. */
+  #tab-bar { display: none; }
+  @media (max-width: 1023.98px) { #tab-bar { display: flex; } }
+  #tab-bar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 45;                      /* 본문·상단바 위, 팝업(60~) 아래 */
+    justify-content: space-around;
+    padding: .55rem 0 calc(.55rem + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid rgb(var(--c-line));
+    background: rgb(var(--c-rail) / .96);
+    backdrop-filter: blur(8px);
+  }
+  #tab-bar button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .3rem;
+    padding: .25rem .75rem;
+    font-size: .7rem;
+    color: rgb(var(--c-muted2));
+    transition: color .15s;
+  }
+  #tab-bar button svg { width: 1.25rem; height: 1.25rem; }
+  #tab-bar button.is-on { color: rgb(var(--c-gold)); font-weight: 600; }
+  /* 탭 바에 가려 마지막 기사가 안 보이지 않도록 본문 아래를 비워 둔다.
+     (탭 바 실측 높이 64px = 4.27rem 보다 조금 넉넉하게) */
+  @media (max-width: 1023.98px) {
+    body { padding-bottom: calc(4.6rem + env(safe-area-inset-bottom, 0px)); }
+  }
   .strip-item {
     flex: none;
     display: flex;
@@ -834,6 +888,41 @@
     .popup-actions svg { width: .6875rem !important; height: .6875rem !important; }
   }
 
+  /* ---------------------------------------------------------------
+     [추가] 시안 10번 : 좁은 화면에서 팝업은 '바텀시트'(아래에서 올라오는 판)로 뜬다.
+       화면 가운데 떠 있는 상자보다 한 손으로 다루기 쉽다.
+       맨 위의 회색 막대는 '여기를 잡아 내린다'는 뜻의 손잡이 표시다.
+     --------------------------------------------------------------- */
+  @keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @media (max-width: 639.98px) {
+    [id$="-modal"] {
+      align-items: flex-end !important;
+      padding: 0 !important;
+      /* 뒷배경이 스크롤되면 오른쪽에 막대가 생겨 시트가 그만큼 좁아진다 → 시트 안에서만 스크롤한다 */
+      overflow: hidden !important;
+    }
+    [id$="-modal"] .modal-pop {
+      width: 100%;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      max-width: 100% !important;
+      max-height: 88vh !important;
+      border-radius: 18px 18px 0 0 !important;
+      border-bottom: 0;
+      animation: sheet-in .22s ease-out;
+    }
+    [id$="-modal"] .modal-pop::before {
+      content: '';
+      display: block;
+      flex: none;
+      width: 38px;
+      height: 4px;
+      margin: 8px auto 0;
+      border-radius: 99px;
+      background: rgb(var(--c-panel));
+    }
+  }
+
   /* 아주 좁은 화면(360px 미만, 예전 소형 폰)에서는 한 단계 더 줄여야 겨우 들어간다 */
   @media (max-width: 359.98px) {
     .popup-foot { padding-left: .5rem !important; padding-right: .5rem !important; }
@@ -918,11 +1007,6 @@
   <div class="sticky top-0 z-40" id="top-bar">
   <header id="app-header" class="border-b border-line bg-rail/90 backdrop-blur px-4 py-3 lg:px-6 lg:py-4 flex justify-between items-center">
     <div class="flex items-center gap-2 lg:gap-3 min-w-0">
-      <!-- [추가] 모바일 전용 : 좌측 SECTION 드로어 열기 -->
-      <button id="nav-toggle-btn" onclick="toggleNav()" aria-label="섹션 메뉴 열기" aria-expanded="false"
-        class="lg:hidden -ml-1 p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
-        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
-      </button>
       <!-- 로고(오렌지 뉴스피드 마크 + Beyond News 워드마크) + 오른쪽에 밑선 맞춰 붙는 문구 -->
       <div class="flex items-end gap-2 lg:gap-3 min-w-0">
         <h1 class="min-w-0 shrink">
@@ -974,8 +1058,10 @@
         <p id="app-subtitle" class="font-sans font-medium text-muted tracking-wide leading-none text-xs sm:text-sm whitespace-nowrap hidden sm:block">Real-Time Wire Desk</p>
       </div>
     </div>
-    <div class="flex items-center gap-4">
-      <span id="live-badge" class="font-mono bg-ink2 border border-line px-3 py-1.5 rounded-full text-muted flex items-center gap-1.5 shrink-0">
+    <div class="flex items-center gap-2 sm:gap-4">
+      <!-- [수정] 시안 10번 : 모바일 헤더는 로고 + 검색·햄버거만 남긴다.
+           LIVE 배지와 ⋮(화면 설정)은 좁은 화면에서 숨긴다. 설정은 아래 탭 바에 있다. -->
+      <span id="live-badge" class="font-mono bg-ink2 border border-line px-3 py-1.5 rounded-full text-muted hidden sm:flex items-center gap-1.5 shrink-0">
         <span class="live-dot w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> LIVE
       </span>
       <!-- [수정] 날짜·시간 : 1pt 축소, 시간은 볼드 해제 -->
@@ -985,16 +1071,27 @@
       </div>
       <!-- [추가] 화면 설정(테마·기본 노출 건수) : 관리자가 아니어도 누구나 쓸 수 있다 -->
       <button id="prefs-btn" onclick="openPrefsModal()" aria-label="화면 설정" title="화면 설정 (테마 · 기본 노출 건수)"
-        class="-mr-1 p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
+        class="hidden lg:inline-flex -mr-1 p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/>
         </svg>
+      </button>
+      <!-- [추가] 모바일 : 검색 · 섹션 드로어 (시안 10번의 오른쪽 아이콘 두 개) -->
+      <button onclick="openSearchFromHeader()" aria-label="키워드 검색"
+        class="lg:hidden p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      </button>
+      <button id="nav-toggle-btn" onclick="toggleNav()" aria-label="섹션 메뉴 열기" aria-expanded="false"
+        class="lg:hidden -mr-1 p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
       </button>
     </div>
   </header>
 
   <!-- [수정] 지수 : 데스크톱에서는 우측 마켓 레일(#market-rail)로 옮겼다. (시안 01번)
        모바일에는 시안 10번처럼 간이 지수 바만 남긴다. 흐르지 않고, 손가락으로 밀어서 본다. -->
+  <!-- [추가] 시안 10번 : 헤더 아래 알약 모양 카테고리 가로 스크롤 (모바일 전용) -->
+  <div id="mobile-cats" class="lg:hidden bg-rail/90 backdrop-blur overflow-x-auto"></div>
   <div id="index-strip" class="lg:hidden bg-rail border-b border-line overflow-x-auto"></div>
   </div>
 
@@ -1930,6 +2027,9 @@
       if (topBarEl && window.ResizeObserver) new ResizeObserver(updateStickTop).observe(topBarEl);
       window.addEventListener('load', updateStickTop);
       window.addEventListener('resize', renderMobileSubnav);   // [추가] 회전/리사이즈 시 모바일 칩 갱신
+      renderMobileCats();                                      // [추가] 상단 알약 줄 · 하단 탭 바
+      renderTabBar();
+      window.addEventListener('resize', renderMobileCats);
 
       // [추가] 모바일 드로어
       window.addEventListener('resize', () => {
@@ -2184,8 +2284,8 @@
       if (!isMobileLayout() || pullRefreshing) return false;
       if (document.body.classList.contains('nav-open') || settingMode) return false;
       if ((window.scrollY || document.documentElement.scrollTop || 0) > 0) return false;
-      // 팝업·드로어·지수 바 안에서 시작한 손짓은 그쪽 몫이다
-      if (el && el.closest('[id$="-modal"], #sidebar, #nav-scrim, #index-strip')) return false;
+      // 팝업·드로어·지수 바·카테고리 알약·하단 탭에서 시작한 손짓은 그쪽 몫이다
+      if (el && el.closest('[id$="-modal"], #sidebar, #nav-scrim, #index-strip, #mobile-cats, #tab-bar')) return false;
       // 스스로 세로 스크롤되는 상자(팝업 본문 등) 안이면 그 스크롤을 방해하지 않는다
       for (let n = el; n && n !== document.body; n = n.parentElement) {
         const oy = getComputedStyle(n).overflowY;
@@ -2661,6 +2761,8 @@
       document.getElementById('status-line').textContent =
         '기사 가져오기 키워드 설정 · 섹션별 포함/제외 키워드를 정하세요.';
       renderSettingToggle();
+      renderMobileCats();   // 설정 화면에서는 켜진 알약·탭이 없다
+      renderTabBar();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -2674,6 +2776,8 @@
       // 들어올 때 접어 뒀던 마켓 레일을 원래대로 되돌린다
       if (railBeforeSetting !== null) { setRailCollapsed(railBeforeSetting, false); railBeforeSetting = null; }
       renderSettingToggle();
+      renderMobileCats();
+      renderTabBar();
       if (rerun) {
         runSearch();                       // 새 키워드로 다시 가져오기 (제목 바도 이때 갱신됨)
       } else if (currentResults.length) {
@@ -3263,6 +3367,8 @@
 
       // [추가] 모바일 하위 섹션 칩은 브리핑 여부와 관계없이 항상 상태에 맞게 갱신
       renderMobileSubnav();
+      renderMobileCats();   // [추가] 상단 알약 줄·하단 탭 바도 같은 시점에 맞춘다
+      renderTabBar();
 
       // [수정] 하위 섹션을 고른 경우엔 '상위>하위' 형태로 보여준다 (예: 물류>경쟁사)
       let label;
@@ -4039,6 +4145,58 @@
     //  - 물류/증시(상위) 또는 그 하위 섹션을 보고 있을 때만 칩을 노출한다.
     //  - 칩을 누르면 곧바로 해당 하위 섹션 기사만 표출된다.
     // ---------------------------------------------------------------
+    // ---------------------------------------------------------------
+    // [추가] 시안 10번 : 모바일 상단 카테고리 알약 줄 · 하단 탭 바
+    //   알약은 좌측 드로어와 같은 목록을 쓴다. 상위 섹션을 누르면 바로 그 섹션으로 간다.
+    //   (하위 섹션은 그 아래 #mobile-subnav 칩이 계속 맡는다)
+    // ---------------------------------------------------------------
+    function renderMobileCats() {
+      const el = document.getElementById('mobile-cats');
+      if (!el) return;
+      if (window.innerWidth >= 1024) { el.innerHTML = ''; return; }
+
+      const keyword = document.getElementById('search-input').value.trim();
+      const parent = parentCategoryOf(currentCategory);
+      el.innerHTML = `<div class="flex gap-1.5 px-4 py-2.5 w-max">${
+        topLevelCategories.map((cat) => {
+          // 하위 섹션을 보는 중이면 그 상위 알약을 켜 둔다
+          const on = !keyword && (currentCategory === cat || parent === cat);
+          return `<button onclick="selectCategory('${cat}')" class="cat-pill${on ? ' is-on' : ''}">${categoryLabels[cat]}</button>`;
+        }).join('')}</div>`;
+
+      // 고른 알약이 화면 밖에 있으면 보이는 자리로 끌어온다
+      const on = el.querySelector('.cat-pill.is-on');
+      if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+
+    // 하단 탭 바 : 지금 보고 있는 화면에 불을 켠다
+    function renderTabBar() {
+      const bar = document.getElementById('tab-bar');
+      if (!bar) return;
+      const parent = parentCategoryOf(currentCategory);
+      const active = settingMode ? ''
+        : currentCategory === 'briefing' ? 'briefing'
+        : (currentCategory === 'stock' || parent === 'stock') ? 'stock'
+        : '';
+      bar.querySelectorAll('button[data-tab]').forEach((b) => {
+        b.classList.toggle('is-on', b.dataset.tab === active);
+      });
+    }
+
+    // 탭에서 섹션으로 이동 : 설정 화면이 열려 있으면 먼저 닫는다
+    function tabGo(cat) {
+      if (settingMode) closeSettingView(false);
+      selectCategory(cat);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // 헤더 돋보기 : 검색 패널을 편다 (이미 펴져 있으면 입력칸으로 커서만 옮긴다)
+    function openSearchFromHeader() {
+      if (!expandedSearch) { toggleSearchPanel(); return; }
+      closeNav();
+      document.getElementById('search-input').focus();
+    }
+
     function renderMobileSubnav() {
       const el = document.getElementById('mobile-subnav');
       if (!el) return;
@@ -5171,6 +5329,28 @@
       init();   // 스크립트가 늦게 실행돼 이미 준비가 끝난 경우
     }
   </script>
+
+  <!-- [추가] 시안 10번 : 모바일 하단 탭 바.
+       시안의 네 번째 칸은 '저장'(북마크)이지만 그 기능이 아직 없어 '설정'으로 뒀다.
+       (헤더에서 숨긴 ⋮ 화면 설정이 여기로 온 셈이다) -->
+  <nav id="tab-bar" class="lg:hidden" aria-label="주요 화면">
+    <button onclick="tabGo('briefing')" data-tab="briefing">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+      브리핑
+    </button>
+    <button onclick="toggleNav()" data-tab="section">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      섹션
+    </button>
+    <button onclick="tabGo('stock')" data-tab="stock">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><rect x="7" y="9" width="4" height="6" rx="1"/><rect x="15" y="5" width="4" height="10" rx="1"/></svg>
+      증시
+    </button>
+    <button onclick="openPrefsModal()" data-tab="prefs">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h10"/><path d="M18 6h2"/><path d="M4 12h4"/><path d="M12 12h8"/><path d="M4 18h10"/><path d="M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg>
+      설정
+    </button>
+  </nav>
 
   <!-- [추가] PDF 저장용 영역 : 화면에는 절대 보이지 않고, 인쇄할 때만 이 안의 내용이 출력된다 -->
   <div id="print-area"></div>
