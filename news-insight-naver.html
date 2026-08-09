@@ -122,9 +122,8 @@
   }
   /* 화이트 테마에서 어두운 배경을 전제로 한 amber 계열 배너 색 보정 */
   :root[data-theme="light"] .text-amber-200 { color: #92400e; }
-  /* 같은 이유로 'Insight' 버튼/배지의 연한 초록 글씨도 어둡게 보정 (밝은 배경에서 안 보임) */
-  :root[data-theme="light"] .text-green-200   { color: #14532d; }
-  :root[data-theme="light"] .text-emerald-300 { color: #065f46; }
+  /* [삭제] 'Insight' 버튼·배지의 연한 초록 보정 규칙은 Phase 4 에서 걷어냈다.
+     이제 초록은 전부 --c-ok 토큰을 쓰므로 화이트 테마에서 알아서 어두워진다. */
 
   /* ---------------------------------------------------------------
      [수정] 로고 : 노란 뉴스피드(RSS) 마크 + 'Beyond News' 워드마크(텍스트)
@@ -369,6 +368,94 @@
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
   .modal-pop { animation: modal-in .18s ease-out; }
+
+  /* ---------------------------------------------------------------
+     [추가] 시안(개선안 05·06·07번) 팝업
+       머리말 / 본문 / 아래 버튼 바 3층 구조. 폭은 620px(설정은 420px).
+       색은 전부 토큰(--c-*)이라 화이트 테마에서도 그대로 뒤집힌다.
+     --------------------------------------------------------------- */
+  .popup-head {
+    display: flex; align-items: flex-start; gap: .875rem;
+    padding: 1.15rem 1.25rem;
+    border-bottom: 1px solid rgb(var(--c-line));
+  }
+  .popup-kind {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .63rem; font-weight: 600; letter-spacing: .16em;
+    color: rgb(var(--c-gold));
+  }
+  .popup-title {
+    font-size: 1.28rem; font-weight: 700; line-height: 1.45;
+    letter-spacing: -.022em; color: rgb(var(--c-paper));
+  }
+  /* 라벨과 출처 사이의 작은 점 */
+  .dot-sep { flex: none; width: 3px; height: 3px; border-radius: 99px; background: rgb(var(--c-muted2) / .7); }
+  .popup-body { padding: 1.15rem 1.25rem; }
+  /* 본문 안 소제목 (핵심 판단 · 주석 …) */
+  .popup-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .63rem; font-weight: 600; letter-spacing: .16em;
+    color: rgb(var(--c-muted2));
+  }
+  /* 01 · 02 · 03 번호를 단 요약 문단 (시안 05번) */
+  .popup-point { display: flex; gap: .7rem; }
+  .popup-point > .no {
+    flex: none; width: 1.2rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .72rem; font-weight: 600; line-height: 1.8;
+    color: rgb(var(--c-gold));
+  }
+  /* 비교 표 : 머리줄만 한 단계 밝은 배경, 나머지는 가로줄로만 나눈다.
+     둥근 모서리로 안쪽을 자르려면 테두리를 감싸는 상자가 따로 있어야 한다. */
+  .popup-table-wrap { border: 1px solid rgb(var(--c-line)); border-radius: 9px; overflow: hidden; }
+  .popup-table { width: 100%; border-collapse: collapse; }
+  .popup-table th {
+    text-align: left; padding: .6rem .8rem; background: rgb(var(--c-ink3));
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .66rem; font-weight: 600; letter-spacing: .1em;
+    color: rgb(var(--c-muted2));
+  }
+  .popup-table td { padding: .65rem .8rem; border-top: 1px solid rgb(var(--c-line)); vertical-align: top; }
+  /* Insight 팝업 : 테두리와 머리말에 초록을 아주 옅게 얹는다 (시안 06번) */
+  .popup-shell.is-ok { border-color: rgb(var(--c-ok) / .28); }
+  .popup-head.is-ok { background: rgb(var(--c-ok) / .05); }
+  /* 아래 버튼 바 */
+  .popup-bar {
+    display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+    padding: .875rem 1.25rem;
+    border-top: 1px solid rgb(var(--c-line));
+    background: rgb(var(--c-rail));
+  }
+  .pop-btn {
+    display: flex; align-items: center; gap: .375rem;
+    height: 2rem; padding: 0 .8rem; border-radius: 7px;
+    border: 1px solid transparent;
+    font-size: .8rem; font-weight: 500; white-space: nowrap;
+    transition: background-color .2s, color .2s, border-color .2s;
+  }
+  .pop-btn.is-plain { border-color: rgb(var(--c-line)); color: rgb(var(--c-muted)); }
+  .pop-btn.is-plain:hover { color: rgb(var(--c-paper)); background: rgb(var(--c-ink3)); }
+  .pop-btn.is-ok { border-color: rgb(var(--c-ok) / .35); color: rgb(var(--c-ok)); }
+  .pop-btn.is-ok:hover { background: rgb(var(--c-ok) / .1); }
+  .pop-btn.is-gold { background: rgb(var(--c-gold)); color: rgb(var(--c-ink)); font-weight: 600; }
+  .pop-btn.is-gold:hover { background: rgb(var(--c-gold2)); }
+
+  /* 화면 설정(시안 07번) : 테마 3종 썸네일 + 설정 줄 */
+  .theme-card {
+    flex: 1; display: flex; flex-direction: column; gap: .5rem;
+    padding: .7rem; border: 1px solid rgb(var(--c-line)); border-radius: 8px;
+    cursor: pointer; transition: background-color .2s, border-color .2s;
+  }
+  .theme-card:hover { border-color: rgb(var(--c-gold) / .45); }
+  .theme-card.is-on { border-color: rgb(var(--c-gold) / .5); background: rgb(var(--c-gold) / .08); }
+  .theme-card .swatch { display: block; height: 26px; border-radius: 4px; border: 1px solid rgb(var(--c-line)); }
+  .theme-card .name { font-size: .8rem; color: rgb(var(--c-muted)); }
+  .theme-card.is-on .name { color: rgb(var(--c-gold)); font-weight: 500; }
+  .pref-row {
+    display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+    padding: .7rem 0; border-bottom: 1px solid rgb(var(--c-line));
+  }
+  .pref-row:last-child { border-bottom: 0; }
 
   .news-row:hover .row-title { color: rgb(var(--c-gold2)); }
 
@@ -1183,34 +1270,29 @@
   <!-- [추가] 화면 설정 팝업 : 헤더 오른쪽 ⋮ 버튼으로 연다.
        테마와 기본 노출 건수는 '이 기기에만' 저장되는 개인 취향이라 비밀번호를 요구하지 않는다. -->
   <div id="prefs-modal" class="hidden fixed inset-0 z-[85] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 pt-16 sm:pt-4 overflow-y-auto" onclick="closePrefsOnBackdrop(event)">
-    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-md" onclick="event.stopPropagation()">
-      <header class="flex items-center gap-2.5 px-5 py-3.5 border-b border-line bg-gradient-to-r from-gold/15 via-ink2 to-ink2 rounded-t-2xl">
-        <span class="text-gold shrink-0" id="prefs-modal-icon"></span>
-        <h2 class="font-sans font-bold text-gold text-xl">화면 설정</h2>
-        <button onclick="closePrefsModal()" title="닫기" class="ml-auto text-muted hover:text-paper transition">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    <!-- [수정] 시안 07번 : 420px · 머리말 한 줄 + 테마 썸네일 3종 + 설정 줄 -->
+    <div class="modal-pop popup-shell bg-ink2 border border-line rounded-xl shadow-2xl w-full max-w-[420px]" onclick="event.stopPropagation()">
+      <header class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-line">
+        <span class="font-sans font-bold text-paper text-[1.05rem]">화면 설정</span>
+        <button onclick="closePrefsModal()" title="닫기" class="text-muted2 hover:text-paper transition">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </header>
-      <div class="p-5 space-y-3">
+      <div class="px-5 py-4 space-y-5">
 
-        <!-- 테마 설정 (화이트 / 다크 / 시스템) · 누르는 즉시 적용되고 이 기기에 저장된다 -->
-        <div class="bg-ink/40 border border-line rounded-lg px-3 py-3 space-y-2">
-          <div class="flex items-center gap-2">
-            <span class="text-gold2 shrink-0" id="theme-setting-icon"></span>
-            <span class="font-semibold text-paper text-[1.15rem]">테마</span>
-            <span class="font-mono text-muted text-[0.8rem]">화면 밝기 · 이 기기에만 적용</span>
-          </div>
-          <div class="flex items-center gap-2 flex-wrap" id="theme-buttons"></div>
+        <!-- 테마 설정 (다크 / 화이트 / 시스템) · 누르는 즉시 적용되고 이 기기에 저장된다 -->
+        <div class="space-y-2.5">
+          <span class="popup-label block">테마</span>
+          <div class="flex items-stretch gap-1.5" id="theme-buttons"></div>
         </div>
 
         <!-- 기본 노출 건수 : 섹션을 처음 열 때 보여줄 기사 수 · 이 기기에 저장 -->
-        <div class="bg-ink/40 border border-line rounded-lg px-3 py-3 space-y-2">
-          <div class="flex items-center gap-2">
-            <span class="text-gold2 shrink-0" id="count-setting-icon"></span>
-            <span class="font-semibold text-paper text-[1.15rem]">기본 노출 건수</span>
-            <span class="font-mono text-muted text-[0.8rem]">처음 열 때 보여줄 기사 수 · 이 기기에만 적용</span>
+        <div class="space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="popup-label">기본 노출 건수</span>
+            <span class="font-mono text-muted2 text-[0.7rem]">처음 열 때 보여줄 기사 수</span>
           </div>
-          <div id="count-setting-selects" class="grid grid-cols-1 gap-2"></div>
+          <div id="count-setting-selects"></div>
         </div>
 
       </div>
@@ -1242,38 +1324,43 @@
 
   <!-- 주요 내용(AI 정리) 팝업 모달 -->
   <div id="brief-modal" class="hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeBriefOnBackdrop(event)">
-    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-4xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
-      <div class="flex justify-between items-center gap-4 p-6 pb-3 shrink-0">
-        <span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-gold/15 text-gold2 rounded-md border border-gold/30">주요 내용</span>
-        <button onclick="closeBrief()" class="text-muted hover:text-paper transition">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    <!-- [수정] 시안 05번 : 620px · 머리말(라벨·출처·제목) / 본문 / 아래 버튼 바 -->
+    <div class="modal-pop popup-shell bg-ink2 border border-line rounded-xl shadow-2xl w-full max-w-[620px] max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="popup-head shrink-0">
+        <div class="flex-1 min-w-0 space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="popup-kind">주요 내용</span>
+            <span class="dot-sep"></span>
+            <span id="brief-meta" class="font-mono text-[0.72rem] text-muted2 truncate"></span>
+          </div>
+          <h2 id="brief-title" class="popup-title font-sans break-keep"></h2>
+        </div>
+        <button onclick="closeBrief()" title="닫기" class="shrink-0 text-muted2 hover:text-paper transition">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
-      <div id="brief-body" class="px-6 overflow-y-auto grow space-y-5 pb-4"></div>
-      <!-- [수정] 안내 문구(윗줄) + 버튼들(아랫줄, 오른쪽 정렬) 로 두 줄 배치 -->
-      <div class="popup-foot flex flex-col items-end gap-2 p-6 pt-4 border-t border-line shrink-0">
-        <span id="brief-note" class="text-muted font-mono text-[0.75rem] self-start"></span>
-        <div class="popup-actions flex items-center gap-2 flex-wrap justify-end">
-          <!-- [추가] 'PDF 저장' : 팝업 내용을 인쇄창(→ PDF로 저장)으로 넘긴다 -->
-          <button onclick="savePopupAsPdf('brief')" title="PDF 저장"
-            class="flex items-center gap-1 text-paper bg-ink3 hover:bg-line px-2.5 py-1 rounded-md transition border border-line font-semibold text-[0.8rem]">
-            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-            PDF 저장
+      <div id="brief-body" class="popup-body overflow-y-auto grow space-y-4"></div>
+      <span id="brief-note" class="shrink-0 px-5 pb-3 text-muted font-mono text-[0.72rem] leading-relaxed"></span>
+      <!-- [수정] 시안 05번 : 안내 문구는 본문 끝으로 내리고, 버튼은 한 줄 바로 모은다 -->
+      <div class="popup-foot popup-bar shrink-0">
+        <div class="popup-actions flex items-center gap-2 flex-wrap w-full">
+          <button id="brief-insight-btn" onclick="openInsightFromBrief()" title="Insight"
+            class="pop-btn is-ok">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+            Insight
           </button>
-          <a id="brief-link" href="#" target="_blank" rel="noopener noreferrer"
-            class="flex items-center gap-1 text-wire hover:text-blue-300 px-2.5 py-1 rounded-md transition border border-wire/30 bg-wire/10 font-semibold text-[0.8rem]">
+          <a id="brief-link" href="#" target="_blank" rel="noopener noreferrer" class="pop-btn is-plain">
             원문 보기
             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
           </a>
-          <button id="brief-insight-btn" onclick="openInsightFromBrief()" title="Insight"
-            class="flex items-center gap-1 bg-green-600/25 hover:bg-green-600/40 text-green-200 px-2.5 py-1 rounded-md transition border border-green-600/60 font-semibold text-[0.8rem]">
-            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
-            Insight
-          </button>
-          <button id="brief-related-btn" onclick="openRelatedFromBrief()" title="관련 기사"
-            class="flex items-center gap-1 text-paper bg-ink3 hover:bg-line px-2.5 py-1 rounded-md transition border border-line font-semibold text-[0.8rem]">
+          <button id="brief-related-btn" onclick="openRelatedFromBrief()" title="관련 기사" class="pop-btn is-plain">
             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             관련 기사
+          </button>
+          <!-- 'PDF 저장' : 팝업 내용을 인쇄창(→ PDF로 저장)으로 넘긴다. 시안의 오른쪽 끝 채움 버튼 자리다. -->
+          <button onclick="savePopupAsPdf('brief')" title="PDF 저장" class="pop-btn is-gold ml-auto">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            PDF 저장
           </button>
         </div>
       </div>
@@ -1282,32 +1369,32 @@
 
   <!-- Insight(AI 두 관점 인사이트) 팝업 모달 -->
   <div id="insight-modal" class="hidden fixed inset-0 z-[65] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeInsightOnBackdrop(event)">
-    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-4xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
-      <div class="flex justify-between items-center gap-4 p-6 pb-3 shrink-0">
-        <span class="flex items-center gap-1.5 font-bold uppercase tracking-widest px-2.5 py-1 bg-emerald-500/15 text-emerald-300 rounded-md border border-emerald-500/40">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
-          Insight
-        </span>
-        <button onclick="closeInsight()" class="text-muted hover:text-paper transition">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    <!-- [수정] 시안 06번 : 620px · 초록 테두리 · 머리말(라벨·제목) / 본문 / 아래 버튼 바 -->
+    <div class="modal-pop popup-shell is-ok bg-ink2 border border-line rounded-xl shadow-2xl w-full max-w-[620px] max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="popup-head is-ok shrink-0">
+        <div class="flex-1 min-w-0 space-y-2">
+          <div class="flex items-center gap-2 text-ok">
+            <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+            <span class="popup-kind text-ok">INSIGHT · AI 분석</span>
+          </div>
+          <h2 id="insight-title" class="popup-title font-sans break-keep"></h2>
+        </div>
+        <button onclick="closeInsight()" title="닫기" class="shrink-0 text-muted2 hover:text-paper transition">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
-      <div id="insight-body" class="px-6 overflow-y-auto grow space-y-5 pb-4"></div>
-      <!-- [수정] 안내 문구(윗줄) + 버튼들(아랫줄, 오른쪽 정렬) 로 두 줄 배치 -->
-      <div class="popup-foot flex flex-col items-end gap-2 p-6 pt-4 border-t border-line shrink-0">
-        <span id="insight-note" class="text-muted font-mono text-[0.75rem] self-start"></span>
-        <div class="popup-actions flex items-center gap-2 flex-wrap justify-end">
-          <!-- [추가] 'PDF 저장' -->
-          <button onclick="savePopupAsPdf('insight')" title="PDF 저장"
-            class="flex items-center gap-1 text-paper bg-ink3 hover:bg-line px-2.5 py-1 rounded-md transition border border-line font-semibold text-[0.8rem]">
-            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-            PDF 저장
-          </button>
-          <a id="insight-link" href="#" target="_blank" rel="noopener noreferrer"
-            class="flex items-center gap-1 text-wire hover:text-blue-300 px-2.5 py-1 rounded-md transition border border-wire/30 bg-wire/10 font-semibold text-[0.8rem]">
+      <div id="insight-body" class="popup-body overflow-y-auto grow space-y-4"></div>
+      <span id="insight-note" class="shrink-0 px-5 pb-3 text-muted font-mono text-[0.72rem] leading-relaxed"></span>
+      <div class="popup-foot popup-bar shrink-0">
+        <div class="popup-actions flex items-center gap-2 flex-wrap w-full">
+          <a id="insight-link" href="#" target="_blank" rel="noopener noreferrer" class="pop-btn is-plain">
             원문 보기
             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
           </a>
+          <button onclick="savePopupAsPdf('insight')" title="PDF 저장" class="pop-btn is-gold ml-auto">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            PDF 저장
+          </button>
         </div>
       </div>
     </div>
@@ -2291,26 +2378,26 @@
     // [추가] 테마 설정 (화이트 / 다크 / 시스템)
     //   applyTheme / readThemePref 는 <head>에 미리 정의돼 있다. (깜빡임 방지)
     // ---------------------------------------------------------------
+    // [수정] 시안 07번 : 아이콘 버튼 대신 실제 배경색을 보여주는 썸네일 3장.
+    //   swatch 색은 각 테마의 --c-ink 값(#0A0D14 / #F4F3EF)을 그대로 적었다.
+    //   토큰을 쓰면 '지금 테마' 색으로 세 장이 다 같아져 미리보기가 안 된다.
     const THEME_OPTIONS = [
-      { key: 'light', label: '화이트', icon: 'sun' },
-      { key: 'dark', label: '다크', icon: 'moon' },
-      { key: 'system', label: '시스템', icon: 'monitor' },
+      { key: 'dark', label: '다크', swatch: 'background:#0A0D14' },
+      { key: 'light', label: '화이트', swatch: 'background:#F4F3EF' },
+      { key: 'system', label: '시스템', swatch: 'background:linear-gradient(90deg,#0A0D14 50%,#F4F3EF 50%)' },
     ];
 
     function renderThemeButtons() {
       const wrap = document.getElementById('theme-buttons');
       if (!wrap) return;
-      const iconEl = document.getElementById('theme-setting-icon');
-      if (iconEl) iconEl.innerHTML = icon('sun', 'w-4 h-4');
 
       const pref = readThemePref();
-      wrap.innerHTML = THEME_OPTIONS.map((o) => {
-        const active = pref === o.key;
-        return `<button type="button" onclick="setTheme('${o.key}')"
-          class="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-[1rem] transition whitespace-nowrap
-            ${active ? 'bg-gold text-ink border-gold font-semibold' : 'bg-ink2 text-muted border-line hover:bg-ink3'}">
-          ${icon(o.icon, 'w-4 h-4')} ${o.label}</button>`;
-      }).join('');
+      wrap.innerHTML = THEME_OPTIONS.map((o) => `
+        <button type="button" onclick="setTheme('${o.key}')" title="${o.label}"
+          class="theme-card${pref === o.key ? ' is-on' : ''}">
+          <span class="swatch" style="${o.swatch}"></span>
+          <span class="name">${o.label}</span>
+        </button>`).join('');
     }
 
     function setTheme(pref) {
@@ -2385,14 +2472,15 @@
     function renderCountSetting() {
       const wrap = document.getElementById('count-setting-selects');
       if (!wrap) return;
-      const iconEl = document.getElementById('count-setting-icon');
-      if (iconEl) iconEl.innerHTML = icon('sliders', 'w-4 h-4');
+      // [수정] 시안 07번의 설정 줄 : 박스를 없애고 가로줄로만 나눈다. 이름 아래에 설명을 작게 붙인다.
       wrap.innerHTML = COUNT_TARGETS.map((t) => `
-        <div class="flex items-center justify-between gap-2 bg-ink border border-line rounded-lg px-2.5 py-2">
-          <span class="text-muted text-[0.95rem] min-w-0 truncate">${t.label}
-            <span class="font-mono text-muted/70 text-[0.75rem]">${t.hint}</span></span>
+        <div class="pref-row">
+          <span class="min-w-0 flex flex-col gap-0.5">
+            <span class="text-paper text-[0.9rem] truncate">${t.label}</span>
+            <span class="text-muted2 text-[0.76rem] truncate">${t.hint}</span>
+          </span>
           <select onchange="setDefaultCount('${t.key}', this.value)" title="${t.label} 기본 노출 건수"
-            class="shrink-0 bg-ink2 border border-line rounded-lg px-2 py-1 text-paper font-mono focus:outline-none focus:border-gold/70">
+            class="shrink-0 bg-ink border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.82rem] focus:outline-none focus:border-gold/70">
             ${COUNT_CHOICES.map((n) => `<option value="${n}" ${String(n) === defaultCounts[t.key] ? 'selected' : ''}>${n}개</option>`).join('')}
           </select>
         </div>`).join('');
@@ -2407,8 +2495,6 @@
       closeNav();                        // 모바일 : 드로어가 열려 있으면 닫는다
       const el = document.getElementById('prefs-modal');
       if (!el) return;
-      const iconEl = document.getElementById('prefs-modal-icon');
-      if (iconEl) iconEl.innerHTML = icon('sliders', 'w-5 h-5');
       renderThemeButtons();              // 현재 선택 상태로 갱신
       renderCountSetting();
       el.classList.remove('hidden');
@@ -4479,39 +4565,45 @@
       </div>`;
     }
 
+    // [수정] 시안 05번 구조 : 요지 → 01·02·03 번호를 단 포인트 → 비교 표 → 주석
+    //   시안의 표는 '구분 / 현재 / 가동 후' 3열이지만 서버가 주는 값은 항목·내용 2열이다.
+    //   내용 구조를 바꾸려면 AI 프롬프트부터 손봐야 하므로 표의 모양만 시안에 맞췄다. (Phase 7)
     function briefHtml(b) {
       const table = (b.table || []).length ? `
-        <table class="w-full border-collapse">
-          <thead><tr class="border-b border-line">
-            <th class="text-left text-muted font-semibold py-2 pr-4 w-32 align-top">항목</th>
-            <th class="text-left text-muted font-semibold py-2">내용</th>
-          </tr></thead>
-          <tbody>${b.table.map(r => `
-            <tr class="border-b border-line/60">
-              <td class="py-2.5 pr-4 text-gold2 align-top break-keep">${esc(r.key)}</td>
-              <td class="py-2.5 text-paper/90 break-keep leading-relaxed">${esc(r.value)}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>` : '';
+        <div class="popup-table-wrap">
+          <table class="popup-table">
+            <thead><tr><th class="w-[7.5rem]">구분</th><th>내용</th></tr></thead>
+            <tbody>${b.table.map(r => `
+              <tr>
+                <td class="text-muted break-keep">${esc(r.key)}</td>
+                <td class="text-paper/90 break-keep leading-relaxed">${esc(r.value)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>` : '';
 
-      const bullets = (b.bullets || []).length ? `
-        <ul class="space-y-2">${b.bullets.map(x => `
-          <li class="flex gap-2 text-paper/90 leading-relaxed break-keep">
-            <span class="text-gold shrink-0">ㆍ</span><span>${esc(x)}</span>
-          </li>`).join('')}</ul>` : '';
+      const points = (b.bullets || []).length ? `
+        <div class="space-y-2.5">${b.bullets.map((x, i) => `
+          <div class="popup-point">
+            <span class="no">${String(i + 1).padStart(2, '0')}</span>
+            <p class="text-[0.93rem] leading-[1.75] text-paper/85 break-keep">${esc(x)}</p>
+          </div>`).join('')}</div>` : '';
 
       const keywords = (b.keywords || []).length ? `
-        <ul class="space-y-1.5">${b.keywords.map(k => `
-          <li class="text-muted text-[0.82rem] leading-relaxed break-keep">
-            <span class="text-gold2 font-semibold">${esc(k.term)}</span> · ${esc(k.explain)}
-          </li>`).join('')}</ul>` : '';
+        <div class="space-y-2 pt-3 border-t border-line">
+          <span class="popup-label block">주석</span>
+          <ul class="space-y-1.5">${b.keywords.map(k => `
+            <li class="text-muted text-[0.8rem] leading-relaxed break-keep">
+              <span class="text-gold font-semibold">${esc(k.term)}</span> · ${esc(k.explain)}
+            </li>`).join('')}</ul>
+        </div>` : '';
 
       return `
-        ${b.headline ? `<h3 class="font-sans text-[1.7rem] font-bold text-paper leading-snug break-keep">${esc(b.headline)}</h3>` : ''}
-        ${b.lead ? `<p class="text-paper/90 leading-relaxed break-keep">${esc(b.lead)}</p>` : ''}
-        ${table ? `<div><h4 class="font-bold text-gold2 text-lg mb-2">핵심 정리</h4>${table}</div>` : ''}
-        ${bullets ? `<div><h4 class="font-bold text-gold2 text-lg mb-2">주요 포인트</h4>${bullets}</div>` : ''}
-        ${keywords ? `<div class="pt-3 border-t border-line/60"><h4 class="font-bold text-muted text-xs uppercase tracking-widest mb-2">주석</h4>${keywords}</div>` : ''}`;
+        ${b.headline ? `<p class="font-sans text-[1.02rem] font-bold text-paper leading-snug break-keep">${esc(b.headline)}</p>` : ''}
+        ${b.lead ? `<p class="text-[0.93rem] leading-[1.75] text-paper/85 break-keep">${esc(b.lead)}</p>` : ''}
+        ${points}
+        ${table}
+        ${keywords}`;
     }
 
     async function openBrief(id) {
@@ -4521,6 +4613,10 @@
       const link = articleLink(item);   // [수정] 원문 보기와 똑같은 주소를 AI 정리에도 사용
       currentBriefId = id;              // [추가] 팝업 안 '관련 기사' 버튼이 쓸 기준 기사
       document.getElementById('brief-link').href = link;
+      // [추가] 시안 05번 : 머리말에 기사 제목과 출처·시각을 먼저 띄운다 (기다리는 동안에도 무엇을 보는지 알 수 있다)
+      document.getElementById('brief-title').innerHTML = item.title;
+      document.getElementById('brief-meta').textContent =
+        `${item.source || ''}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}`;
       document.getElementById('brief-note').textContent = '';
       document.getElementById('brief-body').innerHTML = briefLoadingHtml();
       const briefModal = document.getElementById('brief-modal');
@@ -4580,21 +4676,21 @@
 
     // 관점 하나(물류/주식시장)를 카드로 그린다
     //  - extraHtml : 카드 맨 아래에 덧붙일 내용 (주식시장 카드의 '관련 주요 종목')
+    // [수정] 시안 06번 : 카드 배경은 한 단계 어둡게 깔고 색은 라벨에만 남긴다.
+    //   시안의 '기회 / 리스크' 2열은 AI 응답 형식이 달라 아직 못 만든다 → Phase 7.
     function insightSectionHtml(iconName, label, accent, sec, extraHtml) {
       if (!sec) return '';
       const points = (sec.points || []).length ? `
-        <ul class="space-y-3 mt-3">${sec.points.map(p => `
-          <li class="flex gap-2 text-paper/90 leading-snug break-keep">
+        <ul class="space-y-2.5 mt-3">${sec.points.map(p => `
+          <li class="flex gap-2 text-[0.9rem] leading-[1.7] text-paper/85 break-keep">
             <span class="${accent.dot} shrink-0">ㆍ</span><span>${esc(p)}</span>
           </li>`).join('')}</ul>` : '';
       return `
-        <div class="rounded-xl border ${accent.border} ${accent.bg} p-5">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="flex items-center gap-1.5 font-bold ${accent.text} text-[0.95rem] uppercase tracking-widest">
-              ${icon(iconName, 'w-4 h-4')} ${label}
-            </span>
-          </div>
-          ${sec.summary ? `<p class="font-sans text-[1.15rem] font-bold text-paper leading-snug break-keep">${esc(sec.summary)}</p>` : ''}
+        <div class="rounded-[9px] border border-line bg-ink/50 px-4 py-3.5">
+          <span class="flex items-center gap-1.5 popup-label ${accent.text} mb-2.5">
+            ${icon(iconName, 'w-3.5 h-3.5')} ${label}
+          </span>
+          ${sec.summary ? `<p class="font-sans text-[1.02rem] font-bold text-paper leading-[1.6] break-keep">${esc(sec.summary)}</p>` : ''}
           ${points}
           ${extraHtml || ''}
         </div>`;
@@ -4621,12 +4717,12 @@
           </li>`;
       }).join('');
       return `
-        <div class="mt-4 pt-4 border-t border-line">
-          <span class="flex items-center gap-1.5 font-bold text-wire text-[0.8rem] uppercase tracking-widest mb-3">
+        <div class="mt-4 pt-3.5 border-t border-line">
+          <span class="flex items-center gap-1.5 popup-label mb-2.5">
             ${icon('line-chart', 'w-3.5 h-3.5')} 관련 주요 종목
           </span>
-          <ul class="space-y-3">${rows}</ul>
-          <p class="text-muted text-[0.72rem] leading-snug mt-3 break-keep">
+          <ul class="space-y-2.5">${rows}</ul>
+          <p class="text-muted2 text-[0.72rem] leading-snug mt-3 break-keep">
             AI가 기사 맥락만 보고 고른 참고 목록입니다. 실시간 시세·실적을 반영하지 않으며 투자 권유가 아닙니다.
           </p>
         </div>`;
@@ -4634,11 +4730,11 @@
 
     function insightHtml(d) {
       return `
-        ${insightSectionHtml('candlestick', 'Stock Market Insight',
-          { border: 'border-wire/30', bg: 'bg-wire/5', text: 'text-wire', dot: 'text-wire' }, d.stock,
+        ${insightSectionHtml('candlestick', 'STOCK MARKET',
+          { text: 'text-wire', dot: 'text-wire' }, d.stock,
           insightStocksHtml(d.stock && d.stock.stocks))}
-        ${insightSectionHtml('package', '물류 관점 Insight',
-          { border: 'border-gold/30', bg: 'bg-gold/5', text: 'text-gold2', dot: 'text-gold' }, d.logistics)}`;
+        ${insightSectionHtml('package', 'LOGISTICS',
+          { text: 'text-gold', dot: 'text-gold' }, d.logistics)}`;
     }
 
     async function openInsight(id) {
@@ -4648,6 +4744,7 @@
       const link = articleLink(item);   // 원문 보기와 똑같은 주소 사용
       currentInsightId = id;            // [추가] 'PDF 저장' 이 쓸 기준 기사
       document.getElementById('insight-link').href = link;
+      document.getElementById('insight-title').innerHTML = item.title;   // [추가] 시안 06번 머리말
       document.getElementById('insight-note').textContent = '';
       document.getElementById('insight-body').innerHTML = insightLoadingHtml();
       const insightModal = document.getElementById('insight-modal');
