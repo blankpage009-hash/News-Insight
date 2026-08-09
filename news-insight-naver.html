@@ -199,27 +199,66 @@
   #top-bar, main { max-width: 100%; }
   ::selection { background: rgb(var(--c-gold) / .33); }
 
-  /* 지수 티커 : 5개 지수가 끊김 없이 반복 순환
-     [수정] CSS 애니메이션 대신 JS(requestAnimationFrame)로 위치를 직접 굴린다.
-            → 흐르는 도중에도 마우스/손가락으로 잡고 좌우로 끌어 원하는 지수를 볼 수 있다.
-            touch-action:pan-y 로 세로 스크롤은 그대로 두고 가로 제스처만 가져온다. */
-  .ticker-viewport {
-    overflow: hidden;
-    touch-action: pan-y;
-    cursor: grab;
-  }
-  .ticker-viewport.is-dragging { cursor: grabbing; }
-  /* [추가] 차트가 있는 항목(코스피·코스닥·환율 등)은 눌러서 팝업을 열 수 있다 */
-  .ticker-item.is-chart { cursor: pointer; border-radius: 6px; padding: 1px 5px; margin: 0 -5px; }
-  .ticker-viewport.is-dragging .ticker-item.is-chart { cursor: grabbing; }
-  @media (hover: hover) {
-    .ticker-item.is-chart:hover { background: rgb(var(--c-gold) / .13); }
-  }
-  .ticker-track {
+  /* [수정] 흐르는 지수 티커를 없애고, 데스크톱은 우측 마켓 레일 · 모바일은 간이 지수 바로 나눴다.
+     (시안 01번 / 10번) 값이 제자리에 멈춰 있어야 읽기가 쉽고, 흐름을 붙잡을 필요도 없다. */
+
+  /* --- 모바일 : 헤더 아래 가로 지수 바 (손가락으로 밀어서 본다) --- */
+  #index-strip { -webkit-overflow-scrolling: touch; }
+  #index-strip::-webkit-scrollbar { height: 0; }
+  .strip-item {
+    flex: none;
     display: flex;
-    width: max-content;
-    white-space: nowrap;
-    will-change: transform;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 0;
+  }
+  .strip-sep { flex: none; width: 1px; background: rgb(var(--c-line)); }
+
+  /* --- 데스크톱 : 우측 마켓 레일 --- */
+  #market-rail { display: none; }
+  @media (min-width: 1024px) {
+    #market-rail {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      position: sticky;
+      top: 1rem;
+    }
+  }
+  /* 지수 목록 상자 : 칸을 나누는 건 테두리 하나뿐 (시안 240행) */
+  .rail-box {
+    border: 1px solid rgb(var(--c-line));
+    border-radius: 9px;
+    overflow: hidden;
+    background: rgb(var(--c-ink2));
+  }
+  .rail-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 11px 13px;
+    border-bottom: 1px solid rgb(var(--c-line));
+    width: 100%;
+    text-align: left;
+    transition: background-color .15s;
+  }
+  .rail-row:last-child { border-bottom: 0; }
+  /* 차트가 있는 지수만 눌러서 팝업을 열 수 있다 */
+  .rail-row.is-chart { cursor: pointer; }
+  @media (hover: hover) {
+    .rail-row.is-chart:hover { background: rgb(var(--c-gold) / .08); }
+  }
+  /* 항목이 홀수면 마지막 카드가 반 칸만 차지해 어색하다 → 한 줄을 다 쓰게 한다 */
+  #rail-extra > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .rail-card {
+    padding: 10px 12px;
+    border: 1px solid rgb(var(--c-line));
+    border-radius: 9px;
+    background: rgb(var(--c-ink2));
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
   }
 
   @keyframes pulse-soft { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
@@ -539,11 +578,11 @@
          · 모바일(<1024px)에서는 사이드바가 이미 드로어라서 이 상태를 무시한다.
      --------------------------------------------------------------- */
   @media (min-width: 1024px) {
-    /* [수정] 폭 : 화면의 1/4 대신 고정 폭으로 잡아 기사 영역을 넓힌다 */
-    #main-grid { grid-template-columns: 264px minmax(0, 1fr); }
+    /* [수정] 시안 01번의 3단 구조 : 좌측 섹션 224 / 본문 / 우측 마켓 레일 300 */
+    #main-grid { grid-template-columns: 224px minmax(0, 1fr) 300px; }
     #content-col { grid-column: span 1 / span 1; }
 
-    body.side-collapsed #main-grid { grid-template-columns: 46px minmax(0, 1fr); }
+    body.side-collapsed #main-grid { grid-template-columns: 46px minmax(0, 1fr) 300px; }
     body.side-collapsed #sidebar > div { display: none; }
     body.side-collapsed .side-scroll {
       padding-right: 0;
@@ -779,13 +818,9 @@
     </div>
   </header>
 
-  <!-- 지수 티커 -->
-  <div id="ticker-viewport" class="ticker-viewport bg-rail border-b border-line py-2 select-none">
-    <div class="ticker-track" id="ticker-track">
-      <span id="ticker-content" class="flex items-center gap-12 pr-12 font-mono text-muted"></span>
-      <span id="ticker-content-2" class="flex items-center gap-12 pr-12 font-mono text-muted" aria-hidden="true"></span>
-    </div>
-  </div>
+  <!-- [수정] 지수 : 데스크톱에서는 우측 마켓 레일(#market-rail)로 옮겼다. (시안 01번)
+       모바일에는 시안 10번처럼 간이 지수 바만 남긴다. 흐르지 않고, 손가락으로 밀어서 본다. -->
+  <div id="index-strip" class="lg:hidden bg-rail border-b border-line overflow-x-auto"></div>
   </div>
 
   <!-- [추가] 모바일 드로어 뒷배경 (눌러서 닫기) -->
@@ -1125,6 +1160,17 @@
       <div id="news-list" class="space-y-5"></div>
 
     </section>
+
+    <!-- [추가] 우측 마켓 레일 (시안 01번) : 헤더에서 뺀 지수를 여기 세로로 세운다.
+         1024px 미만에서는 숨기고, 대신 헤더 아래 #index-strip 이 그 역할을 한다. -->
+    <aside id="market-rail" aria-label="시장 지표">
+      <div class="flex items-center justify-between">
+        <span class="font-mono text-[0.63rem] font-semibold label-wide text-muted2">MARKETS</span>
+        <span id="rail-time" class="font-mono text-[0.66rem] text-muted"></span>
+      </div>
+      <div id="rail-indices" class="rail-box"></div>
+      <div id="rail-extra" class="grid grid-cols-2 gap-2"></div>
+    </aside>
   </main>
 
   <!-- [추가] 화면 설정 팝업 : 헤더 오른쪽 ⋮ 버튼으로 연다.
@@ -1729,9 +1775,6 @@
       document.addEventListener('touchend', onPullTouchEnd);
       document.addEventListener('touchcancel', onPullTouchEnd);
 
-      // [추가] 지수 티커 : 자동 흐름 + 잡고 끌기
-      setupTickerDrag();
-
       // [추가] 제목 바 틀고정 '유격' 방지 :
       //   웹폰트 로딩·레이아웃이 확정된 뒤 상단바 높이를 다시 재서 고정 위치를 정확히 맞춘다.
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(updateStickTop);
@@ -1860,8 +1903,8 @@
         if (el && !el.closest('#sidebar, #nav-scrim')) return;
       } else {
         if (t.clientX > NAV_EDGE_ZONE) return;
-        // 티커·가로 스크롤 영역은 자기 드래그가 있으므로 건드리지 않는다
-        if (el && el.closest('#ticker-viewport, .overflow-x-auto')) return;
+        // 가로로 스크롤되는 영역(지수 바 등)은 자기 제스처가 있으므로 건드리지 않는다
+        if (el && el.closest('#index-strip, .overflow-x-auto')) return;
       }
       navDrag = { isOpen, x0: t.clientX, y0: t.clientY, axis: null, progress: isOpen ? 1 : 0 };
     }
@@ -1921,8 +1964,8 @@
       if (!isMobileLayout() || pullRefreshing) return false;
       if (document.body.classList.contains('nav-open') || settingMode) return false;
       if ((window.scrollY || document.documentElement.scrollTop || 0) > 0) return false;
-      // 팝업·드로어·티커 안에서 시작한 손짓은 그쪽 몫이다
-      if (el && el.closest('[id$="-modal"], #sidebar, #nav-scrim, #ticker-viewport')) return false;
+      // 팝업·드로어·지수 바 안에서 시작한 손짓은 그쪽 몫이다
+      if (el && el.closest('[id$="-modal"], #sidebar, #nav-scrim, #index-strip')) return false;
       // 스스로 세로 스크롤되는 상자(팝업 본문 등) 안이면 그 스크롤을 방해하지 않는다
       for (let n = el; n && n !== document.body; n = n.parentElement) {
         const oy = getComputedStyle(n).overflowY;
@@ -4221,34 +4264,16 @@
     }
 
     // ---------------------------------------------------------------
-    // 지수 티커
+    // 지수 표시 (시안 01번 · 10번)
+    //   데스크톱 : 우측 마켓 레일(#market-rail)에 세로로 세운다
+    //   모바일   : 헤더 아래 간이 지수 바(#index-strip)
+    //   흐르는 애니메이션은 없앴다. 값이 제자리에 있어야 읽기 쉽다.
     // ---------------------------------------------------------------
-    // [추가] 티커 항목 중 '증시 > 시황'에 차트가 있는 것은 눌러서 팝업을 열 수 있게 표시해 둔다.
-    //   (data-index-key 를 붙여 두면 setupTickerDrag 의 탭 처리가 그 키로 openIndexChart 를 부른다)
-    function tickerChartAttr(key) {
-      if (!key || !INDEX_CARDS.some((c) => c.key === key)) return { cls: '', attr: '' };
-      return { cls: ' ticker-item is-chart', attr: ` data-index-key="${key}" title="눌러서 차트 보기"` };
-    }
-
-    function formatIndexEntry(item) {
-      const isUp = item.change > 0, isDown = item.change < 0;
-      const arrow = isUp ? '▲' : isDown ? '▼' : '－';
-      const colorClass = isUp ? 'text-up' : isDown ? 'text-down' : 'text-muted';
-      const priceStr = item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const changeStr = Math.abs(item.change).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const pctStr = Math.abs(item.changePercent).toFixed(2);
-      const chart = tickerChartAttr(item.key);
-      return `<span class="flex items-center gap-2${chart.cls}"${chart.attr}>
-        <span class="text-gold tracking-wider">${item.name}</span>
-        <span class="tabular-nums text-paper">${priceStr}</span>
-        <span class="${colorClass} tabular-nums">${arrow}${changeStr} (${arrow}${pctStr}%)</span></span>`;
-    }
 
     // KOSPI → KOSDAQ → NASDAQ → S&P 500 → DOW JONES 순서 고정
     const INDEX_ORDER = ['KOSPI', 'KOSDAQ', 'NASDAQ', 'S&P 500', 'DOW JONES'];
 
     // 기준금리·환율 항목 (한국은행 ECOS / FRED / 네이버 환율 API에서 실시간 조회)
-    let extraTickerHtml = '';
     let lastExtraItems = [];       // [추가] 지수 차트 화면의 '원/달러 환율' 카드도 이 값을 쓴다
     let lastIndexItems = [];
     let indexItemsError = false;   // [추가] 지수 값을 못 받아왔는지 ('지수 차트' 카드 화면 안내용)
@@ -4256,20 +4281,76 @@
     // 시장지표 항목에는 지수 키가 없어서 이름으로 차트 키를 찾는다 (기준금리는 차트가 없다)
     const EXTRA_CHART_KEYS = { '원/달러 환율': 'usdkrw' };
 
-    function formatExtraEntry(item) {
-      const isUp = item.change > 0, isDown = item.change < 0;
-      const arrow = isUp ? '▲' : isDown ? '▼' : '－';
-      const colorClass = isUp ? 'text-up' : isDown ? 'text-down' : 'text-muted';
+    // '증시 > 시황'에 차트가 있는 항목만 눌러서 팝업을 열 수 있다
+    function hasIndexChart(key) {
+      return !!key && INDEX_CARDS.some((c) => c.key === key);
+    }
+
+    // 등락 방향에 따른 화살표·색을 한 번에 구한다
+    function moveOf(change) {
+      const up = change > 0, down = change < 0;
+      return {
+        arrow: up ? '▲' : down ? '▼' : '－',
+        cls: up ? 'text-up' : down ? 'text-down' : 'text-muted',
+      };
+    }
+
+    const num2 = (v) => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    // --- 우측 레일 : 지수 한 줄 ---
+    function railIndexRowHtml(item) {
+      const m = moveOf(item.change);
+      const chart = hasIndexChart(item.key);
+      const tag = chart ? 'button' : 'div';
+      const attr = chart
+        ? ` onclick="openIndexChart('${item.key}')" title="눌러서 기간별 차트 보기"`
+        : '';
+      return `<${tag} class="rail-row${chart ? ' is-chart' : ''}"${attr}>
+        <span class="flex flex-col gap-[3px] min-w-0">
+          <span class="font-mono text-[0.73rem] font-semibold tracking-wider text-muted">${item.name}</span>
+          <span class="font-mono text-[1rem] font-semibold text-paper tabular-nums">${num2(item.price)}</span>
+        </span>
+        <span class="font-mono text-[0.73rem] font-medium ${m.cls} text-right tabular-nums leading-[1.5] shrink-0">
+          ${m.arrow}${num2(Math.abs(item.change))}<br>${item.change >= 0 ? '+' : '-'}${Math.abs(item.changePercent).toFixed(2)}%
+        </span>
+      </${tag}>`;
+    }
+
+    // --- 우측 레일 : 기준금리·환율 작은 카드 ---
+    function railExtraCardHtml(item) {
+      const m = moveOf(item.change);
       const changeText = item.change === 0
-        ? '(동결)'
-        : item.changePercent !== undefined
-          ? `${arrow}${Math.abs(item.change).toFixed(2)} (${arrow}${Math.abs(item.changePercent).toFixed(2)}%)`
-          : `(${arrow}${Math.abs(item.change).toFixed(2)}%p)`;
-      const chart = tickerChartAttr(EXTRA_CHART_KEYS[item.name]);
-      return `<span class="flex items-center gap-2${chart.cls}"${chart.attr}>
-        <span class="text-gold tracking-wider">${item.name}</span>
-        <span class="tabular-nums text-paper">${item.priceStr}</span>
-        <span class="${colorClass} tabular-nums">${changeText}</span></span>`;
+        ? '동결'
+        : `${m.arrow}${Math.abs(item.change).toFixed(2)}`;
+      const key = EXTRA_CHART_KEYS[item.name];
+      const chart = hasIndexChart(key);
+      const tag = chart ? 'button' : 'div';
+      const attr = chart
+        ? ` onclick="openIndexChart('${key}')" title="눌러서 기간별 차트 보기"`
+        : '';
+      return `<${tag} class="rail-card${chart ? ' is-chart' : ''} text-left"${attr}>
+        <span class="font-mono text-[0.66rem] text-muted2">${item.name}</span>
+        <span class="font-mono text-[0.93rem] font-semibold text-paper tabular-nums">${item.priceStr}</span>
+        <span class="font-mono text-[0.7rem] font-medium ${item.change === 0 ? 'text-muted2' : m.cls}">${changeText}</span>
+      </${tag}>`;
+    }
+
+    // --- 모바일 : 가로 지수 바의 한 칸 ---
+    function stripItemHtml(item) {
+      const m = moveOf(item.change);
+      const pct = item.changePercent !== undefined
+        ? `${item.change >= 0 ? '+' : '-'}${Math.abs(item.changePercent).toFixed(2)}%`
+        : `${m.arrow}${Math.abs(item.change).toFixed(2)}`;
+      const value = item.priceStr !== undefined ? item.priceStr : num2(item.price);
+      const key = item.key || EXTRA_CHART_KEYS[item.name];
+      const chart = hasIndexChart(key);
+      const tag = chart ? 'button' : 'div';
+      const attr = chart ? ` onclick="openIndexChart('${key}')"` : '';
+      return `<${tag} class="strip-item text-left"${attr}>
+        <span class="font-mono text-[0.63rem] font-semibold tracking-wider text-muted2">${item.name}</span>
+        <span class="font-mono text-[0.78rem] font-semibold text-paper tabular-nums whitespace-nowrap">${value}
+          <span class="${item.change === 0 ? 'text-muted2' : m.cls}">${item.change === 0 ? '동결' : pct}</span></span>
+      </${tag}>`;
     }
 
     async function refreshExtraTicker() {
@@ -4278,150 +4359,44 @@
         if (!res.ok) throw new Error('시장지표 API 오류: ' + res.status);
         const data = await res.json();
         lastExtraItems = Array.isArray(data.items) ? data.items : [];
-        extraTickerHtml = lastExtraItems.map(formatExtraEntry).join('');
+        renderIndexTicker(lastIndexItems);
         renderIndexCards();   // [추가] 지수 차트 화면이면 환율 카드도 같이 갱신된다
       } catch (err) {
         console.error(err);
       }
     }
 
+    // 레일과 모바일 바를 한 번에 다시 그린다 (이름은 기존 호출부 때문에 그대로 둔다)
     function renderIndexTicker(items) {
-      const sorted = [...items].sort(
+      const sorted = [...(items || [])].sort(
         (a, b) => INDEX_ORDER.indexOf(a.name) - INDEX_ORDER.indexOf(b.name)
       );
-      const html = sorted.length
-        ? sorted.map(formatIndexEntry).join('') + extraTickerHtml
-        : '<span>지수 정보를 불러오는 중입니다...</span>';
-      // 같은 내용을 두 벌 채워야 끊김 없이 계속 순환한다
-      document.getElementById('ticker-content').innerHTML = html;
-      document.getElementById('ticker-content-2').innerHTML = html;
-      measureTicker();   // 내용이 바뀌면 순환 길이를 다시 잰다
-    }
 
-    // ---------------------------------------------------------------
-    // [추가] 지수 티커 : 자동 흐름을 JS로 돌리고, 마우스/손가락으로 잡아 좌우로 끌 수 있다.
-    //   · tickerOffset : 트랙을 왼쪽으로 밀어낸 거리(px). 사본 1개 길이(tickerHalf)마다 되감아
-    //     끊김 없이 무한 순환한다.
-    //   · 끌기를 마치면 잠깐(TICKER_RESUME_DELAY) 멈췄다가 자동 흐름을 다시 시작한다.
-    // ---------------------------------------------------------------
-    const TICKER_SPEED = 40;            // 자동 흐름 속도(px/초)
-    const TICKER_RESUME_DELAY = 2500;   // 손을 뗀 뒤 자동 흐름 재개까지(ms)
-    const TICKER_MAX_FLICK = 2500;      // 튕겼을 때 관성 속도 상한(px/초)
-
-    let tickerOffset = 0;
-    let tickerHalf = 0;
-    let tickerHover = false;
-    let tickerDrag = null;
-    let tickerVelocity = 0;   // 관성 속도(px/초, 양수 = 내용이 오른쪽으로)
-    let tickerResumeAt = 0;
-    let tickerLastTs = 0;
-
-    function wrapTickerOffset(v) {
-      if (!(tickerHalf > 0)) return 0;
-      return ((v % tickerHalf) + tickerHalf) % tickerHalf;
-    }
-
-    function measureTicker() {
-      const track = document.getElementById('ticker-track');
-      if (!track) return;
-      tickerHalf = track.scrollWidth / 2;
-      tickerOffset = wrapTickerOffset(tickerOffset);
-      drawTicker();
-    }
-
-    function drawTicker() {
-      const track = document.getElementById('ticker-track');
-      if (track) track.style.transform = `translateX(${-tickerOffset}px)`;
-    }
-
-    function tickerAutoAllowed() {
-      if (tickerHover) return false;
-      return !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-    }
-
-    function tickerFrame(ts) {
-      const dt = tickerLastTs ? Math.min(0.05, (ts - tickerLastTs) / 1000) : 0;
-      tickerLastTs = ts;
-
-      if (tickerDrag) {
-        // 끌고 있는 동안에는 포인터 위치가 그대로 티커 위치가 된다(아래 pointermove에서 그린다)
-      } else if (Math.abs(tickerVelocity) > 8) {
-        // 튕긴 뒤 관성으로 미끄러지는 구간
-        tickerOffset = wrapTickerOffset(tickerOffset - tickerVelocity * dt);
-        tickerVelocity *= Math.pow(0.004, dt);
-        tickerResumeAt = ts + TICKER_RESUME_DELAY;
-        drawTicker();
-      } else {
-        tickerVelocity = 0;
-        if (dt && ts >= tickerResumeAt && tickerAutoAllowed()) {
-          tickerOffset = wrapTickerOffset(tickerOffset + TICKER_SPEED * dt);
-          drawTicker();
-        }
-      }
-      requestAnimationFrame(tickerFrame);
-    }
-
-    function setupTickerDrag() {
-      const vp = document.getElementById('ticker-viewport');
-      if (!vp) return;
-
-      const endDrag = (e) => {
-        if (!tickerDrag || (e && e.pointerId !== tickerDrag.id)) return;
-        // 손을 떼기 직전에 이미 멈춰 있었다면 관성 없이 그 자리에 선다
-        if (performance.now() - tickerDrag.t > 120) tickerVelocity = 0;
-        try { vp.releasePointerCapture(tickerDrag.id); } catch (_) {}
-        tickerDrag = null;
-        vp.classList.remove('is-dragging');
-        tickerResumeAt = performance.now() + TICKER_RESUME_DELAY;
-      };
-
-      vp.addEventListener('pointerdown', (e) => {
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        measureTicker();
-        tickerVelocity = 0;
-        tickerDrag = { id: e.pointerId, x: e.clientX, t: performance.now(), moved: 0 };
-        try { vp.setPointerCapture(e.pointerId); } catch (_) {}
-        vp.classList.add('is-dragging');
-      });
-
-      vp.addEventListener('pointermove', (e) => {
-        if (!tickerDrag || e.pointerId !== tickerDrag.id) return;
-        const now = performance.now();
-        const dx = e.clientX - tickerDrag.x;
-        if (!dx) return;
-        const dt = Math.max(8, now - tickerDrag.t) / 1000;
-        tickerOffset = wrapTickerOffset(tickerOffset - dx);
-        tickerVelocity = Math.max(-TICKER_MAX_FLICK, Math.min(TICKER_MAX_FLICK, dx / dt));
-        tickerDrag.x = e.clientX;
-        tickerDrag.t = now;
-        tickerDrag.moved += Math.abs(dx);
-        drawTicker();
-        e.preventDefault();
-      });
-
-      // 끌지 않고 톡 눌렀을 때(=탭)만 차트 팝업을 연다.
-      //   포인터를 붙잡아 두는 동안(setPointerCapture)에는 이벤트 대상이 티커 상자로 고정되므로
-      //   손을 뗀 좌표에서 실제로 눌린 항목을 다시 찾는다.
-      vp.addEventListener('pointerup', (e) => {
-        const isTap = !!tickerDrag && e.pointerId === tickerDrag.id && tickerDrag.moved < 6;
-        endDrag(e);
-        if (!isTap) return;
-        const el = document.elementFromPoint(e.clientX, e.clientY);
-        const hit = el && el.closest && el.closest('[data-index-key]');
-        if (hit) openIndexChart(hit.dataset.indexKey);
-      });
-      vp.addEventListener('pointercancel', endDrag);
-      vp.addEventListener('lostpointercapture', endDrag);
-
-      // 마우스를 올려두면(데스크톱) 멈춰서 읽기 편하게 — 터치에서는 해당 없음
-      if (window.matchMedia && window.matchMedia('(hover: hover)').matches) {
-        vp.addEventListener('mouseenter', () => { tickerHover = true; });
-        vp.addEventListener('mouseleave', () => { tickerHover = false; });
+      const rail = document.getElementById('rail-indices');
+      if (rail) {
+        rail.innerHTML = sorted.length
+          ? sorted.map(railIndexRowHtml).join('')
+          : `<div class="rail-row"><span class="text-muted text-[0.8rem]">${indexItemsError ? '지수 정보를 불러올 수 없습니다.' : '지수 정보를 불러오는 중입니다…'}</span></div>`;
       }
 
-      window.addEventListener('resize', measureTicker);
-      measureTicker();
-      requestAnimationFrame(tickerFrame);
+      const extra = document.getElementById('rail-extra');
+      if (extra) extra.innerHTML = lastExtraItems.map(railExtraCardHtml).join('');
+
+      const strip = document.getElementById('index-strip');
+      if (strip) {
+        const all = [...sorted, ...lastExtraItems];
+        strip.innerHTML = all.length
+          ? `<div class="flex items-stretch gap-3.5 px-4 w-max">${
+              all.map(stripItemHtml).join('<span class="strip-sep"></span>')}</div>`
+          : `<div class="px-4 py-2.5 font-mono text-[0.72rem] text-muted">${indexItemsError ? '지수 정보를 불러올 수 없습니다.' : '지수 정보를 불러오는 중입니다…'}</div>`;
+      }
+
+      const time = document.getElementById('rail-time');
+      if (time) {
+        time.textContent = new Date().toLocaleTimeString('ko-KR', {
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        }) + ' KST';
+      }
     }
 
     async function refreshIndexTicker() {
@@ -4440,9 +4415,9 @@
       } catch (err) {
         console.error(err);
         indexItemsError = true;
-        const msg = '<span>지수 정보를 불러올 수 없습니다.</span>' + extraTickerHtml;
-        document.getElementById('ticker-content').innerHTML = msg;
-        document.getElementById('ticker-content-2').innerHTML = msg;
+        lastIndexItems = [];
+        // 지수를 못 받아도 기준금리·환율은 살아 있을 수 있으므로 그대로 다시 그린다
+        renderIndexTicker([]);
         renderIndexCards();   // [추가] 카드 화면이면 '다시 시도'를 보여준다
       }
     }
