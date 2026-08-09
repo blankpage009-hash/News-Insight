@@ -729,8 +729,11 @@
   .setting-row { display: grid; grid-template-columns: 1fr; gap: .75rem; }
   .setting-row + .setting-row { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgb(var(--c-line)); }
   @media (min-width: 768px) {
-    .setting-row { grid-template-columns: 13rem 1fr; gap: 1.5rem; }
-    .setting-row-body { padding-left: 1.5rem; border-left: 1px solid rgb(var(--c-line)); }
+    /* 세로 구분선을 아래 '섹션 목록'(240px) 의 오른쪽 끝과 같은 자리에 둔다.
+       칸 사이 간격(column-gap)을 0으로 두고 여백은 본문 안쪽(padding)으로 줘야
+       테두리가 정확히 240px 지점에 온다. */
+    .setting-row { grid-template-columns: 240px minmax(0, 1fr); column-gap: 0; }
+    .setting-row-body { padding-left: 1.125rem; border-left: 1px solid rgb(var(--c-line)); }
     /* 키워드 설정은 그 안에서 다시 2열로 나뉘므로 가로를 다 쓴다 (제목은 위로) */
     .setting-row.is-wide { grid-template-columns: 1fr; gap: 1rem; }
     .setting-row.is-wide .setting-row-body { padding-left: 0; border-left: 0; }
@@ -1264,9 +1267,10 @@
         <!-- [수정] 스크롤을 내려도 '저장 후 새로고침/기본값/닫기' 버튼을 바로 쓸 수 있게 헤더를 상단 고정(sticky) -->
         <header class="sticky z-30 flex items-center justify-between gap-x-3 gap-y-2 flex-wrap px-1 pt-1 pb-2.5 bg-ink border-b border-gold/30"
           style="top: calc(var(--stick-top, 121px) - 1px)">
-          <div class="flex items-center gap-2.5 min-w-0">
-            <span class="text-gold shrink-0" id="setting-view-icon"></span>
-            <h2 class="font-sans font-bold text-gold text-xl truncate">관리자 Setting</h2>
+          <!-- [수정] 시안 08번 : 금색 ADMIN 라벨 아래에 제목 -->
+          <div class="flex flex-col gap-1 min-w-0">
+            <span class="font-mono text-[0.66rem] font-semibold label-wide text-gold">ADMIN</span>
+            <h2 class="setting-row-title font-sans truncate">섹션 · 키워드 관리</h2>
           </div>
           <!-- [수정] 저장/기본값 버튼을 제목 옆(헤더)으로 이동 -->
           <div class="flex items-center gap-2 shrink-0">
@@ -1309,10 +1313,10 @@
 
           <!-- [수정] 시안 08번 : 위에 제목·설명, 아래에 2열(왼쪽 섹션 목록 · 오른쪽 키워드) -->
           <div class="setting-row is-wide">
-            <div class="pt-1">
+            <div>
+              <!-- 제목은 위 헤더(ADMIN · 섹션 · 키워드 관리)가 대신한다 -->
               <div class="min-w-0">
-                <div class="setting-row-title">섹션 · 키워드 관리</div>
-                <p class="text-muted text-[0.8rem] mt-1 leading-relaxed">
+                <p class="text-muted text-[0.8rem] leading-relaxed">
                   왼쪽에서 섹션을 고르고, <span class="text-gold2 font-semibold">포함</span>·<span class="text-gold2 font-semibold">제외</span> 키워드를 정하면
                   항상 이 값을 기준으로 기사를 가져옵니다.
                   입력칸에 적고 <span class="text-gold2 font-semibold">Enter</span>(또는 콤마)를 누르면 조각으로 담기고, <span class="text-gold2 font-semibold">×</span> 로 지웁니다.
@@ -2038,6 +2042,7 @@
     // [추가] 우측 마켓 레일 접기 · 사이드바와 같은 방식이다.
     //   접으면 지수 목록이 사라지고 펼치기(«) 버튼만 남아, 기사 영역이 그만큼 넓어진다.
     const RAIL_STORAGE_KEY = 'news-insight-rail-collapsed';
+    let railBeforeSetting = null;   // 설정 화면에 들어오기 전의 레일 상태 (나갈 때 되돌린다)
     // 겹화살표 두 방향 : 접기는 오른쪽(»), 펼치기는 왼쪽(«)
     const RAIL_ARROW = {
       collapse: '<path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/>',
@@ -2060,7 +2065,11 @@
     }
 
     function toggleRail() {
-      setRailCollapsed(!document.body.classList.contains('rail-collapsed'));
+      const next = !document.body.classList.contains('rail-collapsed');
+      setRailCollapsed(next);
+      // 설정 화면에서 직접 접거나 편 것은 사용자의 새 취향이다.
+      //  (설정을 닫을 때 예전 상태로 되돌리면 방금 한 조작이 취소돼 버린다)
+      if (settingMode) railBeforeSetting = next;
     }
 
     function restoreRailCollapsed() {
@@ -2644,8 +2653,10 @@
       document.getElementById('scfi-panel').classList.add('hidden');
       const sub = document.getElementById('mobile-subnav');
       if (sub) sub.style.display = 'none';
-      const iconEl = document.getElementById('setting-view-icon');
-      if (iconEl) iconEl.innerHTML = icon('settings', 'w-5 h-5');
+      // [추가] 설정 화면은 가로를 넓게 써야 해서 마켓 레일을 접어 둔다.
+      //   원래 상태를 기억해 두고 나갈 때 되돌린다. (이 접힘은 저장하지 않는다)
+      railBeforeSetting = document.body.classList.contains('rail-collapsed');
+      setRailCollapsed(true, false);
       document.getElementById('setting-view').classList.remove('hidden');
       document.getElementById('status-line').textContent =
         '기사 가져오기 키워드 설정 · 섹션별 포함/제외 키워드를 정하세요.';
@@ -2660,6 +2671,8 @@
       if (countDefaultsDirty) { rerun = true; countDefaultsDirty = false; }
       document.getElementById('setting-view').classList.add('hidden');
       document.getElementById('news-list').classList.remove('hidden');
+      // 들어올 때 접어 뒀던 마켓 레일을 원래대로 되돌린다
+      if (railBeforeSetting !== null) { setRailCollapsed(railBeforeSetting, false); railBeforeSetting = null; }
       renderSettingToggle();
       if (rerun) {
         runSearch();                       // 새 키워드로 다시 가져오기 (제목 바도 이때 갱신됨)
