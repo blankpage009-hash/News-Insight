@@ -4536,6 +4536,7 @@
       if (e.key !== 'Escape') return;
       const open = [
         ['brief-modal', closeBrief],
+        ['insight-modal', closeInsight],   // [수정] 빠져 있어서 Insight 팝업만 열려 있을 때 Esc가 안 먹었다
         ['related-modal', closeRelated],
         ['scfi-modal', closeScfiChart],
         ['index-modal', closeIndexChart],
