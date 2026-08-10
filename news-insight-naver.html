@@ -5730,9 +5730,12 @@
     //  - AI가 기사 맥락으로 골라낸 참고 목록이라, 아래에 안내 문구를 같이 둔다.
     function insightStocksHtml(stocks) {
       if (!Array.isArray(stocks) || !stocks.length) return '';
-      // 지수 위젯과 같은 국내 증시 관례 : 수혜(오름)=빨강, 부담(내림)=파랑
+      // 수혜는 같은 팝업의 '기회' 와 같은 초록(--c-ok)으로 맞춘다.
+      //  - 원래는 지수 위젯처럼 국내 증시 관례(오름=빨강)를 따랐는데,
+      //    B2 에서 '리스크' 라벨이 같은 빨강으로 들어오면서 한 팝업 안에서 빨강의 뜻이 갈렸다.
+      //  - 부담은 그대로 파랑(--c-down). 지수 위젯의 내림색과도 어긋나지 않는다.
       const tagStyle = {
-        '수혜': 'text-up border-up/40 bg-up/10',
+        '수혜': 'text-ok border-ok/40 bg-ok/10',
         '부담': 'text-down border-down/40 bg-down/10',
       };
       const rows = stocks.map(s => {
