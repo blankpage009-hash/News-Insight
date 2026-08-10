@@ -623,6 +623,12 @@
     body.nav-open #sidebar { transform: translateX(0); }
     body.nav-open { overflow: hidden; }   /* 드로어 열려 있는 동안 본문 스크롤 잠금 */
 
+    /* [추가] 팝업이 떠 있는 동안에도 같은 방식으로 뒷배경을 잠근다.
+       화면 설정처럼 내용이 짧은 팝업은 팝업 안에서 스크롤할 게 없어,
+       손짓이 그대로 뒤 기사 목록으로 넘어가 배경이 따라 움직였다.
+       (데스크톱은 스크롤 막대가 사라지며 화면이 튀므로 모바일·태블릿에서만 잠근다) */
+    body.modal-open { overflow: hidden; }
+
     #nav-scrim {
       display: block;
       position: fixed; inset: 0; z-index: 55;
@@ -903,11 +909,15 @@
        화면 가운데 떠 있는 상자보다 한 손으로 다루기 쉽다.
        맨 위의 회색 막대는 '여기를 잡아 내린다'는 뜻의 손잡이 표시다.
      --------------------------------------------------------------- */
-  @keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  /* [수정] 닫을 때 화면 아래로 완전히 숨어야 해서, 아래로 띄운 만큼(안전영역+12px) 더 내린다 */
+  @keyframes sheet-in { from { transform: translateY(calc(100% + 64px)); } to { transform: translateY(0); } }
   @media (max-width: 639.98px) {
     [id$="-modal"] {
       align-items: flex-end !important;
-      padding: 0 !important;
+      /* [수정] 아이폰은 화면 아래 모서리가 둥글어 시트를 바닥에 딱 붙이면
+         'Insight · 원문 보기' 같은 아래쪽 버튼 모서리가 잘려 보인다.
+         홈 바(안전영역)에 12px 을 더한 만큼 시트를 위로 띄운다. */
+      padding: 0 0 calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
       /* 뒷배경이 스크롤되면 오른쪽에 막대가 생겨 시트가 그만큼 좁아진다 → 시트 안에서만 스크롤한다 */
       overflow: hidden !important;
     }
@@ -917,10 +927,17 @@
       overscroll-behavior: contain;
       max-width: 100% !important;
       max-height: 88vh !important;
-      border-radius: 18px 18px 0 0 !important;
-      border-bottom: 0;
+      /* 바닥에서 띄웠으니 아래 모서리도 같이 둥글린다 */
+      border-radius: 18px !important;
       animation: sheet-in .22s ease-out;
     }
+
+    /* [추가] 아래로 쓸어 닫기를 시작할 수 있는 구역(손잡이 막대 + 머리말).
+       본문에서도 되게 두면 기사를 읽으려는 위아래 스크롤과 겹친다. */
+    [id$="-modal"] .sheet-grab { touch-action: none; }
+
+    /* [추가] 팝업 본문을 끝까지 넘겨도 뒤 기사 목록으로 스크롤이 이어지지 않게 한다 */
+    [id$="-modal"] .modal-pop > * { overscroll-behavior: contain; }
     [id$="-modal"] .modal-pop::before {
       content: '';
       display: block;
@@ -1075,8 +1092,8 @@
       </div>
     </div>
     <div class="flex items-center gap-2 sm:gap-4">
-      <!-- [수정] 시안 10번 : 모바일 헤더는 로고 + 검색·햄버거만 남긴다.
-           LIVE 배지와 ⋮(화면 설정)은 좁은 화면에서 숨긴다. 설정은 아래 탭 바에 있다. -->
+      <!-- [수정] 시안 10번 : 모바일 헤더는 로고 + 검색·메뉴만 남긴다.
+           LIVE 배지는 좁은 화면에서 숨긴다. -->
       <span id="live-badge" class="font-mono bg-ink2 border border-line px-3 py-1.5 rounded-full text-muted hidden sm:flex items-center gap-1.5 shrink-0">
         <span class="live-dot w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> LIVE
       </span>
@@ -1087,19 +1104,15 @@
       </div>
       <!-- [추가] 화면 설정(테마·기본 노출 건수) : 관리자가 아니어도 누구나 쓸 수 있다 -->
       <!-- [수정] 모바일에서도 다시 보여준다. 하단 탭 바의 '설정' 자리를 '저장'에 내줬기 때문이다. (Phase 7 A1) -->
-      <button id="prefs-btn" onclick="openPrefsModal()" aria-label="화면 설정" title="화면 설정 (테마 · 기본 노출 건수)"
-        class="inline-flex -mr-1 p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/>
-        </svg>
-      </button>
-      <!-- [추가] 모바일 : 검색 · 섹션 드로어 (시안 10번의 오른쪽 아이콘 두 개) -->
+      <!-- [추가] 모바일 : 검색 (시안 10번의 오른쪽 아이콘) -->
       <button onclick="openSearchFromHeader()" aria-label="키워드 검색"
         class="lg:hidden p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       </button>
-      <button id="nav-toggle-btn" onclick="toggleNav()" aria-label="섹션 메뉴 열기" aria-expanded="false"
-        class="lg:hidden -mr-1 p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
+      <!-- [수정] 섹션 드로어를 여는 햄버거 버튼은 없앴다. 섹션은 헤더 아래 알약과 하단 탭에서 고른다.
+           빈 자리는 화면 설정이 이어받아, 줄 세 개 아이콘이 그대로 '메뉴' 자리에 남는다. -->
+      <button id="prefs-btn" onclick="openPrefsModal()" aria-label="화면 설정" title="화면 설정 (테마 · 기본 노출 건수)"
+        class="inline-flex -mr-1 p-2 rounded-lg text-muted hover:text-gold hover:bg-ink2 transition shrink-0">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
       </button>
     </div>
@@ -1402,7 +1415,7 @@
         </header>
         <div class="px-1 pt-4 pb-5">
 
-          <!-- [수정] 테마·기본 노출 건수는 누구나 쓰는 설정이라 헤더의 ⋮(화면 설정) 팝업으로 옮겼다. -->
+          <!-- [수정] 테마·기본 노출 건수는 누구나 쓰는 설정이라 헤더의 ≡(화면 설정) 팝업으로 옮겼다. -->
 
           <!-- [수정] 설정 비밀번호 : 왼쪽 제목 · 오른쪽 입력란 -->
           <div class="setting-row">
@@ -1468,7 +1481,7 @@
     </aside>
   </main>
 
-  <!-- [추가] 화면 설정 팝업 : 헤더 오른쪽 ⋮ 버튼으로 연다.
+  <!-- [추가] 화면 설정 팝업 : 헤더 오른쪽 ≡ 버튼으로 연다.
        테마와 기본 노출 건수는 '이 기기에만' 저장되는 개인 취향이라 비밀번호를 요구하지 않는다. -->
   <div id="prefs-modal" class="hidden fixed inset-0 z-[85] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 pt-16 sm:pt-4 overflow-y-auto" onclick="closePrefsOnBackdrop(event)">
     <!-- [수정] 시안 07번 : 420px · 머리말 한 줄 + 테마 썸네일 3종 + 설정 줄 -->
@@ -1527,7 +1540,8 @@
   <div id="brief-modal" class="hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeBriefOnBackdrop(event)">
     <!-- [수정] 시안 05번 : 620px · 머리말(라벨·출처·제목) / 본문 / 아래 버튼 바 -->
     <div class="modal-pop popup-shell bg-ink2 border border-line rounded-xl shadow-2xl w-full max-w-[620px] max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
-      <div class="popup-head shrink-0">
+      <!-- sheet-grab : 모바일에서 아래로 쓸어 닫기를 시작할 수 있는 구역 -->
+      <div class="popup-head sheet-grab shrink-0">
         <div class="flex-1 min-w-0 space-y-2">
           <div class="flex items-center gap-2">
             <span class="popup-kind">주요 내용</span>
@@ -1578,7 +1592,7 @@
   <div id="insight-modal" class="hidden fixed inset-0 z-[65] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeInsightOnBackdrop(event)">
     <!-- [수정] 시안 06번 : 620px · 초록 테두리 · 머리말(라벨·제목) / 본문 / 아래 버튼 바 -->
     <div class="modal-pop popup-shell is-ok bg-ink2 border border-line rounded-xl shadow-2xl w-full max-w-[620px] max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
-      <div class="popup-head is-ok shrink-0">
+      <div class="popup-head is-ok sheet-grab shrink-0">
         <div class="flex-1 min-w-0 space-y-2">
           <div class="flex items-center gap-2 text-ok">
             <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
@@ -1669,7 +1683,7 @@
   <!-- 관련 기사 팝업 모달 ([수정] 나중에 연 팝업이 위로 오도록 z-index는 bringModalToFront()가 정한다) -->
   <div id="related-modal" class="hidden fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeRelatedOnBackdrop(event)">
     <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
-      <div class="flex justify-between items-start gap-4 p-6 pb-3 shrink-0">
+      <div class="sheet-grab flex justify-between items-start gap-4 p-6 pb-3 shrink-0">
         <div class="min-w-0">
           <span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30">관련 기사</span>
           <p class="text-muted mt-2 text-[0.95rem] break-keep">기준 기사: <span id="related-source-title" class="text-paper/80"></span></p>
@@ -2878,7 +2892,7 @@
     }
 
     // ---------------------------------------------------------------
-    // [추가] 화면 설정 팝업 (헤더 오른쪽 ⋮)
+    // [추가] 화면 설정 팝업 (헤더 오른쪽 ≡)
     //   테마 · 기본 노출 건수만 담는다. 이 두 가지는 이 기기에만 저장되는
     //   개인 취향이라 관리자 비밀번호 없이 누구나 바꿀 수 있다.
     // ---------------------------------------------------------------
@@ -5160,7 +5174,8 @@
     // [추가] 모바일 바텀시트 : 아래로 쓸어내리면 닫는다
     //   시트 맨 위의 회색 손잡이 막대는 원래 '여기를 잡아 내린다'는 표시였는데,
     //   실제로 내릴 수는 없었다. 그 동작을 붙인다. (주요 내용 · Insight · 관련 기사)
-    //   - 시트 본문이 이미 아래로 스크롤돼 있으면 그건 본문 스크롤이다 → 손대지 않는다
+    //   - [수정] 시트 어디서나 되게 두니 기사를 읽으려는 위아래 스크롤과 겹쳤다.
+    //     이제 맨 위 손잡이 막대와 머리말(.sheet-grab)에서 시작한 손짓만 '닫기'로 본다.
     //   - 세로로 조금(SHEET_SLOP) 내려야 '닫기'로 확정한다. 탭·가로 스와이프와 구분된다.
     // ---------------------------------------------------------------
     const SHEET_CLOSERS = {
@@ -5176,13 +5191,16 @@
     // 바텀시트로 뜨는 폭인가? (CSS 의 시트 전환 기준과 같은 값이어야 한다)
     function isSheetMode() { return window.matchMedia('(max-width: 639.98px)').matches; }
 
-    // 이 터치가 '시트 안'에서 시작했으면 그 시트를 돌려준다.
+    // 이 터치가 시트의 '잡는 구역'에서 시작했으면 그 시트를 돌려준다.
     function sheetPopFrom(target) {
       if (!isSheetMode() || !(target instanceof Element)) return null;
       const modal = target.closest('[id$="-modal"]');
       if (!modal || modal.classList.contains('hidden') || !SHEET_CLOSERS[modal.id]) return null;
       const pop = modal.querySelector('.modal-pop');
-      return pop && pop.contains(target) ? pop : null;   // 뒷배경은 원래대로 눌러서 닫는다
+      if (!pop || !pop.contains(target)) return null;   // 뒷배경은 원래대로 눌러서 닫는다
+      // 손잡이 막대는 시트 자신의 ::before 라서 터치 대상이 시트 자체(pop)로 잡힌다.
+      if (target !== pop && !target.closest('.sheet-grab')) return null;
+      return pop;
     }
 
     // 인라인 transform 을 반드시 지운다. 남겨 두면 다음에 열 때 내려간 자리에서 시작한다.
@@ -5245,8 +5263,9 @@
         return;
       }
       // 끝까지 미끄러뜨린 뒤에 닫는다. 그래야 '내가 내려서 닫혔다'로 보인다.
+      // (시트를 바닥에서 띄워 뒀으므로 그만큼 더 내려야 화면 밖으로 완전히 나간다)
       const modal = d.pop.closest('[id$="-modal"]');
-      d.pop.style.transform = 'translateY(100%)';
+      d.pop.style.transform = 'translateY(calc(100% + 64px))';
       setTimeout(() => {
         const close = modal && SHEET_CLOSERS[modal.id];
         if (close) close();
@@ -5259,6 +5278,40 @@
     document.addEventListener('touchmove', onSheetTouchMove, { passive: false });
     document.addEventListener('touchend', onSheetTouchEnd, { passive: true });
     document.addEventListener('touchcancel', onSheetTouchEnd, { passive: true });
+
+    // ---------------------------------------------------------------
+    // [추가] 팝업이 떠 있는 동안 뒷배경(기사 목록) 스크롤 잠금
+    //   화면 설정처럼 내용이 짧은 팝업은 팝업 안에서 스크롤할 게 없어,
+    //   손짓이 그대로 뒤 본문으로 넘어가 배경이 위아래로 따라 움직였다.
+    //   팝업마다 열고 닫는 함수가 따로 있어서, 함수를 하나하나 고치는 대신
+    //   'hidden 클래스가 붙었다 떨어지는 것'만 지켜보고 body 에 표시를 남긴다.
+    // ---------------------------------------------------------------
+    (function lockScrollWhileModalOpen() {
+      const modals = Array.from(document.querySelectorAll('[id$="-modal"]'));
+      if (!modals.length) return;
+      const sync = () => {
+        const anyOpen = modals.some((m) => !m.classList.contains('hidden'));
+        document.body.classList.toggle('modal-open', anyOpen);
+      };
+      const watcher = new MutationObserver(sync);
+      modals.forEach((m) => watcher.observe(m, { attributes: true, attributeFilter: ['class'] }));
+      sync();
+
+      // 아이폰 사파리는 body 를 잠가도 손가락 스크롤이 새는 경우가 있다.
+      // 팝업 안에서 스스로 스크롤되는 상자를 만나지 못하면 손짓 자체를 막아 확실히 세운다.
+      document.addEventListener('touchmove', (e) => {
+        if (!document.body.classList.contains('modal-open')) return;
+        const el = (e.target instanceof Element) ? e.target : null;
+        const modal = el && el.closest('[id$="-modal"]');
+        if (!modal || modal.classList.contains('hidden')) return;
+        for (let n = el; n && n !== modal; n = n.parentElement) {
+          const scrollable = n.scrollHeight > n.clientHeight + 1
+            && /(auto|scroll)/.test(getComputedStyle(n).overflowY);
+          if (scrollable) return;   // 그 상자의 스크롤이 먼저다
+        }
+        if (e.cancelable) e.preventDefault();
+      }, { passive: false });
+    })();
 
     // ---------------------------------------------------------------
     // 주요 내용 모달 (AI 정리)
@@ -5635,7 +5688,7 @@
 
   <!-- [수정] 시안 10번 : 모바일 하단 탭 바.
        Phase 7 A1 에서 저장(북마크)을 만들면서 네 번째 칸을 시안대로 '저장'으로 되돌렸다.
-       화면 설정은 다시 헤더 오른쪽 ⋮ 버튼에서 연다. -->
+       화면 설정은 다시 헤더 오른쪽 ≡ 버튼에서 연다. -->
   <nav id="tab-bar" class="lg:hidden" aria-label="주요 화면">
     <button onclick="tabGo('briefing')" data-tab="briefing">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
