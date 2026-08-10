@@ -88,6 +88,29 @@
       }
     });
   }
+
+  // ---------------------------------------------------------------
+  // [추가] 본문 크기 (Phase 7 A3)
+  //   화면의 크기·여백이 전부 rem 이라 html 의 기준 글자 크기 하나만 바꾸면 같이 커진다.
+  //   - 테마와 같은 이유로 여기(head)에서 먼저 적용한다. 그려진 뒤에 바꾸면 글자가 한 번 튄다.
+  //   - font-size 를 인라인으로 직접 주면 인쇄용 13px 규칙(@media print)까지 덮어써서
+  //     PDF 가 커진다. 그래서 변수(--root-fs)만 바꾸고 크기는 CSS 가 읽어 가게 둔다.
+  // ---------------------------------------------------------------
+  const FONT_SIZE_KEY = 'newsinsight:fontsize:v1';
+  const FONT_SIZE_DEFAULT = 15;
+  const FONT_SIZE_MIN = 13;
+  const FONT_SIZE_MAX = 19;
+
+  function readRootFontSize() {
+    let n = NaN;
+    try { n = Number(localStorage.getItem(FONT_SIZE_KEY)); } catch {}
+    if (!Number.isFinite(n) || n < FONT_SIZE_MIN || n > FONT_SIZE_MAX) return FONT_SIZE_DEFAULT;
+    return Math.round(n);
+  }
+  function applyRootFontSize(px) {
+    document.documentElement.style.setProperty('--root-fs', px + 'px');
+  }
+  applyRootFontSize(readRootFontSize());
 </script>
 
 <style>
@@ -159,7 +182,9 @@
     white-space: nowrap;
   }
 
-  html { font-size: 15px; }
+  /* [수정] 기준 글자 크기는 화면 설정의 '본문 크기'(Phase 7 A3)가 --root-fs 로 바꾼다.
+     변수가 없으면(설정 전) 지금까지 쓰던 15px 그대로다. */
+  html { font-size: var(--root-fs, 15px); }
   body { font-family: 'Pretendard Variable', Pretendard, 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; }
 
   /* [추가] 시안 타이포 : 한글 제목은 자간을 좁혀야 덩어리로 읽힌다.
@@ -282,6 +307,8 @@
       top: calc(var(--stick-top, 121px) + 1.5rem);
       max-height: calc(100vh - var(--stick-top, 121px) - 3rem);
       overflow-y: auto;
+      overflow-x: hidden;   /* [수정] overflow-y만 auto로 두면 브라우저가 overflow-x도 auto로 계산해
+                                내용이 살짝만 넘쳐도 가로 스크롤 막대가 하단에 뜬다. 세로만 허용한다. */
       overscroll-behavior: contain;
     }
   }
@@ -520,6 +547,33 @@
     padding: .7rem 0; border-bottom: 1px solid rgb(var(--c-line));
   }
   .pref-row:last-child { border-bottom: 0; }
+  /* 마켓 레일은 1024px 이상에서만 있는 물건이라, 좁은 화면에서는 그 줄을 아예 감춘다. */
+  .pref-row.is-wide-only { display: none; }
+  @media (min-width: 1024px) { .pref-row.is-wide-only { display: flex; } }
+
+  /* [추가] Phase 7 A3 : 본문 크기 슬라이더 */
+  .pref-range {
+    width: 100%; height: 1.5rem; cursor: pointer;
+    accent-color: rgb(var(--c-gold));   /* 손잡이·채워진 구간 색 (브라우저 기본 모양을 그대로 쓴다) */
+  }
+  .pref-range:focus-visible { outline: 1px solid rgb(var(--c-gold) / .6); outline-offset: 2px; }
+
+  /* [추가] Phase 7 A4 : 켜고 끄는 스위치 */
+  .pref-switch {
+    position: relative; flex: none; width: 38px; height: 22px;
+    border: 1px solid rgb(var(--c-line)); border-radius: 999px;
+    background: rgb(var(--c-ink)); cursor: pointer;
+    transition: background-color .2s, border-color .2s;
+  }
+  .pref-switch::after {
+    content: ''; position: absolute; top: 50%; left: 3px;
+    width: 14px; height: 14px; margin-top: -7px; border-radius: 50%;
+    background: rgb(var(--c-muted));
+    transition: transform .2s, background-color .2s;
+  }
+  .pref-switch:hover { border-color: rgb(var(--c-gold) / .45); }
+  .pref-switch[aria-checked="true"] { background: rgb(var(--c-gold) / .22); border-color: rgb(var(--c-gold) / .5); }
+  .pref-switch[aria-checked="true"]::after { transform: translateX(15px); background: rgb(var(--c-gold)); }
 
   .news-row:hover .row-title { color: rgb(var(--c-gold2)); }
 
@@ -579,6 +633,11 @@
   .top-story.is-read > :not(.news-row-actions) { opacity: .62; transition: opacity .2s; }
   .news-row.is-read:hover > :not(.news-row-actions),
   .top-story.is-read:hover > :not(.news-row-actions) { opacity: 1; }
+  /* [추가] Phase 7 A4 : 화면 설정에서 '읽은 기사 흐리게'를 끈 상태.
+     읽음 기록(is-read)은 그대로 두고 흐리게만 안 한다 → 다시 켜면 표시가 되살아난다.
+     위 :hover 규칙(0,4,0)보다 특이도가 높아야(0,4,1) 이기므로 body 를 앞에 붙였다. */
+  body.no-read-dim .news-row.is-read > :not(.news-row-actions),
+  body.no-read-dim .top-story.is-read > :not(.news-row-actions) { opacity: 1; }
 
   select { background-image: none; }
 
@@ -1329,7 +1388,7 @@
            카테고리 제목 바만 상단에 틀고정된다. -->
       <!-- 상태 바 (틀고정 아님 · 스크롤하면 같이 숨겨짐) -->
       <div id="status-bar" class="pt-6 px-1">
-        <p class="text-muted" id="status-line">주요 뉴스를 불러오는 중입니다...</p>
+        <p class="text-muted text-[0.85rem]" id="status-line">주요 뉴스를 불러오는 중입니다...</p>
       </div>
 
       <div id="top-stick" class="sticky z-30 !mt-0 pt-3 pb-3 bg-ink space-y-2"
@@ -1509,6 +1568,23 @@
           <div class="flex items-stretch gap-1.5" id="theme-buttons"></div>
         </div>
 
+        <!-- [추가] 본문 크기 (Phase 7 A3) : 화면 전체가 rem 이라 기준 크기 하나로 같이 커진다 -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="popup-label">본문 크기</span>
+            <span class="flex items-center gap-2.5">
+              <span id="fontsize-value" class="font-mono text-muted2 text-[0.7rem]"></span>
+              <button type="button" onclick="setRootFontSize(FONT_SIZE_DEFAULT)" title="기본 크기로 되돌리기"
+                class="font-mono text-[0.7rem] text-muted2 hover:text-gold transition">되돌리기</button>
+            </span>
+          </div>
+          <input id="fontsize-range" type="range" class="pref-range" min="13" max="19" step="1"
+            aria-label="본문 크기" oninput="setRootFontSize(this.value)">
+          <div class="flex items-center justify-between font-mono text-muted2 text-[0.68rem]">
+            <span>작게</span><span>기본</span><span>크게</span>
+          </div>
+        </div>
+
         <!-- 기본 노출 건수 : 섹션을 처음 열 때 보여줄 기사 수 · 이 기기에 저장 -->
         <div class="space-y-2">
           <div class="flex items-center justify-between gap-2">
@@ -1516,6 +1592,12 @@
             <span class="font-mono text-muted2 text-[0.7rem]">처음 열 때 보여줄 기사 수</span>
           </div>
           <div id="count-setting-selects"></div>
+        </div>
+
+        <!-- [추가] 화면 옵션 (Phase 7 A4) : 읽음 흐리게 · 마켓 레일 -->
+        <div class="space-y-2">
+          <span class="popup-label block">화면 옵션</span>
+          <div id="pref-toggles"></div>
         </div>
 
       </div>
@@ -2241,6 +2323,7 @@
       applyDefaultCounts();         // [추가] 첫 화면(Briefing) 건수를 기본값으로 맞춤
       loadSavedArticles();          // [추가] 저장한 기사 보관함 (사이드바 건수·북마크 표시에 필요)
       loadReadArticles();           // [추가] 읽은 기사 목록 (목록을 그리기 전에 있어야 흐리게 표시된다)
+      loadScreenPrefs();            // [추가] 화면 옵션 (읽음 흐리게) — 첫 렌더 전에 적용
       renderCategoryButtons();
       renderSearchToggle();
       renderSettingToggle();        // [추가]
@@ -2943,8 +3026,99 @@
     }
 
     // ---------------------------------------------------------------
+    // [추가] 본문 크기 — Phase 7 A3
+    //   읽기·저장은 <head> 의 readRootFontSize / applyRootFontSize 가 한다. (깜빡임 방지)
+    //   여기서는 슬라이더를 움직였을 때의 처리만 맡는다.
+    // ---------------------------------------------------------------
+    function setRootFontSize(px) {
+      const n = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, Math.round(Number(px) || FONT_SIZE_DEFAULT)));
+      applyRootFontSize(n);
+      try { localStorage.setItem(FONT_SIZE_KEY, String(n)); }
+      catch (e) { console.error('본문 크기를 저장하지 못했습니다.', e); }
+      renderFontSizeSetting();
+      // 글자가 커지면 상단바도 같이 높아진다 → 틀고정(sticky) 기준값을 다시 재야
+      // 아래 제목 바가 상단바에 파묻히지 않는다.
+      updateStickTop();
+    }
+
+    function renderFontSizeSetting() {
+      const cur = readRootFontSize();
+      const r = document.getElementById('fontsize-range');
+      const v = document.getElementById('fontsize-value');
+      if (r) r.value = String(cur);
+      if (v) v.textContent = cur === FONT_SIZE_DEFAULT ? `${cur}px · 기본` : `${cur}px`;
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] 화면 옵션 토글 2개 — Phase 7 A4
+    //   '마켓 레일 표시'는 예전부터 쓰던 자기 저장소(RAIL_STORAGE_KEY)를 그대로 쓴다.
+    //   레일 접기 버튼(»)과 이 토글이 같은 값을 봐야 서로 어긋나지 않기 때문이다.
+    //   나머지 하나만 여기에 모아 둔다.
+    // ---------------------------------------------------------------
+    const SCREEN_PREFS_KEY = 'newsinsight:prefs:v1';
+    const SCREEN_PREFS_DEFAULT = { dimRead: true };
+    let screenPrefs = { ...SCREEN_PREFS_DEFAULT };
+
+    function loadScreenPrefs() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(SCREEN_PREFS_KEY) || '{}');
+        Object.keys(SCREEN_PREFS_DEFAULT).forEach((k) => {
+          if (typeof saved[k] === 'boolean') screenPrefs[k] = saved[k];
+        });
+      } catch {}
+      applyDimRead();
+    }
+
+    function saveScreenPrefs() {
+      try { localStorage.setItem(SCREEN_PREFS_KEY, JSON.stringify(screenPrefs)); }
+      catch (e) { console.error('화면 옵션을 저장하지 못했습니다.', e); }
+    }
+
+    // 읽음 기록(is-read)은 건드리지 않고 '흐리게 보이기'만 끈다 → 다시 켜면 그대로 되살아난다.
+    function applyDimRead() {
+      document.body.classList.toggle('no-read-dim', !screenPrefs.dimRead);
+    }
+
+    // 토글 2개. 값을 어디에 두는지가 서로 달라서 각자 읽기(get)·쓰기(set)를 들고 있는다.
+    const PREF_TOGGLES = [
+      {
+        key: 'dimRead', label: '읽은 기사 흐리게', hint: '한 번 연 기사를 옅게 표시',
+        get: () => screenPrefs.dimRead,
+        set: (on) => { screenPrefs.dimRead = on; saveScreenPrefs(); applyDimRead(); },
+      },
+      {
+        key: 'rail', label: '마켓 레일 표시', hint: '오른쪽 지수 목록 · 넓은 화면에서만', wideOnly: true,
+        get: () => !document.body.classList.contains('rail-collapsed'),
+        // 설정 화면에서 바꾼 것도 사용자의 새 취향으로 본다. (toggleRail 과 같은 규칙)
+        set: (on) => { setRailCollapsed(!on); if (settingMode) railBeforeSetting = !on; },
+      },
+    ];
+
+    function togglePref(key) {
+      const t = PREF_TOGGLES.find((x) => x.key === key);
+      if (!t) return;
+      t.set(!t.get());
+      renderPrefToggles();
+    }
+
+    function renderPrefToggles() {
+      const wrap = document.getElementById('pref-toggles');
+      if (!wrap) return;
+      wrap.innerHTML = PREF_TOGGLES.map((t) => `
+        <div class="pref-row${t.wideOnly ? ' is-wide-only' : ''}">
+          <span class="min-w-0 flex flex-col gap-0.5">
+            <span class="text-paper text-[0.9rem] truncate">${t.label}</span>
+            <span class="text-muted2 text-[0.76rem] truncate">${t.hint}</span>
+          </span>
+          <button type="button" role="switch" aria-checked="${t.get() ? 'true' : 'false'}"
+            aria-label="${t.label}" title="${t.label}"
+            onclick="togglePref('${t.key}')" class="pref-switch"></button>
+        </div>`).join('');
+    }
+
+    // ---------------------------------------------------------------
     // [추가] 화면 설정 팝업 (헤더 오른쪽 ≡)
-    //   테마 · 기본 노출 건수만 담는다. 이 두 가지는 이 기기에만 저장되는
+    //   테마 · 본문 크기 · 기본 노출 건수 · 화면 옵션을 담는다. 모두 이 기기에만 저장되는
     //   개인 취향이라 관리자 비밀번호 없이 누구나 바꿀 수 있다.
     // ---------------------------------------------------------------
     function openPrefsModal() {
@@ -2952,7 +3126,9 @@
       const el = document.getElementById('prefs-modal');
       if (!el) return;
       renderThemeButtons();              // 현재 선택 상태로 갱신
+      renderFontSizeSetting();
       renderCountSetting();
+      renderPrefToggles();
       el.classList.remove('hidden');
     }
 
