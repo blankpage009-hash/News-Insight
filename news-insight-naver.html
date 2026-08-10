@@ -571,6 +571,15 @@
     .news-row.has-no > :last-child { grid-column: 2; }
   }
 
+  /* [추가] 읽음 표시 (시안 01·10번의 opacity .62) — Phase 7 A2
+     한 번 연 기사를 흐리게 눕혀, 아직 안 본 기사가 먼저 눈에 들어오게 한다.
+     버튼 묶음(.news-row-actions)까지 흐려지면 누르기가 망설여지므로 버튼은 그대로 둔다.
+     마우스를 올리면 원래 밝기로 돌아온다 → 다시 읽을 때 답답하지 않다. */
+  .news-row.is-read > :not(.news-row-actions),
+  .top-story.is-read > :not(.news-row-actions) { opacity: .62; transition: opacity .2s; }
+  .news-row.is-read:hover > :not(.news-row-actions),
+  .top-story.is-read:hover > :not(.news-row-actions) { opacity: 1; }
+
   select { background-image: none; }
 
   /* 좌측 카테고리바 : 화면에 고정 + 사이드바 안에서만 따로 스크롤
@@ -1978,6 +1987,47 @@
     }
 
     // ---------------------------------------------------------------
+    // [추가] 읽음 표시 — Phase 7 A2
+    //   '주요 내용' · 'Insight' · '원문 보기' 로 한 번이라도 연 기사를 이 브라우저에 적어 두고
+    //   목록에서 흐리게 보여 준다. 서버에는 올리지 않는다.
+    //   열쇠(key)는 저장(북마크)과 같은 기사 주소를 쓴다 → 새로고침해도 같은 기사는 같은 열쇠다.
+    // ---------------------------------------------------------------
+    const READ_STORAGE_KEY = 'newsinsight:read:v1';
+    const READ_MAX = 1000;          // 넘치면 오래 전에 읽은 것부터 버린다
+    let readKeys = [];              // 최근에 읽은 순서
+    let readKeySet = new Set();     // 목록을 그릴 때마다 찾아야 하므로 Set 을 따로 둔다
+
+    function loadReadArticles() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(READ_STORAGE_KEY) || '[]');
+        readKeys = Array.isArray(raw) ? raw.filter((x) => typeof x === 'string' && x) : [];
+      } catch { readKeys = []; }
+      readKeySet = new Set(readKeys);
+    }
+
+    function isReadKey(key) { return !!key && readKeySet.has(key); }
+
+    // 기사를 열 때 부른다. 이미 읽은 기사면 아무 일도 하지 않는다.
+    function markRead(id) {
+      const key = savedKeyOf(findItem(id));
+      if (!key || readKeySet.has(key)) return;
+      readKeys.unshift(key);
+      readKeys = readKeys.slice(0, READ_MAX);
+      readKeySet = new Set(readKeys);
+      try { localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(readKeys)); }
+      catch (e) { console.error('읽음 표시를 기록하지 못했습니다.', e); }
+      markReadRows(key);
+    }
+
+    // 화면에 떠 있는 같은 기사 줄(목록 · TOP STORY · 관련 기사 팝업)을
+    // 목록을 다시 그리지 않고 그 자리에서 흐리게 만든다.
+    function markReadRows(key) {
+      document.querySelectorAll('[data-read-key]').forEach((el) => {
+        if (el.dataset.readKey === key) el.classList.add('is-read');
+      });
+    }
+
+    // ---------------------------------------------------------------
     // [추가] 기사 가져오기 키워드 설정 (Setting)
     //   - 각 섹션(하위 섹션 포함)의 '포함/제외 키워드'를 사용자가 직접 정한다.
     //   - 이 값은 브라우저에 저장되고, 기사 요청 시 서버로 함께 보내 항상 반영된다.
@@ -2190,6 +2240,7 @@
       loadDefaultCounts();          // [추가] 저장해 둔 기본 노출 건수 읽기
       applyDefaultCounts();         // [추가] 첫 화면(Briefing) 건수를 기본값으로 맞춤
       loadSavedArticles();          // [추가] 저장한 기사 보관함 (사이드바 건수·북마크 표시에 필요)
+      loadReadArticles();           // [추가] 읽은 기사 목록 (목록을 그리기 전에 있어야 흐리게 표시된다)
       renderCategoryButtons();
       renderSearchToggle();
       renderSettingToggle();        // [추가]
@@ -4684,10 +4735,9 @@
       const h   = 'h-7 text-[0.68rem] px-1.5 sm:text-[0.77rem] sm:px-2.5';
       const ic  = 'w-2 h-2 sm:w-2.5 sm:h-2.5 shrink-0';
       const base = 'flex items-center gap-1.5 rounded-md transition whitespace-nowrap';
-      // TOP STORY 는 금색을 꽉 채우고, 목록 행은 은은한 금색 배경만 깐다
-      const brief = big
-        ? 'bg-gold hover:bg-gold2 text-ink font-semibold'
-        : 'bg-gold/10 hover:bg-gold/20 text-gold';
+      // [수정] TOP STORY 도 목록 행과 같은 은은한 금색 배경 + 금색 아이콘/글자로 통일한다.
+      //   전에는 TOP STORY 만 금색을 꽉 채워, 아이콘 색이 목록과 반대로 보였다.
+      const brief = 'bg-gold/10 hover:bg-gold/20 text-gold';
       const plain = 'text-muted hover:text-paper hover:bg-ink3 border border-line';
       const relatedBtn = showRelated ? `
           <button onclick="openRelated(${item.id})" title="관련 기사"
@@ -4713,6 +4763,7 @@
             ${icon('lightbulb', ic)} Insight
           </button>
           <a href="${esc(articleLink(item))}" target="_blank" rel="noopener noreferrer" title="원문 보기"
+            onclick="markRead(${item.id})"
             class="${base} ${h} ${plain}">
             ${icon('external-link', ic)} <span class="sm:hidden">원문 보기</span>
           </a>
@@ -4732,8 +4783,10 @@
     function newsCardHtml(item, no = null, showRelated = true) {
       const numCol = no === null ? '' : `
           <span class="news-row-no">${String(no).padStart(2, '0')}</span>`;
+      // [추가] 읽음 표시 (A2) : 열쇠를 줄에 적어 두면 나중에 그 줄만 찾아 흐리게 만들 수 있다
+      const readKey = savedKeyOf(item);
       return `
-        <article class="news-row${no === null ? '' : ' has-no'}">
+        <article class="news-row${no === null ? '' : ' has-no'}${isReadKey(readKey) ? ' is-read' : ''}" data-read-key="${esc(readKey)}">
           ${numCol}
           <div class="min-w-0 space-y-1.5">
             <h3 class="row-title font-sans text-[1.3rem] font-semibold text-paper break-keep">${item.title}</h3>
@@ -4777,8 +4830,9 @@
     //  네이버가 주는 item.summary(문장 배열)를 요약문으로 쓴다. 없으면 그 줄만 뺀다.
     function topStoryHtml(item) {
       const lead = (item.summary || []).join(' ').trim();
+      const readKey = savedKeyOf(item);   // [추가] 읽음 표시 (A2)
       return `
-        <article class="top-story">
+        <article class="top-story${isReadKey(readKey) ? ' is-read' : ''}" data-read-key="${esc(readKey)}">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono text-[0.62rem] font-semibold label-wide bg-gold text-ink px-1.5 py-1 rounded-[3px]">TOP STORY</span>
             ${badgesHtml(item)}
@@ -5371,6 +5425,7 @@
       const item = findItem(id);
       if (!item) return;
 
+      markRead(id);                     // [추가] 읽음 표시 (A2)
       const link = articleLink(item);   // [수정] 원문 보기와 똑같은 주소를 AI 정리에도 사용
       currentBriefId = id;              // [추가] 팝업 안 '관련 기사' 버튼이 쓸 기준 기사
       document.getElementById('brief-link').href = link;
@@ -5503,6 +5558,7 @@
       const item = findItem(id);
       if (!item) return;
 
+      markRead(id);                     // [추가] 읽음 표시 (A2)
       const link = articleLink(item);   // 원문 보기와 똑같은 주소 사용
       currentInsightId = id;            // [추가] 'PDF 저장' 이 쓸 기준 기사
       document.getElementById('insight-link').href = link;
