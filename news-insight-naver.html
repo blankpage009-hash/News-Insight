@@ -612,6 +612,20 @@
   /* 라이트에서는 그러데이션이 '크림 → 흰색'이 되어 지저분하다.
      시안 09번대로 흰색 단색으로 둔다. */
   :root[data-theme="light"] .top-story { background: rgb(var(--c-ink2)); }
+  /* [추가] Phase 7 A5 : 모바일(<640px)에서는 TOP STORY 상자를 없앤다.
+     390px 폭에서는 테두리 + 안쪽 여백 1.4rem 이 좌우로 46px 을 먹어 큰 제목이 자주 꺾인다.
+     시안 10번대로 테두리·배경을 빼고 아래 여백으로만 나머지 기사와 나눈다.
+     좌우 여백은 기사 행(.news-row)의 0.25rem 에 맞춰 제목 왼쪽 끝선을 같은 자리에 세운다.
+     라이트 배경 규칙(0,3,0)이 더 세므로 그 선택자도 같이 적어 눌러 준다. */
+  @media (max-width: 639px) {
+    .top-story,
+    :root[data-theme="light"] .top-story {
+      padding: 0 0.25rem 1rem;
+      border: 0;
+      border-radius: 0;
+      background: none;
+    }
+  }
   .news-row-no {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.8rem;
