@@ -4691,8 +4691,8 @@
       const plain = 'text-muted hover:text-paper hover:bg-ink3 border border-line';
       const relatedBtn = showRelated ? `
           <button onclick="openRelated(${item.id})" title="관련 기사"
-            class="${base} ${h} ${plain} !px-1.5 sm:!px-2">
-            ${icon('link', ic)}
+            class="${base} ${h} ${plain}">
+            ${icon('link', ic)} <span class="sm:hidden">관련 기사</span>
           </button>` : '';
       // [추가] 저장(북마크) — 시안 01번대로 글자 없이 아이콘만. 줄이 길어지지 않는다.
       const savedOn = isSavedKey(savedKeyOf(item));
@@ -4713,8 +4713,8 @@
             ${icon('lightbulb', ic)} Insight
           </button>
           <a href="${esc(articleLink(item))}" target="_blank" rel="noopener noreferrer" title="원문 보기"
-            class="${base} ${h} ${plain} !px-1.5 sm:!px-2">
-            ${icon('external-link', ic)}
+            class="${base} ${h} ${plain}">
+            ${icon('external-link', ic)} <span class="sm:hidden">원문 보기</span>
           </a>
           ${relatedBtn}
           ${saveBtn}
