@@ -373,6 +373,30 @@
   /* 긴 낱말이 들어와도 레일 폭(300px)을 밀지 않게 한 줄로 자른다 */
   .rail-kw-word { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* 이어보기 (D3) : 낱말 한 줄이 아니라 기사 제목이라 두 줄까지 보여준다 */
+  .rail-fu-row {
+    display: block;
+    width: 100%;
+    padding: 8px 4px;
+    text-align: left;
+    border-bottom: 1px solid rgb(var(--c-line) / .7);
+    cursor: pointer;
+    transition: background-color .15s;
+  }
+  .rail-fu-row:last-child { border-bottom: 0; }
+  @media (hover: hover) {
+    .rail-fu-row:hover { background: rgb(var(--c-gold) / .08); }
+  }
+  /* -webkit-line-clamp 는 아직 이 조합이 표준 경로다 (display:-webkit-box 필요) */
+  .rail-fu-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  /* '무엇의 후속인지'는 한 줄로만 — 두 줄이 되면 제목보다 눈에 띈다 */
+  .rail-fu-from { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   @keyframes pulse-soft { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
   .skeleton { animation: pulse-soft 1.6s ease-in-out infinite; }
 
@@ -1627,6 +1651,12 @@
         <span class="font-mono text-[0.63rem] font-semibold label-wide text-muted2">키워드 랭킹</span>
         <div id="rail-keyword-list"></div>
       </div>
+      <!-- [추가] 이어보기 (Phase 7 D3) : 저장한 기사보다 나중에 나온 후속 보도.
+           저장한 기사가 없거나 후속이 없으면 통째로 감춘다 (키워드 랭킹과 같은 방식) -->
+      <div id="rail-followup" class="rail-kw">
+        <span class="font-mono text-[0.63rem] font-semibold label-wide text-muted2">이어보기</span>
+        <div id="rail-followup-list"></div>
+      </div>
     </aside>
   </main>
 
@@ -2076,6 +2106,7 @@
       persistSavedArticles();
       syncSaveButtons(key);
       renderSavedNav();
+      scheduleFollowupRefresh();   // [추가] 담은 기사가 바뀌면 이어보기도 따라간다 (D3)
       // 저장 화면을 보는 중에는 건수만 고쳐 준다. 줄을 바로 지우면 되돌릴 수가 없다.
       if (!settingMode && currentCategory === 'saved') updateSavedCount();
     }
@@ -2494,6 +2525,10 @@
       // [추가] 레일 하단 키워드 랭킹 (Phase 7 C1) · 서버 캐시를 읽기만 하므로 가볍다
       refreshKeywordRank();
       setInterval(refreshKeywordRank, KEYWORD_RANK_INTERVAL);
+
+      // [추가] 이어보기 (D3). 저장한 기사가 없으면 서버를 부르지 않고 그냥 감춘 채 끝난다.
+      refreshFollowup();
+      setInterval(refreshFollowup, FOLLOWUP_INTERVAL);
 
       document.getElementById('search-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') submitSearch();
@@ -3849,6 +3884,21 @@
     // ---------------------------------------------------------------
     async function apiGet(pathAndQuery) {
       const response = await fetch(`${NAVER_PROXY_BASE}${pathAndQuery}`);
+      if (!response.ok) {
+        let message = 'API 요청 실패: ' + response.status;
+        try { const b = await response.json(); if (b.error) message = b.error; } catch {}
+        throw new Error(message);
+      }
+      return response.json();
+    }
+
+    // [추가] 이어보기(D3)용. 저장 기사 제목을 여러 건 보내야 해서 주소줄에 담기 어렵다.
+    async function apiPost(pathAndQuery, body) {
+      const response = await fetch(`${NAVER_PROXY_BASE}${pathAndQuery}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
       if (!response.ok) {
         let message = 'API 요청 실패: ' + response.status;
         try { const b = await response.json(); if (b.error) message = b.error; } catch {}
@@ -5652,6 +5702,69 @@
       }
       renderKeywordRankView();   // [추가] 모바일 랭킹 화면을 보고 있으면 같이 갱신된다
     }
+
+    // ---------------------------------------------------------------
+    // [추가] 이어보기 — Phase 7 D3
+    //   보관함 맨 위 몇 건을 서버에 보내면, 그 기사보다 나중에 나온 후속 보도를 돌려준다.
+    //   레일은 1024px 이상에서만 보이므로 좁은 화면에서는 아예 부르지 않는다
+    //   (안 보이는 칸 때문에 네이버 호출을 쓸 이유가 없다).
+    // ---------------------------------------------------------------
+    const FOLLOWUP_SEEDS = 5;                     // 서버의 FOLLOWUP_MAX_SEEDS 와 같은 값
+    const FOLLOWUP_INTERVAL = 10 * 60 * 1000;     // 서버 캐시가 10분이라 그보다 자주 물을 이유가 없다
+    const FOLLOWUP_SAVE_DEBOUNCE = 1500;          // 여러 건을 연달아 담을 때 한 번만 부르게
+    let followupTimer = null;
+
+    function followupRowHtml(it) {
+      const href = articleLink(it);
+      // 원문 주소가 없으면 눌러도 갈 곳이 없다. 그런 기사는 아예 넣지 않는다.
+      if (!href || href === '#') return '';
+      return `<a class="rail-fu-row" href="${esc(href)}" target="_blank" rel="noopener noreferrer"
+        title="${esc(it.title)}">
+        <span class="rail-fu-title text-[0.82rem] font-medium text-paper leading-snug">${esc(it.title)}</span>
+        <span class="flex items-center gap-1.5 mt-1 font-mono text-[0.66rem] text-muted2">
+          <span class="truncate">${esc(it.source || '')}</span>
+          <span>·</span><span class="shrink-0">${esc(formatDate(it.datetime))}</span>
+        </span>
+        <span class="rail-fu-from block mt-0.5 text-[0.66rem] text-muted">↳ ${esc(it.fromTitle || '')}</span>
+      </a>`;
+    }
+
+    async function refreshFollowup() {
+      const wrap = document.getElementById('rail-followup');
+      const list = document.getElementById('rail-followup-list');
+      if (!wrap || !list) return;
+
+      // 저장한 기사가 없으면 물어볼 것도 없다.
+      if (isMobileLayout() || !savedArticles.length) return wrap.classList.remove('is-on');
+
+      try {
+        const seeds = savedArticles.slice(0, FOLLOWUP_SEEDS).map((s) => ({
+          title: s.title, url: s.url, naverUrl: s.naverUrl, datetime: s.datetime,
+        }));
+        const data = await apiPost('/api/followup', { items: seeds });
+        const rows = (Array.isArray(data.items) ? data.items : []).map(followupRowHtml).filter(Boolean);
+        wrap.classList.toggle('is-on', rows.length > 0);
+        list.innerHTML = rows.join('');
+      } catch (err) {
+        console.error(err);
+        wrap.classList.remove('is-on');
+      }
+    }
+
+    // 저장/해제 직후에 부른다. 여러 건을 연달아 담을 때 요청이 겹치지 않게 조금 미룬다.
+    function scheduleFollowupRefresh() {
+      clearTimeout(followupTimer);
+      followupTimer = setTimeout(refreshFollowup, FOLLOWUP_SAVE_DEBOUNCE);
+    }
+
+    // 좁은 화면에서는 부르지 않으므로, 창을 넓혀 레일이 나타나는 순간 한 번 채워 준다.
+    //   (안 그러면 다음 10분 주기가 올 때까지 이어보기 칸만 비어 있다)
+    //   이미 채워져 있으면 아무 일도 하지 않는다.
+    window.addEventListener('resize', () => {
+      if (isMobileLayout()) return;
+      const wrap = document.getElementById('rail-followup');
+      if (wrap && !wrap.classList.contains('is-on')) scheduleFollowupRefresh();
+    });
 
     // ---------------------------------------------------------------
     // [추가] '키워드 랭킹' 화면 (Phase 7 D2 · 모바일 하단 탭)

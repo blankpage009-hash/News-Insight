@@ -1955,6 +1955,155 @@ app.get('/api/keyword-rank', (req, res) => {
 });
 
 // -----------------------------------------------------------------
+// [Phase 7 D3] /api/followup : 저장한 기사의 '그 뒤 이야기'
+//
+//   화면이 보관함 맨 위 몇 건을 { title, url, datetime } 로 보내면,
+//   제목에서 화제어를 뽑아 다시 검색하고 **그 기사보다 나중에 나온 기사**만 남긴다.
+//
+//   C1(키워드 랭킹)과 달리 네이버를 새로 부른다. 저장한 그 기사의 후속 보도가
+//   '전체' 섹션 캐시에 들어 있을 이유가 없어서 캐시만 읽어서는 거의 늘 빈칸이 된다.
+//   대신 비용을 두 겹으로 묶는다 :
+//     1. 씨앗(저장 기사)을 FOLLOWUP_MAX_SEEDS 건으로 자른다 → 한 번에 최대 5호출
+//     2. 씨앗 하나당 결과를 따로 캐시한다 → 둘러볼 때마다 다시 부르지 않는다
+//
+//   캐시를 respCache 에 넣지 않는 이유 : 열쇠가 '사람마다 다른 저장 기사'라
+//   종류가 끝없이 늘어난다. RESP_CACHE_MAX(120칸)를 저 값들이 채우면
+//   프리워밍이 만들어 둔 섹션 응답(80KB짜리)이 밀려나 첫 손님이 느려진다.
+//   지수 차트(indexChartCache)를 따로 뺀 것과 같은 이유다.
+// -----------------------------------------------------------------
+const FOLLOWUP_MAX_SEEDS = 5;                                  // 한 번에 재검색할 저장 기사 수
+const FOLLOWUP_MAX_ITEMS = 6;                                  // 화면에 돌려줄 최대 건수
+const FOLLOWUP_PER_SEED_ITEMS = 2;                             // 씨앗 하나가 목록을 독차지하지 않게
+const FOLLOWUP_MIN_OVERLAP = 2;                                // 씨앗 제목과 이만큼은 낱말이 겹쳐야 후속으로 본다
+const FOLLOWUP_PER_SEED = 30;                                  // 씨앗 하나당 네이버에서 받아올 건수
+const TTL_FOLLOWUP = { fresh: 10 * 60 * 1000, stale: 60 * 60 * 1000 };
+const FOLLOWUP_CACHE_MAX = 200;
+const followupCache = new Map();     // "질의|기준시각" -> { ts, items }
+const followupInflight = new Map();  // 같은 씨앗을 동시에 물어보면 한 번만 계산한다
+
+// 제목 → 재검색에 쓸 짧은 질의.
+//   rankTokens() 가 조사·숫자·불용어를 이미 걸러 준다(C1 에서 만든 것을 그대로 쓴다).
+//   낱말 2개를 AND 로 묶는다 — 1개면 너무 넓고, 3개면 후속 기사가 표현을 조금만 바꿔도 놓친다.
+//   고르는 기준은 '긴 낱말' 이다. C1 에서 확인했듯 긴 쪽이 더 구체적이다.
+function followupQuery(title) {
+  const seen = new Set();
+  return rankTokens(title)
+    .filter((p) => !RANK_STOPWORDS.has(p.key))
+    .filter((p) => (seen.has(p.key) ? false : (seen.add(p.key), true)))
+    .sort((a, b) => b.key.length - a.key.length)
+    .slice(0, 2)
+    .map((p) => p.raw)
+    .join(' ');
+}
+
+// 씨앗 1건의 후속 보도. 캐시가 살아 있으면 네이버를 부르지 않는다.
+async function followupForSeed(seed) {
+  const q = followupQuery(seed.title);
+  if (!q) return [];
+
+  const sinceTs = seed.datetime ? new Date(seed.datetime).getTime() : 0;
+  const key = `${shortHash(q)}|${Number.isFinite(sinceTs) ? sinceTs : 0}`;
+
+  const hit = followupCache.get(key);
+  const age = hit ? Date.now() - hit.ts : Infinity;
+  if (hit && age < TTL_FOLLOWUP.fresh) return hit.items;
+
+  const running = followupInflight.get(key);
+  if (running) return running;
+
+  const p = (async () => {
+    const raw = await searchByTerms([q], {
+      display: FOLLOWUP_PER_SEED,
+      sort: 'date',      // '그 뒤에 나온 것'을 찾는 일이라 최신순으로 받아야 한다
+      hours: 'all',      // 시간 자르기는 아래에서 씨앗 기준으로 직접 한다
+      verify: false,     // 사용자가 담아 둔 기사에서 뽑은 말이라 원문 검증까지는 필요 없다
+      match: 'strict',
+      fetchCount: FOLLOWUP_PER_SEED,
+    });
+
+    const seedUrls = new Set([seed.url, seed.naverUrl].filter(Boolean));
+    const seedTitle = stripHtml(seed.title || '').trim();
+    const seedWords = new Set(rankTokens(seedTitle).map((p) => p.key));
+
+    const fresher = raw.filter((it) => {
+      if (!it.datetime) return false;
+      if (new Date(it.datetime).getTime() <= sinceTs) return false;    // 씨앗보다 나중 것만
+      if (seedUrls.has(it.url) || seedUrls.has(it.naverUrl)) return false;
+      return stripHtml(it.title || '').trim() !== seedTitle;           // 같은 기사 재게재
+    });
+
+    // [중요] matchBy 는 제목뿐 아니라 '요약'까지 본다. 그대로 두면 회사 이름만 스친
+    //   시황 기사가 우수수 걸려 '후속 보도'가 아니라 '그 회사 뉴스 아무거나'가 된다.
+    //   → 씨앗 제목과 **제목끼리** 겹치는 낱말 수로 점수를 매기고 FOLLOWUP_MIN_OVERLAP
+    //     미만은 버린다. 같은 사건을 이어서 쓴 기사는 제목에 같은 말이 다시 나온다.
+    const overlapOf = new Map();   // url -> 겹친 낱말 수
+    const scored = fresher.filter((it) => {
+      const words = new Set(rankTokens(stripHtml(it.title || '')).map((p) => p.key));
+      let overlap = 0;
+      words.forEach((w) => { if (seedWords.has(w)) overlap += 1; });
+      overlapOf.set(it.url, overlap);
+      return overlap >= FOLLOWUP_MIN_OVERLAP;
+    });
+
+    // 같은 사건을 여러 매체가 쓴 것은 대표 1건만 남긴다.
+    //   collapseEvents 는 날짜순으로 돌려주므로, 겹친 낱말이 많은 쪽(=더 그 기사의 후속인 쪽)이
+    //   앞에 오도록 여기서 다시 세운다. 씨앗 하나가 레일을 독차지하지 않게 2건까지만 남긴다.
+    const items = collapseEvents(scored, 'date')
+      .sort((a, b) => (overlapOf.get(b.url) || 0) - (overlapOf.get(a.url) || 0)
+                   || new Date(b.datetime || 0) - new Date(a.datetime || 0))
+      .slice(0, FOLLOWUP_PER_SEED_ITEMS);
+    followupCache.delete(key);
+    followupCache.set(key, { ts: Date.now(), items });
+    while (followupCache.size > FOLLOWUP_CACHE_MAX) {
+      followupCache.delete(followupCache.keys().next().value);
+    }
+    return items;
+  })().finally(() => followupInflight.delete(key));
+
+  followupInflight.set(key, p);
+  // 조금 낡았어도 쓸 만하면 기다리게 하지 않는다 (섹션 캐시와 같은 방식)
+  if (hit && age < TTL_FOLLOWUP.stale) {
+    p.catch((e) => console.error('[이어보기 갱신 실패]', q, e.message));
+    return hit.items;
+  }
+  return p;
+}
+
+app.post('/api/followup', async (req, res) => {
+  const seeds = (Array.isArray(req.body && req.body.items) ? req.body.items : [])
+    .filter((s) => s && typeof s.title === 'string' && s.title.trim())
+    .slice(0, FOLLOWUP_MAX_SEEDS);
+
+  if (!seeds.length) return res.json({ items: [], ready: true });
+
+  try {
+    // 씨앗 하나가 실패해도 나머지는 보여준다 (NYSE 지수와 같은 처리)
+    const settled = await Promise.allSettled(seeds.map((seed) => followupForSeed(seed)));
+
+    const seen = new Set();
+    const merged = [];
+    settled.forEach((r, i) => {
+      if (r.status !== 'fulfilled') {
+        return console.error('[이어보기 실패]', seeds[i].title, r.reason && r.reason.message);
+      }
+      r.value.forEach((it) => {
+        const dedupe = it.url || it.naverUrl || it.title;
+        if (!dedupe || seen.has(dedupe)) return;
+        seen.add(dedupe);
+        // 어느 저장 기사에서 나온 후속인지 화면에 적어 줘야 맥락이 산다
+        merged.push({ ...it, fromTitle: seeds[i].title, fromUrl: seeds[i].url || '' });
+      });
+    });
+
+    merged.sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0));
+    res.json({ items: merged.slice(0, FOLLOWUP_MAX_ITEMS), ready: true, seeds: seeds.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '이어보기를 불러오지 못했습니다.' });
+  }
+});
+
+// -----------------------------------------------------------------
 // 하위 카테고리 1개 조회 : /api/{base}/section/:key
 //  -> 물류 / 증시 / 스포츠 / 경제 네 곳에서 함께 사용
 //
