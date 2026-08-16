@@ -744,10 +744,10 @@
     .news-row .row-title.row-title-sm { font-size: 1.215rem; }       /* 1.3rem  → -1pt (관련기사 팝업) */
 
     /* --- 4) 우측 상단 LIVE 배지 축소 ---
-       폰 화면에서는 로고·설정 버튼과 자리를 다투므로 글자·여백·점을 한 단계씩 줄인다. */
+       폰 화면에서는 로고·설정 버튼과 자리를 다투므로 글자·점을 한 단계씩 줄인다.
+       (박스를 없애면서 padding 은 더 이상 필요 없다) */
     #live-badge {
       font-size: .68rem;
-      padding: .2rem .5rem;
       gap: .3rem;
     }
     #live-badge .live-dot { width: .3125rem; height: .3125rem; }
@@ -1248,12 +1248,13 @@
     <div class="flex items-center gap-2 sm:gap-4">
       <!-- [수정] 시안 10번 : 모바일 헤더는 로고 + 검색·메뉴만 남긴다.
            LIVE 배지는 좁은 화면에서 숨긴다.
-           [수정] LIVE · 날짜 · 시간을 한 알약 안에 한 줄로 묶었다. -->
-      <div id="live-badge" class="font-mono bg-ink2 border border-line px-3.5 py-1.5 rounded-full hidden sm:flex items-center gap-2 shrink-0 text-[0.83rem]">
+           [수정] 박스(배경·테두리)를 없애고 글자만 한 줄로 늘어놓았다.
+             LIVE만 초록, 날짜·요일·시간은 같은 색으로 통일했다(금색 아님). -->
+      <div id="live-badge" class="font-mono hidden sm:flex items-center gap-2 shrink-0 text-[0.83rem]">
         <span class="live-dot w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-        <span class="text-gold font-semibold tracking-wide">LIVE</span>
+        <span class="text-emerald-400 font-semibold tracking-wide">LIVE</span>
         <span id="current-date" class="text-muted"></span>
-        <span id="current-time" class="text-gold tabular-nums font-semibold"></span>
+        <span id="current-time" class="text-muted tabular-nums font-semibold"></span>
       </div>
       <!-- [추가] 화면 설정(테마·기본 노출 건수) : 관리자가 아니어도 누구나 쓸 수 있다 -->
       <!-- [수정] 모바일에서도 다시 보여준다. 하단 탭 바의 '설정' 자리를 '저장'에 내줬기 때문이다. (Phase 7 A1) -->
