@@ -251,15 +251,49 @@ function itemMatchesAnyTerm(item, terms) {
 }
 
 // -----------------------------------------------------------------
-// [추가] 검색어 파싱 : 공백 = AND, 콤마 = OR
-//   '롯데 한진'  -> ['롯데 한진']        (한 덩어리 → 두 단어 모두 포함해야 통과)
-//   '롯데, 한진' -> ['롯데', '한진']     (각각 검색 후 합침 → 둘 중 하나만 있어도 통과)
+// [추가] 검색어 파싱 : 공백 = AND, 콤마 = OR, 앞의 - = 제외 (D2)
+//   '롯데 한진'   -> terms ['롯데 한진']        (한 덩어리 → 두 단어 모두 포함해야 통과)
+//   '롯데, 한진'  -> terms ['롯데', '한진']     (각각 검색 후 합침 → 둘 중 하나만 있어도 통과)
+//   '반도체 -중국' -> terms ['반도체'] · excludes ['중국']
+//
+//   제외어는 어느 묶음에 적혀 있든 검색 전체에 걸린다.
+//   네이버에 보내는 질의에서는 빼고, 받아온 결과에서 걸러내는 방식이다
+//   (네이버 뉴스 검색은 제외 연산자를 지원하지 않는다).
 // -----------------------------------------------------------------
 function parseQuery(q) {
-  return String(q || '')
+  const excludes = [];
+  const terms = String(q || '')
     .split(',')
-    .map((s) => s.trim())
+    .map((group) => {
+      const keep = [];
+      let minusPending = false;   // '반도체 - 중국' 처럼 빼기를 띄어 쓴 경우
+      for (const w of group.trim().split(/\s+/).filter(Boolean)) {
+        if (w === '-') { minusPending = true; continue; }
+        // 낱말 가운데의 '-' (코로나-19)는 그대로 둔다. 맨 앞에 붙었을 때만 제외어다.
+        if (minusPending || w.startsWith('-')) {
+          const word = w.startsWith('-') ? w.slice(1) : w;
+          minusPending = false;
+          if (word) { excludes.push(word); continue; }
+        }
+        keep.push(w);
+      }
+      return keep.join(' ');
+    })
     .filter(Boolean);
+  return { terms, excludes: [...new Set(excludes)] };
+}
+
+// [D2] 사용자가 '-단어' 로 지정한 제외어 : 제목·요약 어디에든 있으면 뺀다.
+//   섹션용 applyExcludeList() 는 '제목에 없고 본문에 1번까지는 봐준다'는 느슨한 판정인데,
+//   직접 쳐서 뺀 낱말은 그렇게 봐주면 왜 안 빠지냐는 말이 나온다. 여기서는 엄격하게 건다.
+function dropExcluded(items, excludes) {
+  if (!excludes || !excludes.length) return items;
+  const keys = excludes.map((w) => w.toLowerCase()).filter(Boolean);
+  if (!keys.length) return items;
+  return items.filter((it) => {
+    const text = itemText(it);
+    return !keys.some((k) => text.includes(k));
+  });
 }
 
 // -----------------------------------------------------------------
@@ -1459,7 +1493,10 @@ app.get('/api/news', async (req, res) => {
   const { q, display = '20', sort = 'date', hours = '24' } = req.query;
   if (!q || !q.trim()) return res.status(400).json({ error: '검색어(q)가 필요합니다.' });
 
-  const terms = parseQuery(q);                       // 콤마 = OR, 공백 = AND
+  const { terms, excludes } = parseQuery(q);          // 콤마 = OR, 공백 = AND, -단어 = 제외
+  if (!terms.length) {
+    return res.status(400).json({ error: '뺄 낱말(-단어)만 있습니다. 찾을 낱말도 함께 넣어 주세요.' });
+  }
   const mode = terms.length > 1 ? 'or' : 'and';
   const limit = Math.min(Number(display) || 20, 50);
 
@@ -1491,6 +1528,9 @@ app.get('/api/news', async (req, res) => {
         fetchCount: 100, // [D] 최대치로 받아온 뒤 추림
         pages: digestPages,
       });
+      // [D2] 제외어는 완화 단계마다 다시 건다. 여기서 0건이 되면 다음 단계로 넘어가야 하기 때문에
+      //   반드시 `if (items.length) break` 앞에서 걸러야 한다.
+      items = dropExcluded(items, excludes);
       used = s;
       if (items.length) break;
     }
@@ -1511,6 +1551,7 @@ app.get('/api/news', async (req, res) => {
       items: ordered.slice(0, limit).map(({ _importance, _cluster, _onTopic, ...rest }) => rest),
       mode,
       terms,
+      excludes,                           // [D2] 화면 상태줄에 '무엇을 뺐는지' 적기 위한 값
       relaxed: used.note,                 // 조건을 완화했다면 안내 문구용
       requested: hoursText(reqH),
       total: ordered.length,

@@ -1405,7 +1405,8 @@
             <!-- 검색어 규칙 안내 -->
             <p class="text-muted leading-relaxed text-[0.85rem] bg-ink/60 border border-line rounded-lg px-3 py-2">
               <span class="text-gold2 font-semibold">띄어쓰기 = AND</span> · 롯데 한진 → 둘 다 포함<br>
-              <span class="text-gold2 font-semibold">콤마(,) = OR</span> · 롯데, 한진 → 하나만 있어도
+              <span class="text-gold2 font-semibold">콤마(,) = OR</span> · 롯데, 한진 → 하나만 있어도<br>
+              <span class="text-gold2 font-semibold">빼기(-) = 제외</span> · 반도체 -중국 → 중국 뺀 반도체
             </p>
 
             <!-- 노출 건수 / 게재 기간 / 정렬 -->
@@ -4875,6 +4876,19 @@
     //   '검색이 끝나면 이걸 하고 싶다'는 곳에서 await 로 쓴다.
     let searchDone = Promise.resolve();
 
+    // [D2] 서버가 검색어를 어떻게 읽었는지 사람 말로 적는다.
+    //   원본은 언제나 서버 응답(data.terms · data.excludes)이다.
+    //   화면에서 입력값을 다시 파싱하면 서버와 규칙이 어긋날 때 거짓말을 하게 된다.
+    function searchConditionText(data) {
+      const terms = Array.isArray(data.terms) ? data.terms : [];
+      const excludes = Array.isArray(data.excludes) ? data.excludes : [];
+      const parts = [];
+      if (terms.length > 1) parts.push(`${terms.join(' · ')} 중 하나라도 포함`);
+      else if (terms.length === 1) parts.push(`${terms[0]} ${terms[0].includes(' ') ? '모두 ' : ''}포함`);
+      if (excludes.length) parts.push(`${excludes.join(' · ')} 제외`);
+      return parts.join(' · ') || (data.mode === 'or' ? 'OR(하나라도 포함)' : 'AND(모두 포함)');
+    }
+
     function runSearch() {
       if (isLoading) return searchDone;   // 이미 돌고 있으면 그게 끝나는 걸 알려준다
       searchDone = runSearchInner();
@@ -4913,14 +4927,16 @@
           const list = sortItemsByCurrent(decorateItems(data.items, ['all', 'logistics', 'stock', 'sports', 'briefing'].includes(currentCategory) ? 'society' : currentCategory));
           currentResults = list;
 
-          const modeText = data.mode === 'or' ? 'OR(하나라도 포함)' : 'AND(모두 포함)';
+          const modeText = searchConditionText(data);
           const periodText = getHours() === 'all' ? '전체 기간' : `최근 ${hoursLabel()} 이내`;
           document.getElementById('status-line').textContent =
             `"${keyword}" 검색 결과 · ${modeText} · ${periodText}`;
           renderNews(list);
 
           if (!list.length) {
-            showFallbackBanner('조건에 맞는 기사를 찾지 못했습니다. 키워드를 줄이거나 콤마(,)로 나눠보세요.');
+            showFallbackBanner(data.excludes && data.excludes.length
+              ? `조건에 맞는 기사를 찾지 못했습니다. 제외어(-${data.excludes.join(' -')})를 빼거나 키워드를 줄여보세요.`
+              : '조건에 맞는 기사를 찾지 못했습니다. 키워드를 줄이거나 콤마(,)로 나눠보세요.');
           } else if (data.relaxed) {
             showFallbackBanner(`요청하신 기간(${data.requested})에 결과가 없어 "${data.relaxed}" 조건으로 넓혀 검색했습니다.`);
           }
