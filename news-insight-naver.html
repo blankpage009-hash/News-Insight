@@ -275,6 +275,8 @@
     font-size: .7rem;
     color: rgb(var(--c-muted2));
     transition: color .15s;
+    /* '키워드 랭킹'처럼 띄어쓰기가 있는 이름이 두 줄로 접히면 탭 높이가 들쭉날쭉해진다 */
+    white-space: nowrap;
   }
   #tab-bar button svg { width: 1.25rem; height: 1.25rem; }
   #tab-bar button.is-on { color: rgb(var(--c-gold)); font-weight: 600; }
@@ -1918,7 +1920,8 @@
       sports: '스포츠',
       sports_pohang: '포항스틸러스', sports_kfootball: '국내축구', sports_wfootball: '해외축구',
       sports_baseball: '해외야구', sports_etc: '기타',
-      saved: '저장한 기사'   // [추가] 서버에서 받아오지 않는 화면. localStorage 보관함을 그대로 보여준다.
+      saved: '저장한 기사',   // [추가] 서버에서 받아오지 않는 화면. localStorage 보관함을 그대로 보여준다.
+      keywords: '키워드 랭킹'   // [추가] 모바일 하단 탭 전용 화면. 우측 레일의 랭킹을 크게 펼친 것이다.
     };
     const categoryIcons = {
       briefing: 'sparkles', all: 'grid', breaking: 'siren', logistics: 'package',
@@ -1933,7 +1936,8 @@
       sports: 'trophy',
       sports_pohang: 'trophy', sports_kfootball: 'trophy', sports_wfootball: 'trophy',
       sports_baseball: 'trophy', sports_etc: 'trophy',
-      saved: 'bookmark'
+      saved: 'bookmark',
+      keywords: 'trending-up'
     };
 
     const categoryQueryMap = {
@@ -1991,6 +1995,7 @@
       siren: '<path d="M7 18v-6a5 5 0 1 1 10 0v6"/><path d="M5 21a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2z"/><path d="M21 12h1"/><path d="M18.5 4.5 18 5"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="m4.929 4.929.707.707"/>',
       package: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
       'line-chart': '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>',
+      'trending-up': '<path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/>',
       users: '<path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/>',
       globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
       candlestick: '<path d="M9 5v4"/><rect width="4" height="6" x="7" y="9" rx="1"/><path d="M9 15v2"/><path d="M17 3v2"/><rect width="4" height="8" x="15" y="5" rx="1"/><path d="M17 13v3"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/>',
@@ -4003,10 +4008,12 @@
       // [추가] '저장한 기사'는 이미 담아 둔 것을 보여줄 뿐이라 수집 조건(건수·기간·정렬)이 통하지 않는다.
       //   건수는 보여주고 필터 버튼만 감춘다.
       const savedView = !keyword && currentCategory === 'saved';
-      document.getElementById('cat-header-count').textContent = chartView ? '' : visibleCount() + '건';
+      // [추가] '키워드 랭킹'도 기사 목록이 아니라 건수·필터가 의미 없다 → 지수 차트와 같게 다룬다.
+      const rankView = isKeywordRankView();
+      document.getElementById('cat-header-count').textContent = (chartView || rankView) ? '' : visibleCount() + '건';
       const filterBtn = document.getElementById('cat-header-filter-btn');
-      if (filterBtn) filterBtn.classList.toggle('hidden', chartView || savedView);
-      if (chartView && document.body.classList.contains('hf-open')) toggleHeaderFilters();
+      if (filterBtn) filterBtn.classList.toggle('hidden', chartView || savedView || rankView);
+      if ((chartView || rankView) && document.body.classList.contains('hf-open')) toggleHeaderFilters();
 
       syncHeaderFilters();
       el.classList.remove('hidden');
@@ -4373,7 +4380,7 @@
 
     // ---------------------------------------------------------------
     // [추가] '증시 > 지수 차트' 화면
-    //  - 기사를 가져오지 않는 섹션이다. 주요 지수 5개를 카드로 보여주고,
+    //  - 기사를 가져오지 않는 섹션이다. 주요 지수 6개를 카드로 보여주고,
     //    카드를 누르면 기간별(1일~3년) 차트 팝업이 열린다.
     //  - 카드 값(금일 지수·전일대비·등락률)은 상단 티커가 쓰는 /api/indices 를 그대로 쓴다.
     //    티커가 30초마다 새로 받으므로 카드도 같이 갱신된다.
@@ -4381,8 +4388,9 @@
     const INDEX_CARDS = [
       { key: 'kospi', label: 'KOSPI', sub: '코스피' },
       { key: 'kosdaq', label: 'KOSDAQ', sub: '코스닥' },
-      { key: 'sp500', label: 'S&P 500', sub: '미국' },
+      { key: 'nyse', label: 'NYSE', sub: '미국' },
       { key: 'nasdaq', label: 'NASDAQ', sub: '미국' },
+      { key: 'sp500', label: 'S&P 500', sub: '미국' },
       { key: 'dow', label: 'DOW JONES', sub: '미국' },
       // 환율은 지수가 아니라 /api/market-extra 에서 값을 받는다. 단위도 'p'가 아니라 '원'이다.
       { key: 'usdkrw', label: '원/달러 환율', sub: '환율', unit: '원', fx: true },
@@ -4790,11 +4798,11 @@
     function renderTabBar() {
       const bar = document.getElementById('tab-bar');
       if (!bar) return;
-      const parent = parentCategoryOf(currentCategory);
       const active = settingMode ? ''
         : currentCategory === 'briefing' ? 'briefing'
         : currentCategory === 'saved' ? 'saved'
-        : (currentCategory === 'stock' || parent === 'stock') ? 'stock'
+        // 랭킹에서 낱말을 눌러 검색으로 넘어갔으면 더 이상 랭킹 화면이 아니다 → 불을 끈다
+        : isKeywordRankView() ? 'keywords'
         : '';
       bar.querySelectorAll('button[data-tab]').forEach((b) => {
         b.classList.toggle('is-on', b.dataset.tab === active);
@@ -4960,6 +4968,14 @@
           renderIndexCards();
           if (!lastIndexItems.length) await refreshIndexTicker();
           renderIndexCards();
+
+        } else if (currentCategory === 'keywords') {
+          // [추가] 기사를 가져오지 않는 화면. 레일과 같은 랭킹을 크게 펼쳐 보여준다.
+          document.getElementById('status-line').textContent =
+            '지금 기사에 가장 많이 나오는 낱말입니다. 누르면 그 낱말로 검색합니다.';
+          renderKeywordRankView();
+          if (!lastKeywordItems.length) await refreshKeywordRank();
+          renderKeywordRankView();
 
         } else if (currentCategory.startsWith('logistics_') || currentCategory.startsWith('stock_')
                    || currentCategory.startsWith('economy_') || currentCategory.startsWith('sports_')) {
@@ -5404,8 +5420,8 @@
     //   흐르는 애니메이션은 없앴다. 값이 제자리에 있어야 읽기 쉽다.
     // ---------------------------------------------------------------
 
-    // KOSPI → KOSDAQ → NASDAQ → S&P 500 → DOW JONES 순서 고정
-    const INDEX_ORDER = ['KOSPI', 'KOSDAQ', 'NASDAQ', 'S&P 500', 'DOW JONES'];
+    // KOSPI → KOSDAQ → NYSE → NASDAQ → S&P 500 → DOW JONES 순서 고정
+    const INDEX_ORDER = ['KOSPI', 'KOSDAQ', 'NYSE', 'NASDAQ', 'S&P 500', 'DOW JONES'];
 
     // 기준금리·환율 항목 (한국은행 ECOS / FRED / 네이버 환율 API에서 실시간 조회)
     let lastExtraItems = [];       // [추가] 지수 차트 화면의 '원/달러 환율' 카드도 이 값을 쓴다
@@ -5562,8 +5578,10 @@
     //   서버는 캐시에 기사가 없으면 새로 만들지 않고 빈 목록(ready:false)을 준다.
     //   → 그때는 블록을 감춰 두고, 아래 주기로 다시 물어본다.
     // ---------------------------------------------------------------
-    const KEYWORD_RANK_TOP = 5;
+    const KEYWORD_RANK_TOP = 5;                 // 우측 레일에 세우는 개수
+    const KEYWORD_RANK_VIEW_TOP = 10;           // [추가] 모바일 '키워드 랭킹' 화면에 세우는 개수
     const KEYWORD_RANK_INTERVAL = 5 * 60 * 1000;
+    let lastKeywordItems = [];                  // [추가] 레일과 모바일 화면이 같은 응답을 나눠 쓴다
 
     function railKeywordRowHtml(it, i) {
       const strong = i < 2;   // 시안 : 1·2위만 금색 번호 + 밝은 글자
@@ -5594,12 +5612,14 @@
       const list = document.getElementById('rail-keyword-list');
       if (!wrap || !list) return;
       try {
-        const params = new URLSearchParams({ limit: String(KEYWORD_RANK_TOP) });
+        // [수정] 레일(5개)보다 많이 받아 둔다. 모바일 화면이 같은 응답으로 10위까지 그린다.
+        const params = new URLSearchParams({ limit: String(KEYWORD_RANK_VIEW_TOP) });
         setKwParam(params);   // 서버가 섹션 캐시를 찾으려면 화면과 같은 키워드 설정이 필요하다
         const data = await apiGet(`/api/keyword-rank?${params.toString()}`);
         const items = Array.isArray(data.items) ? data.items : [];
+        lastKeywordItems = items;
         wrap.classList.toggle('is-on', items.length > 0);
-        list.innerHTML = items.map(railKeywordRowHtml).join('');
+        list.innerHTML = items.slice(0, KEYWORD_RANK_TOP).map(railKeywordRowHtml).join('');
         // 낱말에 따옴표가 섞여도 안전하도록 onclick 문자열 대신 data 속성으로 넘긴다
         list.querySelectorAll('.rail-kw-row').forEach((b) => {
           b.onclick = () => searchRailKeyword(b.dataset.kw);
@@ -5608,6 +5628,61 @@
         console.error(err);
         wrap.classList.remove('is-on');
       }
+      renderKeywordRankView();   // [추가] 모바일 랭킹 화면을 보고 있으면 같이 갱신된다
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] '키워드 랭킹' 화면 (Phase 7 D2 · 모바일 하단 탭)
+    //   좁은 화면에는 우측 레일이 없어 랭킹을 볼 길이 없었다. 하단 탭의 '증시' 자리를
+    //   이 화면으로 바꿨다. (증시 섹션은 왼쪽 '섹션' 목록에 그대로 있다)
+    //   기사를 새로 가져오지 않는다. 레일과 같은 /api/keyword-rank 응답을 크게 펼칠 뿐이다.
+    // ---------------------------------------------------------------
+    function isKeywordRankView() {
+      if (settingMode) return false;
+      if (document.getElementById('search-input').value.trim()) return false;
+      return currentCategory === 'keywords';
+    }
+
+    function keywordRankRowHtml(it, i) {
+      const strong = i < 3;   // 1~3위만 금색 번호 + 밝은 글자
+      const move = it.isNew ? { text: 'NEW', cls: 'text-up' }
+        : it.diff > 0        ? { text: `▲${it.diff}`, cls: 'text-up' }
+        : it.diff < 0        ? { text: `▼${-it.diff}`, cls: 'text-down' }
+        :                      { text: '—', cls: 'text-muted2' };
+      const word = esc(it.word);
+      return `<button data-kw="${word}" title="'${word}' 이(가) 들어간 기사 ${it.count}건 · 눌러서 검색"
+        class="kw-rank-row flex items-center gap-3 w-full text-left bg-panel/70 border border-line rounded-xl px-4 py-3.5 transition hover:border-gold/50 hover:bg-panel focus:outline-none focus:border-gold/70">
+        <span class="font-mono text-[0.95rem] font-semibold w-6 shrink-0 ${strong ? 'text-gold' : 'text-muted2'}">${i + 1}</span>
+        <span class="text-[1rem] font-medium break-keep ${strong ? 'text-paper' : 'text-muted'}">${word}</span>
+        <span class="ml-auto flex items-center gap-3 shrink-0">
+          <span class="font-mono text-[0.75rem] text-muted2">${it.count}건</span>
+          <span class="font-mono text-[0.75rem] font-medium w-9 text-right ${move.cls}">${move.text}</span>
+        </span>
+      </button>`;
+    }
+
+    function renderKeywordRankView() {
+      if (!isKeywordRankView()) return;
+      const wrap = document.getElementById('news-list');
+      if (!wrap) return;
+
+      if (!lastKeywordItems.length) {
+        // 서버 캐시에 기사가 없으면(ready:false) 랭킹을 셀 재료가 없다. 잠시 뒤 다시 물어본다.
+        wrap.innerHTML = emptyBoxHtml('아직 랭킹을 셀 기사가 모이지 않았습니다. 잠시 뒤 다시 열어보세요.');
+        return;
+      }
+
+      wrap.innerHTML = `
+        <div class="flex items-center gap-2 flex-wrap px-1">
+          <span class="text-muted font-mono text-[0.85rem]">전체 섹션 기사 제목 기준 · 화살표는 1시간 전 순위와 비교한 것입니다.</span>
+        </div>
+        <div class="space-y-2">
+          ${lastKeywordItems.slice(0, KEYWORD_RANK_VIEW_TOP).map(keywordRankRowHtml).join('')}
+        </div>`;
+
+      wrap.querySelectorAll('.kw-rank-row').forEach((b) => {
+        b.onclick = () => searchRailKeyword(b.dataset.kw);
+      });
     }
 
     // 현재 화면 기사(currentResults) + 관련기사 팝업 기사(relatedItems)에서 id로 찾는다
@@ -6207,7 +6282,9 @@
 
   <!-- [수정] 시안 10번 : 모바일 하단 탭 바.
        Phase 7 A1 에서 저장(북마크)을 만들면서 네 번째 칸을 시안대로 '저장'으로 되돌렸다.
-       화면 설정은 다시 헤더 오른쪽 ≡ 버튼에서 연다. -->
+       화면 설정은 다시 헤더 오른쪽 ≡ 버튼에서 연다.
+       [수정] 세 번째 칸은 '증시' 대신 '키워드 랭킹'이다. 증시는 '섹션' 목록에서 열 수 있지만
+       키워드 랭킹은 우측 레일에만 있어서 좁은 화면에서는 볼 방법이 없었다. -->
   <nav id="tab-bar" class="lg:hidden" aria-label="주요 화면">
     <button onclick="tabGo('briefing')" data-tab="briefing">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
@@ -6217,9 +6294,9 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
       섹션
     </button>
-    <button onclick="tabGo('stock')" data-tab="stock">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><rect x="7" y="9" width="4" height="6" rx="1"/><rect x="15" y="5" width="4" height="10" rx="1"/></svg>
-      증시
+    <button onclick="tabGo('keywords')" data-tab="keywords">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>
+      키워드 랭킹
     </button>
     <button onclick="tabGo('saved')" data-tab="saved">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>

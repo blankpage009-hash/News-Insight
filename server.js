@@ -2829,13 +2829,16 @@ app.get('/api/insight', async (req, res) => {
 });
 
 // -----------------------------------------------------------------
-// /api/indices : KOSPI / KOSDAQ / NASDAQ / S&P 500 / DOW JONES
+// /api/indices : KOSPI / KOSDAQ / NYSE / NASDAQ / S&P 500 / DOW JONES
 // -----------------------------------------------------------------
 // key : 화면(지수 카드·차트 팝업)이 지수를 구분할 때 쓰는 고정 이름.
 //   name 은 표시용이라 바뀔 수 있으므로 화면이 이름으로 짝을 맞추지 않게 한다.
 const INDEX_TARGETS = [
   { key: 'kospi', codes: ['KOSPI'], name: 'KOSPI', world: false },
   { key: 'kosdaq', codes: ['KOSDAQ'], name: 'KOSDAQ', world: false },
+  // NYSE 종합지수는 네이버 증권에 없다(어떤 코드로 물어도 '지원하지 않는 지수' 409).
+  //   그래서 이 항목만 야후에서 받는다. codes 가 비어 있으니 곧바로 야후로 넘어간다.
+  { key: 'nyse', codes: [], name: 'NYSE', world: true, yahoo: '^NYA' },
   { key: 'nasdaq', codes: ['.IXIC'], name: 'NASDAQ', world: true },
   { key: 'sp500', codes: ['.INX', '.SPX', 'SPI@SPX'], name: 'S&P 500', world: true },
   { key: 'dow', codes: ['.DJI'], name: 'DOW JONES', world: true },
@@ -2858,6 +2861,26 @@ function indexUrls({ codes, world }) {
     }
   });
   return urls;
+}
+
+// 네이버에 없는 지수(NYSE)용. 지수 차트가 쓰는 야후 파이낸스에서 현재가·전일종가만 꺼낸다.
+//   나스닥으로 두 경로를 맞대 보면 값과 등락률이 네이버와 똑같이 나온다.
+async function fetchOneIndexFromYahoo({ key, name, yahoo }) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahoo)}`
+    + '?range=1d&interval=1d';
+  const res = await fetchWithTimeout(url, {
+    headers: { 'User-Agent': UA_BROWSER, Accept: 'application/json' },
+  }, 8000);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const meta = (await res.json())?.chart?.result?.[0]?.meta;
+  const price = toNum(meta?.regularMarketPrice);
+  const prev = toNum(meta?.chartPreviousClose);
+  if (!Number.isFinite(price) || !Number.isFinite(prev) || prev === 0) {
+    throw new Error('야후 응답 형식 해석 불가');
+  }
+  const change = price - prev;
+  return { key, name, price, change, changePercent: (change / prev) * 100 };
 }
 
 async function fetchOneIndex(target) {
@@ -2897,7 +2920,14 @@ async function fetchOneIndex(target) {
       lastErr = e;
     }
   }
-  throw new Error(`지수 조회 실패 (${codes.join('/')}): ${lastErr?.message || 'unknown'}`);
+  if (target.yahoo) {
+    try {
+      return await fetchOneIndexFromYahoo(target);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw new Error(`지수 조회 실패 (${codes.join('/') || name}): ${lastErr?.message || 'unknown'}`);
 }
 
 // 화면의 지수 티커는 30초마다 이 API를 부른다. 캐시가 없으면 탭을 하나 열어둘 때마다
@@ -2928,11 +2958,12 @@ app.get('/api/indices', async (req, res) => {
 // -----------------------------------------------------------------
 // /api/index-chart : 증시 지수의 기간별 추이 (지수 카드를 누르면 열리는 차트 팝업용)
 //  - 1일은 5분봉, 1주일은 30분봉, 그 위로는 일봉(3년만 주봉)이다.
-//  - 1순위는 야후 파이낸스. 지수 5개 × 모든 기간을 같은 형식으로 주고
+//  - 1순위는 야후 파이낸스. 지수 6개 × 모든 기간을 같은 형식으로 주고
 //    5분봉까지 있어서 이 경로 하나로 화면이 다 채워진다.
 //  - 야후가 막히면 네이버로 넘어간다. 다만 네이버는
 //      · 국내(코스피/코스닥) : 분봉 + 임의 기간 일/주봉이 모두 된다.
 //      · 해외(나스닥/S&P/다우) : 분봉이 빈 배열로 오고, 한 번에 110개까지만 준다.
+//      · NYSE : 네이버에 아예 없어 폴백이 없다.
 //    그래서 폴백은 되는 것만 채우고, 해외 '1일'처럼 안 되는 조합은 오류로 돌려준다.
 //  - 응답 형식 : { key, name, range, points: [{ t(초), value }], prevClose, gmtoffset, source }
 //    t 는 UTC 초, gmtoffset 은 그 거래소의 시차(초)다. 화면은 이 둘을 더해
@@ -2943,6 +2974,8 @@ const INDEX_CHART_TARGETS = {
   kosdaq: { name: 'KOSDAQ',    yahoo: '^KQ11', world: false, naverCode: 'KOSDAQ' },
   sp500:  { name: 'S&P 500',   yahoo: '^GSPC', world: true,  naverCode: '.INX' },
   nasdaq: { name: 'NASDAQ',    yahoo: '^IXIC', world: true,  naverCode: '.IXIC' },
+  // NYSE 종합은 네이버에 없다 → 야후가 막히면 폴백 없이 오류가 난다 (naverCode 를 두지 않는 이유)
+  nyse:   { name: 'NYSE',      yahoo: '^NYA',  world: true },
   dow:    { name: 'DOW JONES', yahoo: '^DJI',  world: true,  naverCode: '.DJI' },
   // 환율은 지수가 아니지만 같은 화면·같은 응답 형식으로 보여준다.
   //   야후는 24시간 시세라 시차를 런던(BST)으로 준다 → 한국 시각으로 읽도록 gmtoffset 을 고정한다.
@@ -3162,8 +3195,8 @@ async function fetchIndexChartFromNaverFx(target, rangeKey) {
   };
 }
 
-// 대상 6개 × 기간 7개 = 42칸. 기사 응답 캐시(respCache)에 섞으면 그쪽을 밀어내므로 따로 둔다.
-const INDEX_CHART_CACHE_MAX = 48;
+// 대상 7개 × 기간 7개 = 49칸. 기사 응답 캐시(respCache)에 섞으면 그쪽을 밀어내므로 따로 둔다.
+const INDEX_CHART_CACHE_MAX = 56;
 const indexChartCache = new Map();   // "지수:기간" -> { ts, payload }
 
 function indexChartTtl(rangeKey) {
@@ -3179,6 +3212,7 @@ async function buildIndexChart(key, rangeKey) {
     return { ...head, ...(await fetchIndexChartFromYahoo(target, rangeKey)) };
   } catch (e) {
     console.error(`[지수 차트] 야후 실패 (${key}/${rangeKey}):`, e.message);
+    if (!target.naverCode) throw new Error(`${target.name} 은(는) 대체 경로가 없습니다: ${e.message}`);
     const fallback = target.fx ? fetchIndexChartFromNaverFx
       : target.world ? fetchIndexChartFromNaverForeign : fetchIndexChartFromNaverDomestic;
     return { ...head, ...(await fallback(target, rangeKey)) };
