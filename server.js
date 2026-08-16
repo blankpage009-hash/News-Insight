@@ -1985,6 +1985,13 @@ const followupInflight = new Map();  // 같은 씨앗을 동시에 물어보면 
 //   rankTokens() 가 조사·숫자·불용어를 이미 걸러 준다(C1 에서 만든 것을 그대로 쓴다).
 //   낱말 2개를 AND 로 묶는다 — 1개면 너무 넓고, 3개면 후속 기사가 표현을 조금만 바꿔도 놓친다.
 //   고르는 기준은 '긴 낱말' 이다. C1 에서 확인했듯 긴 쪽이 더 구체적이다.
+//
+//   [중요] 검색어에는 원표기(raw)가 아니라 조사를 뗀 형태(key)를 쓴다.
+//   matchBy() 는 검색어를 문자 그대로 본문에 포함되는지만 본다(조사 제거 없음).
+//   '반도체가' 를 그대로 검색어로 보내면 다른 기사가 '반도체는'·'반도체 ' 로 쓰는 순간
+//   전부 놓친다 — 실측으로 걸렸다(그 기사만 잡히고 후속은 0건). key 를 쓰면
+//   '반도체'만 포함돼도 걸려 훨씬 잘 잡힌다. 화면에 보여줄 값이 아니라 검색 전용이라
+//   C1 처럼 raw 로 되돌릴 필요가 없다.
 function followupQuery(title) {
   const seen = new Set();
   return rankTokens(title)
@@ -1992,7 +1999,7 @@ function followupQuery(title) {
     .filter((p) => (seen.has(p.key) ? false : (seen.add(p.key), true)))
     .sort((a, b) => b.key.length - a.key.length)
     .slice(0, 2)
-    .map((p) => p.raw)
+    .map((p) => p.key)
     .join(' ');
 }
 
