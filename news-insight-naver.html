@@ -2945,14 +2945,15 @@
       else if (e.key === 'Escape') { e.target.blur(); }
     }
 
-    // 헤더에서 엔터 : 검색을 실행하되 조건 패널은 '머리만 남긴 접힌 상태'로 열어 둔다.
-    //   무엇을 검색했는지 보이고, 필터 3개를 고치려면 그 머리를 누르면 된다.
+    // 헤더에서 엔터 : 검색만 실행한다. 아래 '키워드 검색' 패널은 열지 않는다.
+    //   (2026-08-16 사용자 요청 : 헤더에서 검색했는데 똑같은 검색창이 결과 위에 한 번 더
+    //    보이는 게 불필요하다 → 필터를 고치려면 헤더 칸의 필터 아이콘을 쓰면 된다)
     function submitSearchFromHeader() {
       const h = document.getElementById('hsearch-input');
       if (!h || !h.value.trim()) return;
-      expandedSearch = true;
-      renderSearchToggle();
-      submitSearch();
+      document.getElementById('search-input').blur();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      runSearch();
     }
 
     // ⌘K / Ctrl+K → 헤더 칸으로 커서. 모바일에는 헤더 칸이 없으므로 검색 패널을 편다.
