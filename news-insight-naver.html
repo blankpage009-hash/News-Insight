@@ -1182,6 +1182,67 @@
         <p id="app-subtitle" class="font-sans font-medium text-muted tracking-wide leading-none text-xs sm:text-sm whitespace-nowrap hidden sm:block">Real-Time Wire Desk</p>
       </div>
     </div>
+
+    <!-- [추가] Phase 7 D1 · 시안 01번 : 헤더 가운데 검색창 (데스크톱 전용)
+         여기 친 글자는 아래 검색 패널의 입력칸(#search-input)으로 그대로 옮겨진다.
+         화면 곳곳이 #search-input 값으로 '지금 키워드 검색 중인가'를 판단하기 때문에,
+         진짜 값은 언제나 그쪽 하나만 두고 이 칸은 비추는 역할만 한다. -->
+    <div class="hidden lg:flex flex-1 justify-center px-6 min-w-0">
+      <div class="relative flex items-center w-full max-w-[520px]">
+      <div class="group flex items-center gap-2 w-full h-11 px-3.5 bg-ink border border-line rounded-lg focus-within:border-gold/70 transition">
+        <svg class="w-[18px] h-[18px] shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" id="hsearch-input" aria-label="키워드 검색" placeholder="키워드 검색"
+          oninput="onHeaderSearchInput()" onkeydown="onHeaderSearchKey(event)"
+          class="flex-1 min-w-0 bg-transparent text-[0.95rem] placeholder:text-muted focus:outline-none">
+        <!-- [수정] 단축키 배지 → 필터 아이콘 버튼. 누르면 작은 드롭다운(노출건수·게재기간·정렬)이 펼쳐진다 -->
+        <button id="hsearch-filter-btn" type="button" onclick="toggleHsearchFilters(event)" aria-expanded="false" aria-controls="hsearch-filter-pop"
+          title="검색 필터 (노출 건수 · 게재 기간 · 정렬)" aria-label="검색 필터"
+          class="shrink-0 -mr-1 p-1 rounded text-muted hover:text-gold hover:bg-ink3 transition">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+        </button>
+      </div>
+
+      <!-- [추가] 필터 아이콘 드롭다운 : 검색 패널 전체가 아니라 이 3개 선택만 작게 뜬다.
+           값의 원본은 언제나 아래 검색 패널의 search-count-select 등이다 (D1 과 같은 '거울' 방식). -->
+      <div id="hsearch-filter-pop" class="hidden absolute right-0 top-full mt-2 z-50 w-60 bg-ink2 border border-line rounded-xl shadow-lg p-3 space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <label for="hsearch-count-select" class="text-muted whitespace-nowrap text-[0.85rem]">노출 건수</label>
+          <select id="hsearch-count-select" onchange="onHsearchFilterChange()" title="노출 개수"
+            class="bg-ink border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
+            <option value="3">3개</option>
+            <option value="5">5개</option>
+            <option value="10">10개</option>
+            <option value="15">15개</option>
+            <option value="20">20개</option>
+            <option value="30">30개</option>
+          </select>
+        </div>
+        <div class="flex items-center justify-between gap-2">
+          <label for="hsearch-hours-select" class="text-muted whitespace-nowrap text-[0.85rem]">게재 기간</label>
+          <select id="hsearch-hours-select" onchange="onHsearchFilterChange()" title="기사 게재 시간 (현재 시각 기준)"
+            class="bg-ink border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
+            <option value="1">1시간전</option>
+            <option value="3">3시간전</option>
+            <option value="12">12시간전</option>
+            <option value="24">1일전</option>
+            <option value="168">1주일전</option>
+            <option value="720">1달전</option>
+            <option value="8760">1년전</option>
+            <option value="all">모두</option>
+          </select>
+        </div>
+        <div class="flex items-center justify-between gap-2">
+          <label for="hsearch-sort-select" class="text-muted whitespace-nowrap text-[0.85rem]">정렬</label>
+          <select id="hsearch-sort-select" onchange="onHsearchFilterChange()" title="검색 결과 정렬 기준"
+            class="bg-ink border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
+            <option value="sim">정확도순</option>
+            <option value="date">최신순</option>
+          </select>
+        </div>
+      </div>
+      </div>
+    </div>
+
     <div class="flex items-center gap-2 sm:gap-4">
       <!-- [수정] 시안 10번 : 모바일 헤더는 로고 + 검색·메뉴만 남긴다.
            LIVE 배지는 좁은 화면에서 숨긴다. -->
@@ -1245,9 +1306,9 @@
       <!-- [수정] 카드 박스(배경/테두리/둥근 모서리) 제거 : 구분선만으로 구획을 나눈다 -->
       <div class="space-y-2">
 
-        <!-- 제목(영문) : 기존 1.18rem → 3pt(=4px) 크게 (이후 1pt 축소) -->
+        <!-- 제목(영문) : 기존 1.18rem → 3pt(=4px) 크게 → 1pt 축소 → 사이드바 전체 1pt 재축소 (2026-08-16) -->
         <div class="flex items-center justify-between gap-2">
-          <h2 class="font-semibold text-muted uppercase tracking-[0.14em] text-[1.28rem]">SECTION</h2>
+          <h2 class="font-semibold text-muted uppercase tracking-[0.14em] text-[1.20rem]">SECTION</h2>
           <!-- [추가] 데스크톱 : 사이드바 접기 («) -->
           <button id="sidebar-collapse-btn" onclick="toggleSidebar()" aria-controls="sidebar" aria-expanded="true"
             aria-label="사이드바 접기" title="사이드바 접기 (Ctrl+\)"
@@ -1295,25 +1356,14 @@
 
         <div class="flex flex-col gap-1" id="category-filters"></div>
 
-        <!-- 카테고리 목록과 키워드 검색 구분선 -->
-        <div class="border-t border-line my-2"></div>
-
-        <!-- 키워드 검색 (누르면 오른쪽 기사 영역에 팝업으로 열린다) -->
-        <div>
-          <button id="search-toggle-btn" onclick="toggleSearchPanel()"
-            class="cat-btn text-[1.17rem] flex items-center justify-between px-4 py-2.5 rounded-xl transition w-full text-muted hover:bg-ink3">
-            <span>키워드 검색</span>
-            <span class="flex items-center gap-1.5" id="search-toggle-icons"></span>
-          </button>
-        </div>
-
-        <!-- [추가] 카테고리/검색 메뉴와 Setting 을 나누는 구분선 -->
+        <!-- [수정] 사이드바 '키워드 검색' 메뉴는 삭제했다 (2026-08-16 사용자 요청).
+             검색은 이제 헤더 가운데 검색창(D1)과 모바일 헤더 돋보기 아이콘으로만 들어간다. -->
         <div class="border-t border-line my-2"></div>
 
         <!-- [수정] Setting : 누르면 오른쪽(기사 영역)에서 키워드를 설정한다 -->
         <div>
           <button id="setting-toggle-btn" onclick="toggleSettingPanel()"
-            class="cat-btn text-[1.17rem] flex items-center justify-between px-4 py-2.5 rounded-xl transition w-full text-muted hover:bg-ink3">
+            class="cat-btn text-[1.09rem] flex items-center justify-between px-4 py-2.5 rounded-xl transition w-full text-muted hover:bg-ink3">
             <span>Admin Setting</span>
             <span class="flex items-center gap-1.5" id="setting-toggle-icons"></span>
           </button>
@@ -2383,6 +2433,11 @@
           e.preventDefault();
           toggleSidebar();
         }
+        // [추가] Phase 7 D1 : Ctrl(⌘) + K 로 헤더 검색창에 커서
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+          e.preventDefault();
+          focusHeaderSearch();
+        }
       });
 
       // [추가] 모바일 : 왼쪽 가장자리 스와이프로 드로어 열기 / 왼쪽으로 밀어 닫기
@@ -2413,6 +2468,17 @@
         if (e.key === 'Escape') closeAllFilterDropdowns();
       });
 
+      // [추가] D1 필터 드롭다운 : 바깥을 누르거나 Esc 를 누르면 닫힌다
+      document.addEventListener('click', (e) => {
+        const pop = document.getElementById('hsearch-filter-pop');
+        if (!pop || pop.classList.contains('hidden')) return;
+        if (e.target.closest('#hsearch-filter-pop, #hsearch-filter-btn')) return;
+        closeHsearchFilters();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeHsearchFilters();
+      });
+
       updateClock();
       setInterval(updateClock, 1000);
 
@@ -2426,6 +2492,8 @@
       document.getElementById('search-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') submitSearch();
       });
+      // [추가] D1 : 패널 칸에 친 글자도 헤더 칸에 그대로 비친다 (반대 방향은 onHeaderSearchInput)
+      document.getElementById('search-input').addEventListener('input', syncHeaderSearch);
 
       // [추가] 비밀번호 입력창에서 Enter → 바로 확인
       document.getElementById('password-input').addEventListener('keydown', (e) => {
@@ -2765,14 +2833,10 @@
     // 키워드 검색 토글 (카테고리 메뉴 항목)
     // ---------------------------------------------------------------
     function renderSearchToggle() {
-      document.getElementById('search-toggle-icons').innerHTML =
-        icon('search', 'w-5 h-5') + icon(expandedSearch ? 'chevron-up' : 'chevron-down', 'w-4 h-4 opacity-70');
+      // [수정] 사이드바 '키워드 검색' 버튼을 지우면서(2026-08-16) 여기 있던
+      //   #search-toggle-icons·#search-toggle-btn 갱신 코드도 같이 없앴다.
       const popup = document.getElementById('search-popup');
       popup.classList.toggle('hidden', !expandedSearch);
-      const btn = document.getElementById('search-toggle-btn');
-      btn.classList.toggle('text-gold2', expandedSearch);
-      btn.classList.toggle('bg-ink3', expandedSearch);
-      btn.classList.toggle('text-muted', !expandedSearch);
       renderSearchCollapse();
       updateSearchStick();
     }
@@ -2785,6 +2849,8 @@
       const btn  = document.getElementById('search-collapse-btn');
       const q    = document.getElementById('search-collapsed-query');
       if (!body) return;
+      syncHeaderSearch();   // [추가] D1 : 헤더 칸도 같은 값을 비추게 한다
+
       body.classList.toggle('hidden', searchCollapsed);
       if (chev) chev.innerHTML = icon(searchCollapsed ? 'chevron-down' : 'chevron-up', 'w-5 h-5');
       if (btn) btn.setAttribute('aria-expanded', String(!searchCollapsed));
@@ -2812,7 +2878,8 @@
       document.documentElement.style.setProperty('--search-stick', h + 'px');
     }
 
-    // 사이드바 '키워드 검색' → 오른쪽 기사 영역 맨 위에 검색 패널을 펼친다/접는다.
+    // 모바일 헤더 돋보기(openSearchFromHeader) → 기사 영역 맨 위에 검색 패널을 펼친다/접는다.
+    //   (2026-08-16 사이드바 '키워드 검색' 버튼은 지웠지만, 이 함수 자체는 모바일 진입점으로 남아 있다)
     function toggleSearchPanel() {
       expandedSearch = !expandedSearch;
       if (expandedSearch) searchCollapsed = false;   // [추가] 사이드바로 열 때는 항상 펼친 상태로
@@ -2838,6 +2905,100 @@
       renderSearchCollapse();
       updateSearchStick();
       window.scrollTo({ top: 0, behavior: 'smooth' });  // 접힌 헤더 바로 아래부터 결과가 보이도록
+      runSearch();
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] Phase 7 D1 : 헤더 가운데 검색창 (데스크톱)
+    //   입력칸이 둘로 보이지만 '진짜 값'은 언제나 #search-input 하나다.
+    //   초기화·섹션 이동·레일 키워드 클릭 등 프로그램이 값을 바꾸는 곳은
+    //   모두 renderSearchToggle() → renderSearchCollapse() 를 거치므로,
+    //   그 끝에서 한 번만 비춰 주면 두 칸이 어긋나지 않는다.
+    // ---------------------------------------------------------------
+
+    // #search-input → 헤더 칸
+    function syncHeaderSearch() {
+      const h = document.getElementById('hsearch-input');
+      const inp = document.getElementById('search-input');
+      if (!h || !inp) return;
+      // 값이 같으면 손대지 않는다 : 타이핑 중에 h.value 를 다시 넣으면 커서가 끝으로 튄다.
+      // (커서가 헤더 칸에 있다고 건너뛰면 안 된다. 섹션 이동·초기화는 커서와 상관없이 반영돼야 한다)
+      if (h.value !== inp.value) h.value = inp.value;
+    }
+
+    // 헤더 칸 → #search-input
+    function onHeaderSearchInput() {
+      const h = document.getElementById('hsearch-input');
+      const inp = document.getElementById('search-input');
+      if (!h || !inp) return;
+      inp.value = h.value;
+      renderSearchCollapse();   // 접힌 패널 머리의 '현재 검색어' 요약도 같이 갱신
+    }
+
+    function onHeaderSearchKey(e) {
+      if (e.key === 'Enter') { e.preventDefault(); submitSearchFromHeader(); }
+      else if (e.key === 'Escape') { e.target.blur(); }
+    }
+
+    // 헤더에서 엔터 : 검색을 실행하되 조건 패널은 '머리만 남긴 접힌 상태'로 열어 둔다.
+    //   무엇을 검색했는지 보이고, 필터 3개를 고치려면 그 머리를 누르면 된다.
+    function submitSearchFromHeader() {
+      const h = document.getElementById('hsearch-input');
+      if (!h || !h.value.trim()) return;
+      expandedSearch = true;
+      renderSearchToggle();
+      submitSearch();
+    }
+
+    // ⌘K / Ctrl+K → 헤더 칸으로 커서. 모바일에는 헤더 칸이 없으므로 검색 패널을 편다.
+    function focusHeaderSearch() {
+      if (isMobileLayout()) { openSearchFromHeader(); return; }
+      const h = document.getElementById('hsearch-input');
+      if (!h) return;
+      h.focus();
+      h.select();
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] 헤더 검색창의 필터 아이콘 : 검색 패널 전체가 아니라
+    //   노출건수·게재기간·정렬 3개만 작은 드롭다운으로 뜬다.
+    //   값의 원본은 언제나 아래 검색 패널의 search-count-select 등이다 (D1 의 '거울' 방식 재사용).
+    // ---------------------------------------------------------------
+    function toggleHsearchFilters(e) {
+      if (e) e.stopPropagation();
+      const pop = document.getElementById('hsearch-filter-pop');
+      if (!pop) return;
+      const open = pop.classList.contains('hidden');
+      if (open) syncHsearchFilters();
+      pop.classList.toggle('hidden', !open);
+      document.getElementById('hsearch-filter-btn')?.setAttribute('aria-expanded', String(open));
+      document.getElementById('hsearch-filter-btn')?.classList.toggle('text-gold2', open);
+    }
+
+    function closeHsearchFilters() {
+      const pop = document.getElementById('hsearch-filter-pop');
+      if (!pop || pop.classList.contains('hidden')) return;
+      pop.classList.add('hidden');
+      document.getElementById('hsearch-filter-btn')?.setAttribute('aria-expanded', 'false');
+      document.getElementById('hsearch-filter-btn')?.classList.remove('text-gold2');
+    }
+
+    // 드롭다운을 현재 검색 필터 값으로 맞춘다 (열 때마다 호출)
+    function syncHsearchFilters() {
+      const c = document.getElementById('hsearch-count-select');
+      const h = document.getElementById('hsearch-hours-select');
+      const s = document.getElementById('hsearch-sort-select');
+      if (c) c.value = document.getElementById('search-count-select').value;
+      if (h) h.value = document.getElementById('search-hours-select').value;
+      if (s) s.value = document.getElementById('search-sort-select').value;
+    }
+
+    // 드롭다운에서 값을 바꾸면 → 진짜 검색 필터(search-*-select)에 반영하고 다시 검색한다.
+    //   헤더 검색창은 항상 '키워드 검색' 필터를 쓴다 (isKeywordMode 와 무관하게).
+    function onHsearchFilterChange() {
+      document.getElementById('search-count-select').value = document.getElementById('hsearch-count-select').value;
+      document.getElementById('search-hours-select').value = document.getElementById('hsearch-hours-select').value;
+      document.getElementById('search-sort-select').value = document.getElementById('hsearch-sort-select').value;
       runSearch();
     }
 
@@ -3499,7 +3660,7 @@
         html += `<div>`;
         html += `
           <button onclick="${exp ? `onExpandableClick('${cat}')` : `selectCategory('${cat}')`}" data-cat="${cat}"
-            class="cat-btn ${isBriefing ? 'text-[1.07rem]' : 'text-[1.17rem]'} flex items-center justify-between px-4 py-2.5 rounded-xl transition w-full ${isActive ? 'bg-gold text-ink font-semibold' : 'text-muted hover:bg-ink3'} ${isBriefing && !isActive ? 'border border-gold/40 text-gold2' : ''}">
+            class="cat-btn ${isBriefing ? 'text-[0.99rem]' : 'text-[1.09rem]'} flex items-center justify-between px-4 py-2.5 rounded-xl transition w-full ${isActive ? 'bg-gold text-ink font-semibold' : 'text-muted hover:bg-ink3'} ${isBriefing && !isActive ? 'border border-gold/40 text-gold2' : ''}">
             <span>${categoryLabels[cat]}</span>
             <span class="flex items-center gap-1.5">
               ${icon(categoryIcons[cat], 'w-5 h-5')}
@@ -3514,14 +3675,14 @@
           //   상위 전체 기사로 바로 가는 항목을 따로 둔다.
           html += `
             <button onclick="selectCategory('${cat}')"
-              class="cat-btn lg:hidden text-[1.02rem] text-left px-3 py-2 rounded-lg transition ${isActive ? 'bg-gold/90 text-ink font-semibold' : 'text-muted hover:bg-ink3'}">
+              class="cat-btn lg:hidden text-[0.94rem] text-left px-3 py-2 rounded-lg transition ${isActive ? 'bg-gold/90 text-ink font-semibold' : 'text-muted hover:bg-ink3'}">
               전체 보기
             </button>`;
           exp.subs.forEach((sub) => {
             const subActive = currentCategory === sub.key;
             html += `
               <button onclick="selectCategory('${sub.key}')" data-cat="${sub.key}"
-                class="cat-btn text-[1.02rem] text-left px-3 py-2 rounded-lg transition ${subActive ? 'bg-gold/90 text-ink font-semibold' : 'text-muted hover:bg-ink3'}">
+                class="cat-btn text-[0.94rem] text-left px-3 py-2 rounded-lg transition ${subActive ? 'bg-gold/90 text-ink font-semibold' : 'text-muted hover:bg-ink3'}">
                 ${sub.label}
               </button>`;
           });
@@ -3538,7 +3699,7 @@
       html += `
         <div class="border-t border-line my-2"></div>
         <button id="saved-nav-btn" onclick="selectCategory('saved')" data-cat="saved"
-          class="cat-btn text-[1.17rem] flex items-center justify-between px-4 py-2.5 rounded-xl transition w-full ${savedOn ? 'bg-gold text-ink font-semibold' : 'text-muted hover:bg-ink3'}">
+          class="cat-btn text-[1.09rem] flex items-center justify-between px-4 py-2.5 rounded-xl transition w-full ${savedOn ? 'bg-gold text-ink font-semibold' : 'text-muted hover:bg-ink3'}">
           <span>${categoryLabels.saved}</span>
           <span class="flex items-center gap-1.5">
             <span data-saved-count class="font-mono text-[0.8rem] opacity-70">${savedArticles.length || ''}</span>
@@ -3665,6 +3826,7 @@
       expandedSports = false;    // [추가]
       expandedEconomy = false;   // [추가]
       expandedSearch = false;
+      closeHsearchFilters();   // [추가] D1 : 열려 있었다면 낡은 값을 보여주지 않도록 닫는다
       renderSearchToggle();
       renderCategoryButtons();
       runSearch();
