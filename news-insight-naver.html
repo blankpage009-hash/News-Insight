@@ -348,6 +348,29 @@
     gap: 5px;
   }
 
+  /* --- [추가] 키워드 랭킹 (Phase 7 C1 · 시안 01번 레일 하단) --- */
+  /* 보이기/숨기기를 Tailwind 의 .hidden + .flex 조합으로 하면 어느 쪽이 이기는지가
+     CDN 출력 순서에 달린다. 이 블록은 자체 클래스 하나로만 여닫는다. */
+  .rail-kw { display: none; flex-direction: column; gap: 0.7rem; }
+  .rail-kw.is-on { display: flex; }
+  .rail-kw-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 4px;
+    text-align: left;
+    border-bottom: 1px solid rgb(var(--c-line) / .7);
+    cursor: pointer;
+    transition: background-color .15s;
+  }
+  .rail-kw-row:last-child { border-bottom: 0; }
+  @media (hover: hover) {
+    .rail-kw-row:hover { background: rgb(var(--c-gold) / .08); }
+  }
+  /* 긴 낱말이 들어와도 레일 폭(300px)을 밀지 않게 한 줄로 자른다 */
+  .rail-kw-word { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   @keyframes pulse-soft { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
   .skeleton { animation: pulse-soft 1.6s ease-in-out infinite; }
 
@@ -1546,6 +1569,11 @@
       </div>
       <div id="rail-indices" class="rail-box"></div>
       <div id="rail-extra" class="grid grid-cols-2 gap-2"></div>
+      <!-- [추가] 키워드 랭킹 Top 5 (Phase 7 C1) : 셀 기사가 없으면 통째로 감춘다 -->
+      <div id="rail-keywords" class="rail-kw">
+        <span class="font-mono text-[0.63rem] font-semibold label-wide text-muted2">키워드 랭킹</span>
+        <div id="rail-keyword-list"></div>
+      </div>
     </aside>
   </main>
 
@@ -2390,6 +2418,10 @@
 
       refreshIndexTicker();
       setInterval(refreshIndexTicker, 30000);
+
+      // [추가] 레일 하단 키워드 랭킹 (Phase 7 C1) · 서버 캐시를 읽기만 하므로 가볍다
+      refreshKeywordRank();
+      setInterval(refreshKeywordRank, KEYWORD_RANK_INTERVAL);
 
       document.getElementById('search-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') submitSearch();
@@ -5359,6 +5391,60 @@
         // 지수를 못 받아도 기준금리·환율은 살아 있을 수 있으므로 그대로 다시 그린다
         renderIndexTicker([]);
         renderIndexCards();   // [추가] 카드 화면이면 '다시 시도'를 보여준다
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] 키워드 랭킹 Top 5 (Phase 7 C1 · 시안 01번)
+    //   서버(/api/keyword-rank)가 이미 받아 둔 섹션 기사들의 제목 낱말을 세어 준다.
+    //   서버는 캐시에 기사가 없으면 새로 만들지 않고 빈 목록(ready:false)을 준다.
+    //   → 그때는 블록을 감춰 두고, 아래 주기로 다시 물어본다.
+    // ---------------------------------------------------------------
+    const KEYWORD_RANK_TOP = 5;
+    const KEYWORD_RANK_INTERVAL = 5 * 60 * 1000;
+
+    function railKeywordRowHtml(it, i) {
+      const strong = i < 2;   // 시안 : 1·2위만 금색 번호 + 밝은 글자
+      const move = it.isNew ? { text: 'NEW', cls: 'text-up' }
+        : it.diff > 0        ? { text: `▲${it.diff}`, cls: 'text-up' }
+        : it.diff < 0        ? { text: `▼${-it.diff}`, cls: 'text-down' }
+        :                      { text: '—', cls: 'text-muted2' };
+      const word = esc(it.word);
+      return `<button class="rail-kw-row" data-kw="${word}" title="'${word}' 이(가) 들어간 기사 ${it.count}건 · 눌러서 검색">
+        <span class="font-mono text-[0.69rem] font-semibold w-[14px] shrink-0 ${strong ? 'text-gold' : 'text-muted2'}">${i + 1}</span>
+        <span class="rail-kw-word text-[0.82rem] font-medium ${strong ? 'text-paper' : 'text-muted'}">${word}</span>
+        <span class="ml-auto font-mono text-[0.66rem] font-medium shrink-0 ${move.cls}">${move.text}</span>
+      </button>`;
+    }
+
+    // 레일의 키워드를 누르면 그 낱말로 검색한다 (무엇을 검색했는지 보이게 패널도 연다)
+    function searchRailKeyword(word) {
+      const inp = document.getElementById('search-input');
+      if (!inp || !word) return;
+      inp.value = word;
+      expandedSearch = true;
+      renderSearchToggle();
+      submitSearch();
+    }
+
+    async function refreshKeywordRank() {
+      const wrap = document.getElementById('rail-keywords');
+      const list = document.getElementById('rail-keyword-list');
+      if (!wrap || !list) return;
+      try {
+        const params = new URLSearchParams({ limit: String(KEYWORD_RANK_TOP) });
+        setKwParam(params);   // 서버가 섹션 캐시를 찾으려면 화면과 같은 키워드 설정이 필요하다
+        const data = await apiGet(`/api/keyword-rank?${params.toString()}`);
+        const items = Array.isArray(data.items) ? data.items : [];
+        wrap.classList.toggle('is-on', items.length > 0);
+        list.innerHTML = items.map(railKeywordRowHtml).join('');
+        // 낱말에 따옴표가 섞여도 안전하도록 onclick 문자열 대신 data 속성으로 넘긴다
+        list.querySelectorAll('.rail-kw-row').forEach((b) => {
+          b.onclick = () => searchRailKeyword(b.dataset.kw);
+        });
+      } catch (err) {
+        console.error(err);
+        wrap.classList.remove('is-on');
       }
     }
 

@@ -1783,6 +1783,137 @@ app.get('/api/all/sections', async (req, res) => {
 });
 
 // -----------------------------------------------------------------
+// [Phase 7 C1] /api/keyword-rank : 지금 기사에 많이 나오는 낱말 Top N
+//
+//   네이버를 새로 부르지 않는다. '전체' 화면이 쓰는 /api/all/sections 캐시
+//   (프리워밍이 30분마다 데워 두는 그 칸)를 그대로 읽어 제목의 낱말만 센다.
+//   캐시가 비어 있으면 빈 목록을 주고 끝낸다 — 여기서 새로 만들면 화면 한구석의
+//   장식 때문에 섹션 전체(네이버 수십 호출)를 짓게 되어 첫 손님이 느려진다.
+// -----------------------------------------------------------------
+
+// 제목에 흔해서 '화제어'로 볼 수 없는 낱말.
+//   위쪽 STOPWORDS 는 기사 중복 판정용이라 짧게 잡혀 있다. 랭킹은 사람 눈에
+//   그대로 노출되므로 서술어·시점어까지 한 겹 더 걸러낸다.
+const RANK_STOPWORDS = new Set([
+  '오늘', '내일', '어제', '올해', '작년', '지난해', '내년', '이날', '최근', '현재', '당시',
+  '전날', '이후', '이전', '가운데', '대비', '기준', '전망', '예상', '계획', '추진', '발표',
+  '공개', '확대', '축소', '강화', '지원', '가능', '개최', '진행', '시작', '중심', '경우',
+  '상황', '문제', '이유', '방침', '검토', '결정', '요구', '주장', '지적', '강조', '설명',
+  '밝혔다', '나섰다', '했다', '한다', '된다', '있다', '없다', '올랐다', '내렸다',
+  '사진', '영상', '포토', '화보', '그래픽', '인터뷰', '기고', '칼럼', '전문', '일지',
+  '이번주', '지난달', '이달', '내달', '상반기', '하반기',
+]);
+
+const RANK_MIN_COUNT = 2;                 // 최소 이 건수의 기사에 나와야 순위에 올린다
+const RANK_SNAP_GAP = 60 * 60 * 1000;     // 등락 비교 기준(스냅샷)을 갈아 끼우는 간격
+const RANK_SNAP_KEEP = 20;                // 스냅샷에 남겨 둘 순위 깊이
+const RANK_SNAP_MAX = 8;                  // 키워드 설정별 스냅샷 보관 개수
+const rankSnaps = new Map();              // 섹션 캐시키 -> { ts, order: [낱말...] }
+
+// respCache 를 '읽기만' 한다. 없거나 너무 낡았으면 null (절대 새로 만들지 않는다)
+function peekResponse(key, ttl) {
+  const hit = respCache.get(key);
+  if (!hit || Date.now() - hit.ts > ttl.stale) return null;
+  return hit.value;
+}
+
+// 제목 한 줄 → [{ raw, key }]
+//   key   : 조사를 뗀 형태. '삼성전자가' 와 '삼성전자는' 을 같은 낱말로 묶는 데 쓴다.
+//   raw   : 화면에 보여줄 원래 표기. key 만 쓰면 조사 제거가 과하게 먹은 낱말
+//           ('공매도' → '공매')이 그대로 노출되어 이상해 보인다.
+//   숫자로 시작하는 토큰('15일' · '7000선')은 화제어가 아니라 수치라 버린다.
+function rankTokens(title) {
+  return (title || '')
+    .replace(/[^가-힣A-Za-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2 && !/^\d/.test(t) && !STOPWORDS.has(t))
+    .map((raw) => ({ raw, key: stripJosa(raw) }))
+    .filter((p) => p.key.length >= 2);
+}
+
+function countTitleWords(sections, kwMap) {
+  // 섹션 검색어 자체('물류' · '증시' …)는 그 섹션 기사에 거의 다 들어 있다.
+  //   빼지 않으면 늘 상위를 독차지한다. 화제어가 아니라 '검색 조건'이므로 제외한다.
+  const skip = new Set(RANK_STOPWORDS);
+  ALL_SECTIONS.forEach((sec) => {
+    resolveSectionKw(kwMap, sec).terms.forEach((t) => {
+      rankTokens(t).forEach((p) => skip.add(p.key));
+    });
+  });
+
+  const seen = new Set();     // 같은 기사가 여러 섹션에 걸려 있어도 한 번만 센다
+  const freq = new Map();     // key -> 기사 수
+  const surface = new Map();  // key -> Map(원래 표기 -> 횟수)
+  sections.forEach((sec) => (sec.items || []).forEach((it) => {
+    const id = it.url || it.title;
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    const once = new Map();   // 한 기사 안에서 같은 낱말이 여러 번 나와도 1건
+    rankTokens(it.title).forEach((p) => {
+      if (skip.has(p.key) || RANK_STOPWORDS.has(p.raw)) return;
+      if (!once.has(p.key)) once.set(p.key, p.raw);
+    });
+    once.forEach((raw, key) => {
+      freq.set(key, (freq.get(key) || 0) + 1);
+      const s = surface.get(key) || new Map();
+      s.set(raw, (s.get(raw) || 0) + 1);
+      surface.set(key, s);
+    });
+  }));
+
+  // 한 묶음의 표기들은 전부 '조사를 뗀 형태 + 조사' 꼴이다. 그중 가장 짧은 것이
+  //   조사가 제일 덜 붙은 표기다('급반등에' 보다 '급반등'). 길이가 같으면 흔한 쪽.
+  //   조사를 뗀 형태(key)를 그냥 쓰지 않는 이유는 과하게 잘리는 낱말이 있어서다('공매도' → '공매').
+  const pickSurface = (key) => [...surface.get(key)].sort(
+    (a, b) => a[0].length - b[0].length || b[1] - a[1]
+  )[0][0];
+
+  return [...freq.entries()]
+    .filter(([, n]) => n >= RANK_MIN_COUNT)
+    // 동점이 아주 많다. 가나다순으로 끊으면 아무 뜻 없는 낱말이 위로 오므로
+    //   더 구체적인(긴) 낱말을 먼저 보여준다.
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length || a[0].localeCompare(b[0], 'ko'))
+    .map(([key, count]) => ({ key, word: pickSurface(key), count }));
+}
+
+app.get('/api/keyword-rank', (req, res) => {
+  const kwMap = parseKw(req.query.kw);
+  const limit = Math.min(Number(req.query.limit) || 5, 20);
+
+  // 기간·정렬·건수는 프리워밍과 똑같이 고정한다. 화면의 설정을 따라가면
+  //   캐시 키가 갈라져 적중하지 않고, 그러면 랭킹이 영영 비어 보인다.
+  const opts = { limit: WARM_PER_SECTION, hours: WARM_HOURS, sort: WARM_SORT };
+  const key = buildSectionsKey('all', ALL_SECTIONS, opts, kwMap);
+
+  const cached = peekResponse(key, TTL_SECTION);
+  if (!cached) return res.json({ items: [], ready: false });
+
+  const ranked = countTitleWords(cached.sections || [], kwMap);
+  const snap = rankSnaps.get(key);
+
+  // 등락 비교는 표기(word)가 아니라 묶음 이름(key)으로 한다.
+  //   대표 표기는 기사가 바뀌면 흔들려서('삼성전자' ↔ '삼성전자가') 헛되이 NEW 가 뜬다.
+  const items = ranked.slice(0, limit).map(({ key: k, ...it }, i) => {
+    if (!snap) return { ...it, diff: null, isNew: false };
+    const prev = snap.order.indexOf(k);
+    return { ...it, diff: prev < 0 ? null : prev - i, isNew: prev < 0 };
+  });
+
+  // 등락은 '한 시간 전 순위'와 비교한다. 서버가 다시 뜨면 비교 대상이 없어져
+  //   한 시간 동안은 전부 '—' 로 나온다. (메모리에만 두는 값이다)
+  if (!snap || Date.now() - snap.ts > RANK_SNAP_GAP) {
+    rankSnaps.set(key, {
+      ts: Date.now(),
+      order: ranked.slice(0, RANK_SNAP_KEEP).map((r) => r.key),
+    });
+    while (rankSnaps.size > RANK_SNAP_MAX) rankSnaps.delete(rankSnaps.keys().next().value);
+  }
+
+  res.json({ items, ready: true, total: ranked.length });
+});
+
+// -----------------------------------------------------------------
 // 하위 카테고리 1개 조회 : /api/{base}/section/:key
 //  -> 물류 / 증시 / 스포츠 / 경제 네 곳에서 함께 사용
 //
