@@ -294,7 +294,7 @@
        이 요소들의 보이기/숨기기는 전부 여기 @media 한 곳에서 정한다.
        (id 선택자가 lg:hidden 같은 클래스를 이겨서, 둘을 섞으면 어느 쪽이 이길지 헷갈린다)
      --------------------------------------------------------------- */
-  #index-row, #cat-tabs, #cat-chips, #market-rail { display: none; }
+  #index-row, #cat-tabs, #cat-chips, #market-rail, #rail-handle { display: none; }
   @media (min-width: 1024px) {
     #sidebar { display: none; }
 
@@ -346,13 +346,44 @@
     /* 시안 본문 좌우 32px. 아래 여백도 main 이 아니라 여기서 준다 :
        main 에 주면 '화면 높이 − 상단바' 로 꽉 찬 패널 + 그 여백만큼 기사가 적은 화면에서도 페이지가 밀려,
        패널 머리가 상단바 밑으로 숨는다. */
-    #content-col { grid-column: auto; padding: 0 2rem 1.5rem; }
+    /* 손잡이(#rail-handle)가 패널과 같은 칸에 겹쳐 앉으므로, 자동 배치에 맡기지 않고 칸을 못 박는다 */
+    #content-col { grid-column: 1; grid-row: 1; padding: 0 2rem 1.5rem; }
     /* 패널을 숨기면 칸 자체를 없앤다 (예전 레일처럼 펼치기 버튼만 남는 띠는 두지 않는다) */
     body.rail-collapsed #main-grid { grid-template-columns: minmax(0, 1fr); }
+
+    /* 오른쪽 패널 여닫이 손잡이. 크기 0 짜리 틀을 패널과 같은 칸에 얹고, 스크롤해도 상단바 밑에 붙어 따라다니게 한다.
+       (position:fixed 로 하면 세로 스크롤 막대 폭만큼 위치가 어긋나서, 격자 안에 둔다)
+       열려 있을 땐 패널 왼쪽 선에 걸치고, 닫히면 본문 칸 오른쪽 끝(가장자리)에 붙는다. */
+    #rail-handle {
+      display: block;
+      grid-column: 2; grid-row: 1;
+      align-self: start; justify-self: start;
+      position: sticky;
+      top: calc(var(--stick-top, 121px) + 2px);
+      width: 0; height: 0;
+      z-index: 35;
+    }
+    body.rail-collapsed #rail-handle { grid-column: 1; justify-self: end; }
+    /* 테두리 없는 작은 » 아이콘. 열려 있을 땐 패널 안쪽 왼쪽 위(머리 글자 위 여백), 닫히면 화면 오른쪽 끝 같은 높이.
+       눈에는 작게 보이되 손가락으로 누를 칸은 36x24px 로 잡는다. */
+    #rail-toggle {
+      position: absolute; left: 6px; top: 0;
+      width: 36px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      color: rgb(var(--c-muted));
+      cursor: pointer;
+    }
+    body.rail-collapsed #rail-toggle { left: auto; right: 4px; }
+    #rail-toggle svg { width: 14px; height: 14px; }
+    @media (hover: hover) {
+      #rail-toggle:hover { color: rgb(var(--c-paper)); }
+    }
+    #rail-toggle:focus-visible { outline: 2px solid rgb(var(--c-gold)); outline-offset: 2px; }
 
     #market-rail {
       display: flex;
       flex-direction: column;
+      grid-column: 2; grid-row: 1;
       position: sticky;
       top: var(--stick-top, 121px);
       /* 목록이 짧아도 왼쪽 선이 화면 아래 끝까지 내려오도록 높이를 채운다 */
@@ -1962,6 +1993,11 @@
         </button>
       </section>
     </aside>
+
+    <!-- [추가] 오른쪽 패널 여닫이 손잡이 (데스크톱 · 아이패드 가로 전용). 위치는 CSS 의 #rail-handle 참고 -->
+    <div id="rail-handle">
+      <button type="button" id="rail-toggle" onclick="toggleRail()" aria-controls="market-rail" aria-expanded="true" aria-label="오른쪽 패널 닫기" title="오른쪽 패널 닫기"></button>
+    </div>
   </main>
 
   <!-- [수정] v3 Phase 8 : 설정 한 창 (시안 1e · 880px). 왼쪽 탭 = 화면 설정 / 관리자 Setting.
@@ -2390,6 +2426,8 @@
       'chevron-up': '<path d="m18 15-6-6-6 6"/>',
       'chevron-left': '<path d="m15 18-6-6 6-6"/>',
       'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+      'chevrons-left': '<path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>',
+      'chevrons-right': '<path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/>',
       sliders: '<line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/>',
       settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
     };
@@ -2893,6 +2931,11 @@
       // [삭제] v3 Phase 9 : 왼쪽 가장자리 스와이프로 드로어를 열던 손짓은 드로어와 함께 없앴다.
       //   카드를 오른쪽으로 밀어 이전 기사로 넘기는 손짓과 같은 방향이라 부딪혔다.
 
+      // [추가] 오른쪽 패널 스와이프 여닫기 (아이패드 가로 등)
+      document.addEventListener('touchstart', onRailSwipeStart, { passive: true });
+      document.addEventListener('touchend', onRailSwipeEnd, { passive: true });
+      document.addEventListener('touchcancel', () => { railSwipe = null; }, { passive: true });
+
       // [추가] 모바일 : 맨 위에서 화면을 아래로 끌면 대시보드 전체 새로고침
       document.addEventListener('touchstart', onPullTouchStart, { passive: true });
       document.addEventListener('touchmove', onPullTouchMove, { passive: false });
@@ -3018,7 +3061,56 @@
     function setRailCollapsed(collapsed, persist = true) {
       document.body.classList.toggle('rail-collapsed', collapsed);
       if (persist) { try { localStorage.setItem(RAIL_STORAGE_KEY, collapsed ? '1' : '0'); } catch {} }
+      syncRailToggle();
       updateStickTop();
+      // 본문 폭이 300px 바뀌므로 폭을 재서 그리는 것(차트 · 칩 줄)이 다시 맞추도록 알려 준다
+      if (persist) requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    }
+
+    function toggleRail() {
+      setRailCollapsed(!document.body.classList.contains('rail-collapsed'));
+    }
+
+    // 손잡이 모양(화살표 방향)과 읽어주기용 문구를 현재 상태에 맞춘다
+    function syncRailToggle() {
+      const btn = document.getElementById('rail-toggle');
+      if (!btn) return;
+      const collapsed = document.body.classList.contains('rail-collapsed');
+      const label = collapsed ? '오른쪽 패널 열기' : '오른쪽 패널 닫기';
+      btn.innerHTML = icon(collapsed ? 'chevrons-left' : 'chevrons-right');
+      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      btn.setAttribute('aria-label', label);
+      btn.title = label;
+    }
+
+    // 터치 스와이프 : 패널 위에서 오른쪽으로 밀면 닫고, 닫힌 상태에서 화면 오른쪽 끝에서 왼쪽으로 밀면 연다.
+    //   '어디서든' 열리게 하면 기사 카드를 옆으로 넘기는 손짓(wireBriefStage)과 부딪히므로,
+    //   여는 쪽은 본문 오른쪽 여백(32px) 안에서 시작한 손짓만 받는다. 데스크톱 폭에서만 동작한다.
+    const RAIL_SWIPE_EDGE = 36;    // 닫힌 상태에서 이 폭(px) 안쪽 가장자리에서 시작해야 열린다
+    const RAIL_SWIPE_MIN = 56;     // 이만큼(px) 이상 밀어야 한 번의 스와이프로 친다
+    let railSwipe = null;
+
+    function onRailSwipeStart(e) {
+      railSwipe = null;
+      if (isMobileLayout() || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const collapsed = document.body.classList.contains('rail-collapsed');
+      const fromEdge = document.documentElement.clientWidth - t.clientX <= RAIL_SWIPE_EDGE;
+      const inRail = !!(e.target.closest && e.target.closest('#market-rail'));
+      if (collapsed ? !fromEdge : !inRail) return;
+      railSwipe = { x: t.clientX, y: t.clientY, collapsed };
+    }
+
+    function onRailSwipeEnd(e) {
+      const s = railSwipe;
+      railSwipe = null;
+      if (!s || !e.changedTouches.length) return;
+      const dx = e.changedTouches[0].clientX - s.x;
+      const dy = e.changedTouches[0].clientY - s.y;
+      // 세로로 훑는 스크롤은 걸러낸다 (가로 이동이 세로의 1.5배 넘을 때만)
+      if (Math.abs(dx) < RAIL_SWIPE_MIN || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      if (s.collapsed && dx < 0) setRailCollapsed(false);
+      else if (!s.collapsed && dx > 0) setRailCollapsed(true);
     }
 
     function restoreRailCollapsed() {
