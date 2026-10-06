@@ -1009,7 +1009,9 @@
   .bc-tot { font-size: .933rem; font-weight: 600; color: rgb(var(--c-muted2)); }
   /* 가장자리 카드가 본문 칸 끝(왼쪽 화면 끝 · 오른쪽 패널 선)까지 보이도록 칸 좌우 여백(2rem)만큼 넓힌다 */
   .bc-stage {
-    position: relative; height: 490px; margin: .667rem -2rem 0;
+    /* 높이는 화면 높이에 맞춘다 (380~490px). 184px = 상단바 아래 제목 줄(114) + 진행 막대 줄(70) 실측 → 노트북처럼 낮은 화면에서도 카드와 진행 막대가 한 화면에 들어온다 */
+    --bc-hd: clamp(380px, calc(100svh - var(--stick-top, 217px) - 184px), 490px);
+    position: relative; height: var(--bc-hd); margin: .667rem -2rem 0;
     overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: grab;
   }
   .bc-stage:focus-visible { outline: 2px solid rgb(var(--c-gold)); outline-offset: -2px; }
@@ -1017,7 +1019,7 @@
   .bc-stage.is-drag .bc-card { transition: none; }
   .bc-card {
     position: absolute; top: 8px; left: 50%;
-    width: min(640px, calc(100% - 4rem)); height: 466px;
+    width: min(640px, calc(100% - 4rem)); height: calc(var(--bc-hd) - 24px);
     display: flex; flex-direction: column;
     background: rgb(var(--c-ink2)); border: 2px solid rgb(var(--c-paper) / .4);
     transform: translateX(calc(-50% + var(--d, 0) * (100% + 28px) + var(--dx, 0px))) scale(var(--s, 1));
