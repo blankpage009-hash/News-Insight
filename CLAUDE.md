@@ -6,6 +6,7 @@
 - `news-insight-naver.html` — 화면 전체. 단일 파일, **줄바꿈 LF**
 - 배포 : Render. `origin/main` 에 push하면 자동 배포됨 (push 전에 확인받을 것)
 - 로컬 실행 : `.claude/launch.json` 의 `newsinsight` 설정 사용
+- **v3.0 리디자인 진행 중** — 작업 브랜치 `v3`, 계획·진행 기록은 [REDESIGN-v3.md](REDESIGN-v3.md) (한 Phase 씩, 끝나면 멈추고 확인)
 
 ## 로딩 속도 개선 작업
 
