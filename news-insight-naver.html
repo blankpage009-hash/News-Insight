@@ -3653,7 +3653,7 @@
       renderFontSizeSetting();
       renderCountSetting();
       renderPrefToggles();
-      renderKeywordSettings();           // 다른 기기에서 바뀐 키워드도 최신 값으로
+      renderKeywordSettings();           // 지금 들고 있는 userKeywords 로 다시 그린다 (서버를 다시 부르지는 않는다)
       const pwMsg = document.getElementById('password-change-msg');
       if (pwMsg) pwMsg.textContent = '';
       showSettingsTab('prefs');          // 관리자 탭이 잠겨 있으면 화면 설정 위에 잠금 창이 뜬다
