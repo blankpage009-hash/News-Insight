@@ -5521,6 +5521,9 @@
 
     // --- [수정] v3 Phase 2 : 데스크톱 지수 가로 줄의 한 칸 (시안 2a : 이름 · 값 · ▲등락 (등락률%)) ---
     //   예전 우측 레일의 세로 목록(지수 줄 + 기준금리·환율 카드)을 이 한 줄로 합쳤다.
+    //   9칸이라 한 줄에 다 안 들어가 휠로 옆으로 밀어 본다(사용자 결정 2026-10-06). 긴 이름은 이 줄에서만 줄인다.
+    //   (원래 이름은 정렬 INDEX_ORDER·모바일 지수 바·마우스를 올렸을 때 뜨는 설명에 그대로 쓴다)
+    const INDEX_ROW_SHORT = { 'DOW JONES': 'Dow' };
     function indexRowItemHtml(item) {
       const m = moveOf(item.change);
       const value = item.priceStr !== undefined ? item.priceStr : num2(item.price);
@@ -5533,7 +5536,7 @@
       const tag = chart ? 'button' : 'span';
       const attr = chart ? ` onclick="openIndexChart('${key}')" title="${item.name} · 눌러서 기간별 차트 보기"` : '';
       return `<${tag} class="idx-item"${attr}>
-        <span class="idx-name text-muted">${item.name}</span>
+        <span class="idx-name text-muted">${INDEX_ROW_SHORT[item.name] || item.name}</span>
         <span class="font-semibold text-paper tabular-nums">${value}</span>
         <span class="tabular-nums ${item.change === 0 ? 'text-muted' : m.cls}">${change}</span>
       </${tag}>`;
