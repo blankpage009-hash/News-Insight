@@ -21,6 +21,10 @@ const fetch = require('node-fetch'); // v2
 const path = require('path');
 const fs = require('fs');
 const { AsyncLocalStorage } = require('async_hooks');
+const dns = require('dns');
+const net = require('net');
+const http = require('http');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -75,7 +79,8 @@ app.get('/healthz', (req, res) => {
     ok: true,
     uptime: Math.round(process.uptime()),  // 초. 들를 때마다 900 미만이면 그새 잠들었다는 뜻
     warming,                               // 지금 프리워밍이 도는 중인지
-    cache: { resp: respCache.size, article: articleTextCache.size },
+    cache: { resp: respCache.size, article: articleTextCache.size, image: imageCache.size },
+    image: imageStats,                     // 사진 확보 현황 (원문 성공 · 네이버 우회 성공 · 실패 · 붐빔)
   });
 });
 
@@ -2120,6 +2125,245 @@ app.post('/api/followup', async (req, res) => {
     console.error(err);
     res.status(500).json({ error: '이어보기를 불러오지 못했습니다.' });
   }
+});
+
+// -----------------------------------------------------------------
+// [기사 사진] POST /api/news-images  (v3 Phase 5a)
+//   body { items: [{ url, naverUrl }] }  →  { images: { url: 사진주소 | '' }, pending: [url] }
+//
+//   네이버 뉴스 API 는 사진을 주지 않는다. 원문 페이지의 og:image(카톡 미리보기 사진)를
+//   서버가 읽어 '주소만' 돌려준다. 사진 파일 자체는 언론사 서버에서 브라우저가 직접 받는다
+//   (이미지 프록시는 트래픽 부담이 커서 하지 않는다 — REDESIGN.md D6 메모 4번).
+//
+//   [중요] 목록 응답과 완전히 따로 돈다. 기사마다 원문에 접속하므로 목록에 끼우면
+//   로딩 속도 개선 작업을 되돌리는 꼴이 된다. 그래서
+//     · respCache / 프리워밍 / Supabase 사본에 넣지 않는다 (열쇠가 기사 수만큼 늘어나 섹션 응답을 밀어낸다)
+//     · 네이버 슬롯(naverSlotAcquire)을 쓰지 않는다 — 네이버 API 호출이 아니고, 섞이면 사용자 검색이 밀린다
+//     · 동시 접속 수는 따로 IMAGE_MAX_CONCURRENT 로 묶는다 (D6 시험값 8)
+//
+//   [안전] 주소가 화면(=외부)에서 오므로 서버가 내부망을 대신 찔러 주는 일(SSRF)을 막는다.
+//     ① 주소 모양 : http/https · 포트 80/443 · 사설/루프백 IP 글자 그대로 쓴 주소 거절
+//     ② 도메인    : 접속 직전에 DNS 결과를 다시 확인 (safeLookup — 도메인이 내부 IP 를 가리켜도 막힌다)
+//     ③ 재전송    : 자동으로 따라가지 않고 한 칸씩 ①을 다시 거친다
+// -----------------------------------------------------------------
+const IMAGE_MAX_CONCURRENT = 8;               // 원문 동시 접속 수 (네이버 슬롯과 별개)
+const IMAGE_QUEUE_MAX = 200;                  // 대기열이 이보다 길면 새 일은 받지 않고 '나중에' 로 돌린다
+const IMAGE_FETCH_TIMEOUT_MS = 4000;          // 주소 하나(재전송 포함)에 쓰는 최대 시간
+const IMAGE_READ_MAX_BYTES = 200 * 1024;      // og 태그는 <head> 에 있다 → 앞부분만 읽는다
+const IMAGE_MAX_REDIRECTS = 3;
+const IMAGE_REQ_MAX_ITEMS = 30;               // 한 번에 물을 수 있는 기사 수 (섹션 화면 30건)
+const IMAGE_REQ_DEADLINE_MS = 5000;           // 이 안에 못 끝낸 기사는 pending 으로 돌려주고 뒤에서 계속 읽는다
+const IMAGE_TTL_OK = 24 * 60 * 60 * 1000;     // 기사 사진은 거의 안 바뀐다
+const IMAGE_TTL_FAIL = 30 * 60 * 1000;        // 실패는 짧게 — 일시적으로 막힌 언론사도 다시 기회를 준다
+const IMAGE_CACHE_MAX = 3000;                 // 한 칸 ≈ 주소 2개(수백 바이트) → 수 MB 이내
+
+const imageCache = new Map();     // 기사 url -> { ts, img }   ('' = 사진 없음/실패)
+const imageInflight = new Map();  // 같은 기사를 동시에 물어도 한 번만 읽는다
+const imageStats = { ok: 0, viaNaver: 0, fail: 0, busy: 0 };  // /healthz 에서 Render 확보율을 본다
+
+// 원문 접속 슬롯 — 네이버 슬롯과 같은 모양이지만 사용자/프리워밍 구분은 없다(프리워밍이 안 쓴다)
+let imageActive = 0;
+const imageWaiters = [];
+function imageSlotAcquire() {
+  if (imageActive < IMAGE_MAX_CONCURRENT) {
+    imageActive += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => imageWaiters.push(resolve));
+}
+function imageSlotRelease() {
+  const next = imageWaiters.shift();
+  if (next) next();          // 자리를 그대로 넘긴다 (imageActive 는 그대로)
+  else imageActive -= 1;
+}
+
+// 내부망·예약 대역이면 true. 형식을 모르는 값도 막는다.
+function isBlockedIp(ip) {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || a >= 224
+      || (a === 100 && b >= 64 && b <= 127)       // 통신사 공용(CGNAT)
+      || (a === 169 && b === 254)                 // 클라우드 메타데이터 주소가 여기 있다
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168)
+      || (a === 198 && (b === 18 || b === 19));
+  }
+  if (net.isIPv6(ip)) {
+    const s = ip.toLowerCase();
+    // '::' 로 시작하는 것(::1 · ::ffff:127.0.0.1 처럼 IPv4 를 품은 꼴)은 공개 사이트가 쓸 일이 없다
+    return s.startsWith('::') || /^f[cd]/.test(s) || /^fe[89ab]/.test(s) || s.startsWith('ff')
+      || s.startsWith('64:ff9b:') || s.startsWith('2002:');
+  }
+  return true;
+}
+
+// 주소 모양만 보고 거른다(①). 통과하면 URL 객체, 아니면 null.
+//   new URL 이 '2130706433' 같은 숫자 꼴 IP 를 127.0.0.1 로 바꿔 주므로 그 결과로 판단한다.
+function imageUrlAllowed(raw) {
+  let u;
+  try { u = new URL(String(raw || '')); } catch { return null; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+  if (u.username || u.password) return null;
+  if (u.port && u.port !== '80' && u.port !== '443') return null;
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  if (!host || host === 'localhost' || /\.(localhost|local|internal|home|lan)$/i.test(host)) return null;
+  if (net.isIP(host)) return isBlockedIp(host) ? null : u;
+  if (!host.includes('.')) return null;   // 점 없는 이름 = 내부망 컴퓨터 이름
+  return u;
+}
+
+// 접속 직전 DNS 확인(②). 주소를 글자로 쓴 경우(IP)는 여기를 거치지 않으므로 ①이 따로 막는다.
+//   Node 24 는 IPv4/IPv6 를 번갈아 시도하느라 all:true 로 부른다 → 두 가지 돌려주기 모양을 다 맞춘다.
+function safeLookup(hostname, options, callback) {
+  if (typeof options === 'function') { callback = options; options = {}; }
+  const opts = typeof options === 'number' ? { family: options } : { ...(options || {}) };
+  dns.lookup(hostname, { ...opts, all: true }, (err, addrs) => {
+    if (err) return callback(err);
+    if (!addrs || !addrs.length || addrs.some((a) => isBlockedIp(a.address))) {
+      const e = new Error(`내부망 주소로 풀리는 도메인 차단: ${hostname}`);
+      e.code = 'EBLOCKED';
+      return callback(e);
+    }
+    if (opts.all) return callback(null, addrs);
+    return callback(null, addrs[0].address, addrs[0].family);
+  });
+}
+const imageHttpAgent = new http.Agent({ lookup: safeLookup });
+const imageHttpsAgent = new https.Agent({ lookup: safeLookup });
+
+// 응답 본문을 <head> 가 끝날 때까지(또는 200KB) 읽는다.
+//   latin1 로 읽는 이유 : EUC-KR 언론사도 있는데 우리가 찾는 건 ASCII 태그·주소뿐이라
+//   바이트를 그대로 보존해 두고, 찾은 주소만 나중에 UTF-8 로 풀면 된다.
+async function readHead(body) {
+  let html = '';
+  for await (const chunk of body) {
+    html += chunk.toString('latin1');
+    if (html.length >= IMAGE_READ_MAX_BYTES || /<\/head\s*>/i.test(html.slice(-chunk.length - 8))) break;
+  }
+  return html.slice(0, IMAGE_READ_MAX_BYTES);
+}
+
+// 원문 1개 → <head> HTML 과 최종 주소(재전송 뒤). 실패하면 null.
+async function fetchPageHead(startUrl) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
+  try {
+    let url = imageUrlAllowed(startUrl);
+    for (let hop = 0; url && hop <= IMAGE_MAX_REDIRECTS; hop += 1) {
+      const r = await fetch(url.href, {
+        signal: controller.signal,
+        redirect: 'manual',   // ③ 재전송은 직접 따라가며 매번 검사한다
+        agent: url.protocol === 'http:' ? imageHttpAgent : imageHttpsAgent,
+        headers: BROWSER_HEADERS,
+      });
+      // node-fetch v2 는 중간에 끊으면(abort) 본문 스트림에 'error' 를 쏜다.
+      //   듣는 쪽이 없으면 그 에러가 서버 전체를 죽이므로 빈 귀를 먼저 달아 둔다.
+      if (r.body) r.body.on('error', () => {});
+      if (r.status >= 300 && r.status < 400) {
+        const loc = r.headers.get('location');
+        let next = null;
+        try { next = loc ? imageUrlAllowed(new URL(loc, url).href) : null; } catch { next = null; }
+        url = next;
+        continue;
+      }
+      if (!r.ok || !/html/i.test(r.headers.get('content-type') || '')) return null;
+      return { html: await readHead(r.body), finalUrl: url.href };
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+    controller.abort();   // 다 읽었으면 나머지 본문은 받지 않고 연결을 끊는다
+  }
+}
+
+// <head> HTML → 사진 주소('' = 없음)
+function pickOgImage(html, baseUrl) {
+  const props = ['og:image', 'og:image:url', 'og:image:secure_url', 'twitter:image', 'twitter:image:src'];
+  for (const prop of props) {
+    const raw = pickMeta(html, prop)
+      .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+      .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
+      .trim();
+    if (!raw) continue;
+    try {
+      const u = new URL(Buffer.from(raw, 'latin1').toString('utf8'), baseUrl);
+      if (u.protocol === 'http:' || u.protocol === 'https:') return u.href;
+    } catch { /* 다음 후보 */ }
+  }
+  return '';
+}
+
+async function fetchOgImage(pageUrl) {
+  if (!imageUrlAllowed(pageUrl)) return '';
+  await imageSlotAcquire();
+  try {
+    const page = await fetchPageHead(pageUrl);
+    return page ? pickOgImage(page.html, page.finalUrl) : '';
+  } finally {
+    imageSlotRelease();
+  }
+}
+
+// 기사 1건의 사진 주소. undefined = 지금 붐벼서 못 봤다(캐시하지 않음, 다음에 다시)
+//   원문을 먼저 본다. 원문이 막혔거나 og 태그가 없으면 네이버 뉴스 주소로 한 번 더.
+async function imageForArticle(url, naverUrl) {
+  const hit = imageCache.get(url);
+  if (hit && Date.now() - hit.ts < (hit.img ? IMAGE_TTL_OK : IMAGE_TTL_FAIL)) return hit.img;
+
+  const running = imageInflight.get(url);
+  if (running) return running;
+  if (imageWaiters.length >= IMAGE_QUEUE_MAX) {
+    imageStats.busy += 1;
+    return undefined;
+  }
+
+  const p = (async () => {
+    let img = await fetchOgImage(url);
+    if (img) imageStats.ok += 1;
+    else if (naverUrl && naverUrl !== url && /^https?:\/\/n\.news\.naver\.com\//i.test(naverUrl)) {
+      img = await fetchOgImage(naverUrl);
+      if (img) imageStats.viaNaver += 1;
+    }
+    if (!img) imageStats.fail += 1;
+    imageCache.delete(url);
+    imageCache.set(url, { ts: Date.now(), img });
+    while (imageCache.size > IMAGE_CACHE_MAX) {
+      imageCache.delete(imageCache.keys().next().value);
+    }
+    return img;
+  })().finally(() => imageInflight.delete(url));
+
+  imageInflight.set(url, p);
+  return p;
+}
+
+app.post('/api/news-images', async (req, res) => {
+  const list = (Array.isArray(req.body && req.body.items) ? req.body.items : [])
+    .filter((it) => it && typeof it.url === 'string' && it.url && it.url.length <= 2048)
+    .slice(0, IMAGE_REQ_MAX_ITEMS);
+
+  const found = new Map();
+  const jobs = list.map((it) => {
+    const naverUrl = typeof it.naverUrl === 'string' ? it.naverUrl : '';
+    return imageForArticle(it.url, naverUrl)
+      .then((img) => { if (img !== undefined) found.set(it.url, img); })
+      .catch(() => found.set(it.url, ''));
+  });
+
+  // 느린 언론사 하나 때문에 화면이 사진을 통째로 못 받는 일이 없게, 시간이 되면 있는 것만 보낸다.
+  //   못 끝낸 일은 뒤에서 계속 돌아 캐시에 들어가므로 화면이 pending 만 다시 물으면 된다.
+  let timer;
+  await Promise.race([
+    Promise.all(jobs),
+    new Promise((resolve) => { timer = setTimeout(resolve, IMAGE_REQ_DEADLINE_MS); }),
+  ]);
+  clearTimeout(timer);
+
+  const pending = list.map((it) => it.url).filter((u) => !found.has(u));
+  res.set('Cache-Control', 'no-store');
+  res.json({ images: Object.fromEntries(found), pending });
 });
 
 // -----------------------------------------------------------------
