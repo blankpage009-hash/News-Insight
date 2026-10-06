@@ -1,6 +1,6 @@
 {
   "name": "naver-news-dashboard-proxy",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "description": "네이버 검색 API 프록시 서버 (News Insight 대시보드용)",
   "main": "server.js",
   "scripts": {
