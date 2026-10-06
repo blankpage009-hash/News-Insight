@@ -407,13 +407,13 @@
       font-size: 20px; font-weight: 800; line-height: 1.2; letter-spacing: -.02em; color: rgb(var(--c-paper));
     }
     #cat-header-count { font-size: 12px; color: rgb(var(--c-muted)); }
-    #status-line { order: 9; flex-basis: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: rgb(var(--c-muted)); }
-    #view-toggle.is-shown { margin-left: auto; }
-    #view-toggle.is-shown + #cat-header-filter-btn { margin-left: 0; }
-    #view-toggle button { width: 34px; height: 30px; padding: 0; gap: 0; justify-content: center; font-size: 0; }   /* 글자(카드·목록)는 감추고 아이콘만 */
+    #status-line { order: 9; flex-basis: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: rgb(var(--c-muted)); padding-bottom: 4px; }
+    #cat-header-filter-btn { margin-left: auto; }
+    #cat-header-filter-btn.hidden + #view-toggle { margin-left: auto; }   /* 필터 버튼이 숨겨지면 토글이 오른쪽 끝을 맡는다 */
+    #view-toggle button { width: 30px; height: 26px; padding: 0; gap: 0; justify-content: center; font-size: 0; }   /* 글자(카드·목록)는 감추고 아이콘만 */
     #view-toggle button svg { width: 16px; height: 16px; }
     #cat-header-filter-btn {
-      width: 44px; height: 44px; padding: 0; margin-right: -10px;
+      width: 44px; height: 44px; padding: 0; margin-top: -10px; margin-bottom: -10px;   /* 눌리는 영역은 44px 그대로, 줄 높이는 제목만큼만 차지 → 제목·안내 문구 사이 여백 축소 */
       justify-content: center; border: 0; color: rgb(var(--c-paper));
     }
     #cat-header-filter-btn svg { width: 20px; height: 20px; stroke-width: 2; }
@@ -666,6 +666,9 @@
     background: rgb(var(--c-gold) / .12);
   }
   .save-btn.is-saved:hover { background: rgb(var(--c-gold) / .2); color: rgb(var(--c-gold2)); }
+  /* 목록·카드 저장 아이콘은 담겨도 금색 상자를 두지 않는다 (아이콘 색·채움만 바뀐다) */
+  .save-btn.bc-save.is-saved, .save-btn.bc-save.is-saved:hover { background: none; }
+  .save-btn.bc-save.is-row.is-saved { border-color: transparent; }
 
   /* ---------------------------------------------------------------
      [추가] v3 Phase 7 : Sub Page 팝업 (시안 1a 주요 내용 · 1b Insight · 1c 관련 기사 · 1d 지수 차트)
@@ -768,7 +771,7 @@
   }
   .pv-kind { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
   .pv-kind svg { width: 15px; height: 15px; }
-  .pv-verdict { font-size: 19px; font-weight: 800; letter-spacing: -.01em; line-height: 1.4; word-break: keep-all; text-wrap: pretty; }
+  .pv-verdict { font-size: 18px; font-weight: 800; letter-spacing: -.01em; line-height: 1.4; word-break: keep-all; text-wrap: pretty; }
   .pv-sign-list { display: flex; flex-direction: column; gap: 10px; }
   .pv-sign-list li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.6; word-break: keep-all; }
   .pv-sign { font-size: 12px; font-weight: 800; line-height: 1.9; }
@@ -1123,7 +1126,7 @@
     .bc-head { gap: 10px; padding: 14px 14px 0 16px; }
     .bc-head-l { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; flex: none; }
     .bc-no { font-size: 40px; padding-top: 4px; }
-    .bc-thumb.is-m { width: 132px; height: 88px; cursor: pointer; }
+    .bc-thumb.is-m { width: 156px; height: 104px; cursor: pointer; }
     .bc-thumb.is-d { display: none !important; }
     .bc-meta { gap: 6px; padding-top: 2px; font-size: 12px; }
     .bc-tags { gap: 4px; }
@@ -1151,31 +1154,31 @@
 
     /* 목록 : [번호 30] [메타 · 제목 17px · 요약 2줄] [저장 44] / 그 아래 버튼 줄(칸 높이 44px) — 시안 1b. 사진 칸은 없다 */
     #news-list > .bc-list { margin: 0 -1rem 1rem; }
-    #news-list .bc-row {
+    :is(#news-list, .pv-rows) .bc-row {
       grid-template-columns: 30px minmax(0, 1fr) 44px; gap: 5px 8px;
       padding: 14px 8px 0 1rem;
     }
-    #news-list .bc-list.is-in-box .bc-row { padding-left: 0; padding-right: 0; }
-    #news-list .bc-row:hover { background: none; }
-    #news-list .bc-rno    { grid-area: 1 / 1 / 4 / 2; font-size: 20px; line-height: 1.1; }
-    #news-list .bc-rmeta  { grid-area: 1 / 2; gap: 4px; font-size: 12px; }
-    #news-list .bc-rmeta .bc-tag { padding: 1px 6px; font-size: 11px; }
-    #news-list .bc-rtitle { grid-area: 2 / 2; font-size: 1.133rem; line-height: 1.35; }   /* 17px */
-    #news-list .bc-rbody  { display: contents; }
-    #news-list .bc-rmid   { grid-area: 3 / 2; }
-    #news-list .bc-rsum   { font-size: .867rem; line-height: 1.55; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }   /* 13px */
-    #news-list .bc-row .bc-thumb { display: none !important; }
-    #news-list .bc-row .bc-save  { grid-area: 1 / 3 / 3 / 4; align-self: start; width: 44px; height: 44px; margin: -12px 0 0; }
-    #news-list .bc-racts {
+    :is(#news-list, .pv-rows) .bc-list.is-in-box .bc-row { padding-left: 0; padding-right: 0; }
+    :is(#news-list, .pv-rows) .bc-row:hover { background: none; }
+    :is(#news-list, .pv-rows) .bc-rno    { grid-area: 1 / 1 / 4 / 2; font-size: 20px; line-height: 1.1; }
+    :is(#news-list, .pv-rows) .bc-rmeta  { grid-area: 1 / 2; gap: 4px; font-size: 12px; }
+    :is(#news-list, .pv-rows) .bc-rmeta .bc-tag { padding: 1px 6px; font-size: 11px; }
+    :is(#news-list, .pv-rows) .bc-rtitle { grid-area: 2 / 2; font-size: 1.133rem; line-height: 1.35; }   /* 17px */
+    :is(#news-list, .pv-rows) .bc-rbody  { display: contents; }
+    :is(#news-list, .pv-rows) .bc-rmid   { grid-area: 3 / 2; }
+    :is(#news-list, .pv-rows) .bc-rsum   { font-size: .867rem; line-height: 1.55; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }   /* 13px */
+    :is(#news-list, .pv-rows) .bc-row .bc-thumb { display: none !important; }
+    :is(#news-list, .pv-rows) .bc-row .bc-save  { grid-area: 1 / 3 / 3 / 4; align-self: start; width: 44px; height: 44px; margin: -12px 0 0; }
+    :is(#news-list, .pv-rows) .bc-racts {
       grid-area: 4 / 2 / 5 / 4; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0;
       margin: 5px 0 0; border-top: 1px solid rgb(var(--c-paper) / .4);
     }
-    #news-list .bc-row .bc-act {
+    :is(#news-list, .pv-rows) .bc-row .bc-act {
       height: 44px; padding: 0; gap: 4px; border: 0; background: none;
       font-size: 12px; font-weight: 600; color: rgb(var(--c-paper));
     }
-    #news-list .bc-row .bc-act svg { width: 13px; height: 13px; }
-    #news-list .bc-row .bc-act.is-primary { font-weight: 700; color: rgb(var(--c-up)); }
+    :is(#news-list, .pv-rows) .bc-row .bc-act svg { width: 13px; height: 13px; }
+    :is(#news-list, .pv-rows) .bc-row .bc-act.is-primary { font-weight: 700; color: rgb(var(--c-up)); }
 
     /* '전체' 화면 섹션 상자 */
     .sec-head { padding: 10px 0; }
@@ -4374,7 +4377,7 @@
       if (line.parentElement !== row) row.insertBefore(line, filterBtn);
       const toggle = document.getElementById('view-toggle');
       const toggleHost = isMobileLayout() ? row : document.getElementById('admin-setting-btn').parentElement;
-      if (toggle.parentElement !== toggleHost) toggleHost.insertBefore(toggle, isMobileLayout() ? filterBtn : toggleHost.firstChild);
+      if (toggle.parentElement !== toggleHost) toggleHost.insertBefore(toggle, isMobileLayout() ? filterBtn.nextSibling : toggleHost.firstChild);
     }
     window.addEventListener('resize', placeStatusLine);
 
@@ -7005,7 +7008,7 @@
       검색
     </button>
     <button type="button" onclick="tabGo('saved')" data-tab="saved">
-      <span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg><span id="tab-saved-count" hidden></span></span>
+      <span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M6 3h12v18l-6-5-6 5Z"/></svg><span id="tab-saved-count" hidden></span></span>
       저장
     </button>
     <button type="button" onclick="openSettingsTab()" data-tab="settings">
