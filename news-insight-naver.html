@@ -812,7 +812,13 @@
     font-size: 1.8rem; line-height: 1.25; letter-spacing: -.02em; font-weight: 800; text-wrap: pretty; word-break: keep-all;
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   }
-  /* 요약은 남는 칸만큼만 보이고 아래는 서서히 사라진다 (사진이 붙는 Phase 5 전까지는 한 칸 전체를 쓴다) */
+  /* 요약은 남는 칸만큼만 보이고 아래는 서서히 사라진다. 사진이 오면 오른쪽에 작은 썸네일(사진 없으면 폭 전체) */
+  .bc-thumb { flex: none; display: block; width: 168px; height: 112px; background: rgb(var(--c-ink3)); overflow: hidden; }
+  .bc-thumb[hidden] { display: none; }
+  .bc-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; animation: bcThumbIn .3s; }
+  @keyframes bcThumbIn { from { opacity: 0; } }
+  .bc-sum { display: flex; gap: 20px; align-items: flex-start; }
+  .bc-sum > p { flex: 1; min-width: 0; }
   .bc-sum {
     flex: 1; min-height: 0; overflow: hidden; padding-top: 16px;
     border-top: 1px solid rgb(var(--c-paper) / .4);
@@ -865,6 +871,9 @@
   .bc-rmeta { grid-area: 1 / 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: .8rem; color: rgb(var(--c-muted)); }
   .bc-rtitle { grid-area: 2 / 2; font-size: 1.267rem; font-weight: 800; line-height: 1.35; letter-spacing: -.01em; text-wrap: pretty; word-break: keep-all; }
   .bc-rbody { grid-area: 3 / 2; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .bc-rmid { display: flex; gap: 16px; align-items: flex-start; }
+  .bc-rmid > .bc-rsum { flex: 1; min-width: 0; }
+  .bc-row .bc-thumb { width: 120px; height: 80px; }
   .bc-rsum  { font-size: .933rem; line-height: 1.6; color: #444141; text-wrap: pretty; word-break: keep-all; }
   .bc-row .bc-save { grid-area: 1 / 3 / 4 / 4; align-self: start; }
   .bc-racts { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -5578,7 +5587,64 @@
       return `${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}`;
     }
 
-    // 카드 한 장. 사진은 Phase 5 에서 붙는다 — 그 전까지 요약이 카드 폭 전체를 쓴다.
+    // ---- 기사 썸네일 (v3 Phase 5b) ----
+    //  목록은 사진 없이 먼저 그리고, 사진 주소는 /api/news-images 로 따로 받아 빈 칸(.bc-thumb)에 채운다.
+    //  기사 주소가 열쇠. ''(사진 없음·실패)도 기억해서 다시 그려도 서버를 또 부르지 않는다.
+    const thumbCache = new Map();
+    const thumbAsked = new Set();    // 이미 물어본(응답 대기 중이거나 끝난) 주소
+    const THUMB_RETRY_MS = [3000, 8000];   // 서버가 5초 안에 못 끝낸 기사(pending)만 이 간격으로 다시 묻는다
+
+    function thumbKeyOf(item) {
+      return item.url && item.url !== '#' ? item.url : '';
+    }
+
+    // 빈 칸 : 사진이 올 때까지 숨어 있다 → 사진 없는 카드는 요약이 폭 전체를 쓴다
+    function thumbSlotHtml(item) {
+      const k = thumbKeyOf(item);
+      return k ? `<span class="bc-thumb" hidden data-thumb-key="${esc(k)}"></span>` : '';
+    }
+
+    function fillThumbSlots() {
+      document.querySelectorAll('#news-list .bc-thumb[hidden]').forEach((slot) => {
+        const src = thumbCache.get(slot.dataset.thumbKey);
+        if (!src) return;
+        const img = new Image();
+        img.alt = '';
+        img.decoding = 'async';
+        img.referrerPolicy = 'no-referrer';   // 언론사 Referer 검사로 사진이 막히는 것을 줄인다
+        // 못 열리면 칸을 숨기고 '' 로 기억 → 깨진 그림 아이콘이 안 보이고 다시 그려도 시도하지 않는다
+        img.onerror = () => { thumbCache.set(slot.dataset.thumbKey, ''); slot.remove(); };
+        img.onload = () => { slot.hidden = false; };
+        img.src = src;
+        slot.appendChild(img);
+      });
+    }
+
+    async function loadBriefThumbs(list, attempt = 0) {
+      const want = list.filter((it) => {
+        const k = thumbKeyOf(it);
+        return k && !thumbCache.has(k) && (attempt > 0 ? thumbAsked.has(k) : !thumbAsked.has(k));
+      });
+      if (!want.length) return;
+      want.forEach((it) => thumbAsked.add(thumbKeyOf(it)));
+      const stillPending = [];
+      for (let i = 0; i < want.length; i += 30) {   // 서버는 한 번에 30건까지
+        const chunk = want.slice(i, i + 30);
+        try {
+          const data = await apiPost('/api/news-images', {
+            items: chunk.map((it) => ({ url: thumbKeyOf(it), naverUrl: it.naverUrl || '' })),
+          });
+          Object.entries(data.images || {}).forEach(([u, img]) => thumbCache.set(u, img || ''));
+          chunk.forEach((it) => { if (!thumbCache.has(thumbKeyOf(it))) stillPending.push(it); });
+        } catch { chunk.forEach((it) => thumbAsked.delete(thumbKeyOf(it))); }   // 네트워크 실패 → 다음 그림 때 다시 묻는다
+      }
+      fillThumbSlots();
+      if (stillPending.length && attempt < THUMB_RETRY_MS.length) {
+        setTimeout(() => loadBriefThumbs(stillPending, attempt + 1), THUMB_RETRY_MS[attempt]);
+      }
+    }
+
+    // 카드 한 장. 사진 칸(.bc-thumb)은 비어 있다가 loadBriefThumbs 가 채운다.
     function briefCardHtml(item, i) {
       const d = i - briefIdx;
       const lead = (item.summary || []).join(' ').trim();
@@ -5595,7 +5661,7 @@
           </div>
           <div class="bc-body">
             <h3 class="bc-title bc-dim">${item.title}</h3>
-            <div class="bc-sum bc-dim">${lead ? `<p>${lead}</p>` : ''}</div>
+            <div class="bc-sum bc-dim">${lead ? `<p>${lead}</p>` : ''}${thumbSlotHtml(item)}</div>
           </div>
           ${briefActionsHtml(item, 'bc-actions')}
         </article>`;
@@ -5630,7 +5696,7 @@
             ${briefSaveBtnHtml(item, 'row')}
             <h4 class="bc-rtitle bc-dim">${item.title}</h4>
             <div class="bc-rbody">
-              ${lead ? `<p class="bc-rsum bc-dim">${lead}</p>` : ''}
+              <div class="bc-rmid">${lead ? `<p class="bc-rsum bc-dim">${lead}</p>` : ''}${thumbSlotHtml(item)}</div>
               ${briefActionsHtml(item, 'bc-racts')}
             </div>
           </article>`;
@@ -5742,6 +5808,8 @@
         wrap.innerHTML = briefCarouselHtml(list);
         wireBriefStage();
       }
+      fillThumbSlots();            // 이미 아는 사진은 바로
+      loadBriefThumbs(list);       // 모르는 것만 서버에 (목록은 이미 그려진 뒤)
     }
 
     // Today's Briefing (좁은 화면 · v2 모양) : 순위 + 카테고리 배지 + 핵심 2줄 요약

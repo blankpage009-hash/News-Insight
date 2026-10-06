@@ -95,7 +95,8 @@ v2(어두운 금색 톤 · 좌측 사이드바 + 우측 마켓 레일 3단)를 �
 - [x] **Phase 3** Daily Brief 카드 (2026-10-06)
 - [x] **Phase 4** 오른쪽 패널 (2026-10-06)
 - [x] **Phase 5a** 사진 서버 (2026-10-06) — main 에 서버만 배포(`e65dc11`), Render 실측 99%
-- [ ] Phase 5b 사진 화면 ← 다음 (Sonnet 5.5 · medium)
+- [x] **Phase 5b** 사진 화면 (2026-10-06)
+- [ ] Phase 6 섹션 화면 ← 다음 (Opus 5.5 · medium)
 
 ### Phase 0 에서 한 것 (2026-10-06)
 
@@ -256,3 +257,19 @@ Render 실측(2026-10-06, 배포 직후, Render 의 브리핑 + 전체 섹션 �
 - main 에 서버만 보낼 때 이 폴더에서 `git checkout main` 을 하지 않았다(HTML 이 CRLF 로 풀린다). 대신 임시 worktree(`git -c core.autocrlf=false worktree add`)에서 cherry-pick 했다.
 - node-fetch v2 는 중간에 끊으면(abort) 응답 본문 스트림에 `'error'` 를 직접 쏜다. 듣는 쪽이 없으면 서버가 죽으므로 응답을 받자마자 `r.body.on('error', () => {})` 를 단다.
 - Node 24 는 접속할 때 `lookup` 을 `{all:true}` 로 부른다(IPv4/IPv6 번갈아 시도). 직접 만든 lookup 은 배열 모양과 낱개 모양 둘 다 돌려줄 수 있어야 한다.
+
+### Phase 5b 에서 한 것 (2026-10-06) — `news-insight-naver.html` 한 파일, 1024px 이상만
+
+- **썸네일 칸** : 카드는 요약 오른쪽(168×112), 목록 행은 요약 오른쪽(120×80). 칸은 `hidden` 으로 숨어 있다가 사진이 열리면 나타난다 → **사진 없는 카드·행은 요약이 폭 전체**(시안에 없는 모양, 별도 처리 불필요). 출처는 원래 메타 줄에 있어 그대로.
+- **불러오는 순서** : 목록을 먼저 그리고(`renderBriefing`), 그 뒤에 `loadBriefThumbs` 가 `POST /api/news-images` 를 부른다(30건씩). 서버가 5초 안에 못 끝낸 `pending` 만 3초·8초 뒤 최대 2번 다시 묻는다.
+- **기억** : `thumbCache`(기사 주소 → 사진 주소 · '' = 없음/실패)와 `thumbAsked`. 카드↔목록 토글·창 크기 변경으로 다시 그려도 서버를 다시 부르지 않는다(실측 요청 1회 유지).
+- **실패 처리** : `<img referrerpolicy="no-referrer">`, 못 열리면(`onerror`) 칸을 지우고 '' 로 기억 → 깨진 그림 아이콘 없음.
+- **좁은 화면(<1024px)** : 옛 TOP STORY 모양이라 칸이 없고 **사진 요청도 안 한다**(375px 실측 요청 0).
+
+검증(로컬, 1440px) : 10/10 칸 채워짐 · 카드 168×112 · 행 120×80 · 가로 스크롤 없음 · 콘솔 에러 0 · 375px 에서 옛 모양 + 요청 0.
+
+### Phase 5b 에서 배운 것
+
+- `loading="lazy"` 는 **숨은(display:none) 칸 안의 이미지를 아예 안 받는다.** 칸이 `hidden` 이라 onload 가 안 와서 영영 안 나타났을 것 → 지웠다(카드 10장뿐이라 불필요).
+- 미리보기 서버 슬롯이 다른 채팅에서 가득 차 있으면 `PORT=3457 node server.js` 로 직접 띄워 시험하고 끝나면 내린다.
+- 섹션·검색 결과·저장 화면의 사진은 Phase 6 에서 같은 `thumbSlotHtml` / `loadBriefThumbs` 를 부르면 된다(이름만 Brief 지, 목록이면 뭐든 된다).
