@@ -1008,6 +1008,8 @@
   /* 요약은 남는 칸만큼만 보이고 아래는 서서히 사라진다. 사진이 오면 오른쪽에 작은 썸네일(사진 없으면 폭 전체) */
   .bc-thumb { flex: none; display: block; width: 168px; height: 112px; background: rgb(var(--c-ink3)); overflow: hidden; }
   .bc-thumb[hidden] { display: none; }
+  /* 카드형 데스크톱 : 사진을 요약 글 왼쪽에 두고 조금 키운다 (order 로 앞세워 마크업은 그대로) */
+  .bc-thumb.is-d { order: -1; width: 192px; height: 128px; }
   .bc-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; animation: bcThumbIn .3s; }
   @keyframes bcThumbIn { from { opacity: 0; } }
   .bc-sum { display: flex; gap: 20px; align-items: flex-start; }
@@ -1307,6 +1309,9 @@
        선이 없어진 만큼 제목 줄·본문 사이 여백도 줄여 본문을 위로 올린다. */
     #cat-header > div { border-bottom: 0; padding-bottom: 1.1rem; }   /* 제목과 검은 선 사이 여백 : 검은 선이 오른쪽 '저장 기사' 선 높이에 오도록 맞춘 값 */
     #status-bar { padding-top: 0; }
+    /* 상단 탭 아래 ~ 제목 위 여백을 10px 줄인다 (space-y-6 의 22.5px → 12.5px).
+       오른쪽 '저장 기사' 선과 높이를 맞추려고 패널 쪽 margin-top 도 같은 만큼 줄여 두었다. */
+    #content-col > #status-bar { margin-top: 12.5px; }
     #top-stick { padding-top: 0; padding-bottom: 0; }
     #cat-header > div { padding-top: .775rem; }   /* 아래 여백을 줄인 만큼 제목을 내려 검은 선 높이는 그대로 */
     #news-list { margin-top: 0; }
@@ -1926,7 +1931,7 @@
         <div id="rail-keyword-list"></div>
       </section>
       <!-- 저장 기사 : 최근 5건 + 이어보기. 사이드바가 데스크톱에서 사라져 저장 화면으로 가는 길도 여기 둔다 -->
-      <section class="panel-sec" style="margin-top:1.867rem">
+      <section class="panel-sec" style="margin-top:1.2rem">
         <div class="panel-head">
           <h2>저장 기사</h2>
           <span id="panel-saved-count" class="text-[0.73rem] text-muted"></span>
