@@ -449,6 +449,12 @@
     transition: background-color .15s, color .15s;
   }
   .cat-tab:hover { background: rgb(var(--c-ink2)); }
+  /* The Daily Brief 와 나머지 섹션 탭 사이의 세로 구분선 */
+  .cat-tab.has-sep { position: relative; margin-left: 8px; }
+  .cat-tab.has-sep::before {
+    content: ''; position: absolute; left: -6px; top: 22%; bottom: 22%;
+    width: 1px; background: rgb(var(--c-paper) / .45);
+  }
   .cat-tab.is-on { background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); font-weight: 600; }
   .cat-chip {
     flex: none;
@@ -1380,24 +1386,34 @@
   }
 
   /* ---------------------------------------------------------------
-     [수정] v3 Phase 9 · 시안 Mobile 1c~1e : 좁은 화면(640px 미만)의 팝업 = 화면 전체를 덮는 시트 (사용자 결정)
+     [수정] v3 Phase 9 · 시안 Mobile 1c~1e : 좁은 화면(640px 미만)의 팝업 = 아래에서 올라오는 시트 (사용자 결정)
+       [수정] 화면 전체를 덮던 것을 되돌려, 예전처럼 화면 높이의 90%까지만 올라온다(위 10%는 뒷배경 → 눌러서 닫기).
        머리말 52px(레드 라벨 · 메타 · 44px X) / 본문(이 안에서만 스크롤) / 아래에 붙은 버튼 줄(아이콘 위 · 글자 아래, 칸 균등).
-       아이폰 노치·홈 바(안전영역)만큼 위아래를 비운다. 머리말을 아래로 끌어 닫는 손짓(.sheet-grab)은 그대로 둔다.
+       시트가 바닥에 붙으므로 홈 바(안전영역)는 아래 버튼 줄(.pv-foot)이 스스로 비운다. 아래로 쓸어 닫는 손짓은 JS(onSheetTouchStart) 참고.
        비밀번호 잠금 창은 작은 확인 창이라 시트로 만들지 않는다.
      --------------------------------------------------------------- */
   @keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
   @media (max-width: 639.98px) {
     [id$="-modal"]:not(#password-modal) {
-      align-items: stretch !important;
+      align-items: flex-end !important;
       padding: 0 !important;
       overflow: hidden !important;
     }
     [id$="-modal"]:not(#password-modal) .modal-pop {
-      width: 100%; max-width: 100% !important; height: 100%; max-height: none !important;
-      padding-top: env(safe-area-inset-top, 0px);
+      width: 100%; max-width: 100% !important; max-height: 90vh !important;
       border: 0; box-shadow: none;
       overflow: hidden; overscroll-behavior: contain;
       animation: sheet-in .26s cubic-bezier(.2, .8, .2, 1);
+    }
+    /* 주소창이 오르내리는 폰에서는 vh 가 실제 보이는 높이보다 커서 dvh 로 다시 덮는다(지원 안 하는 브라우저는 위 vh 를 그대로 쓴다) */
+    @supports (max-height: 90dvh) {
+      [id$="-modal"]:not(#password-modal) .modal-pop { max-height: 90dvh !important; }
+    }
+    /* [추가] 맨 위 가운데 회색 손잡이 막대 = '아래로 쓸어 닫는다'는 표시.
+       막대는 4px 뿐이라 손가락으로 잡기 어려워, 20px 높이 띠를 깔고 그 가운데에 막대를 그린다(띠 전체가 끄는 구역). */
+    [id$="-modal"]:not(#password-modal) .modal-pop::before {
+      content: ''; display: block; flex: none; height: 20px;
+      background: linear-gradient(rgb(var(--c-muted2)), rgb(var(--c-muted2))) center / 38px 4px no-repeat;
     }
     /* 머리말을 끄는 동안에는 올라오는 애니메이션(transform)을 꺼야 손가락을 따라온다 */
     [id$="-modal"] .sheet-grab { touch-action: none; }
@@ -2490,7 +2506,7 @@
         const key = esc(a.key);
         const title = esc(plainText(a.title));
         return `<div class="panel-saved-row">
-          <a class="panel-saved-title" href="${esc(articleLink(a))}" target="_blank" rel="noopener noreferrer" title="${title}">${title}</a>
+          <a class="panel-saved-title" href="${esc(articleLink(a))}" data-panel-brief="${key}" title="${title}">${title}</a>
           <button class="panel-saved-x" data-panel-unsave="${key}" title="저장 취소" aria-label="저장 취소"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
           <span class="panel-saved-meta">
             <span class="panel-saved-src">${esc(a.source || '출처 미상')} · ${esc(formatDate(a.datetime))}</span>
@@ -2506,6 +2522,8 @@
       if (unsave) { removeSavedByKey(unsave.dataset.panelUnsave); return; }
       const resume = e.target.closest('[data-panel-resume]');
       if (resume) openFollowupFromPanel(resume.dataset.panelResume);
+      const brief = e.target.closest('[data-panel-brief]');
+      if (brief) { e.preventDefault(); openBriefFromPanel(brief.dataset.panelBrief); }
     });
 
     function removeSavedByKey(key) {
@@ -2524,6 +2542,15 @@
       const [item] = decorateItems([a], (a.cats && a.cats[0]) || 'society');
       followupItems.push(item);
       openFollowup(item.id);
+    }
+
+    // 제목을 누르면 원문 대신 주요 내용 요약 팝업. 이어보기와 같은 방식으로 화면용 id 를 붙여 연다
+    function openBriefFromPanel(key) {
+      const a = savedArticles.find((x) => x.key === key);
+      if (!a) return;
+      const [item] = decorateItems([a], (a.cats && a.cats[0]) || 'society');
+      followupItems.push(item);
+      openBrief(item.id);
     }
 
     // 저장 화면 그리기. 보관함을 화면용 기사(id 부여)로 바꿔 목록과 똑같은 행으로 그린다.
@@ -4042,9 +4069,10 @@
       const active = keyword ? null
         : (parentCategoryOf(currentCategory) || currentCategory);
 
-      list.innerHTML = topLevelCategories.map((cat) => {
+      list.innerHTML = topLevelCategories.map((cat, i) => {
         const on = cat === active;
-        return `<button onclick="selectCategory('${cat}')" class="cat-tab${on ? ' is-on' : ''}"${on ? ' aria-current="page"' : ''}>${TAB_LABELS[cat] || categoryLabels[cat]}</button>`;
+        const sep = topLevelCategories[i - 1] === 'briefing';   // Daily Brief 바로 다음 탭에만 구분선
+        return `<button onclick="selectCategory('${cat}')" class="cat-tab${on ? ' is-on' : ''}${sep ? ' has-sep' : ''}"${on ? ' aria-current="page"' : ''}>${TAB_LABELS[cat] || categoryLabels[cat]}</button>`;
       }).join('');
       syncViewToggle();   // 카드/목록 토글은 탭과 같은 때(섹션 이동 · 검색 · 설정 화면 열고 닫기)에 보이고 숨긴다
 
@@ -6397,8 +6425,11 @@
     // [추가] 모바일 바텀시트 : 아래로 쓸어내리면 닫는다
     //   시트 맨 위의 회색 손잡이 막대는 원래 '여기를 잡아 내린다'는 표시였는데,
     //   실제로 내릴 수는 없었다. 그 동작을 붙인다. (주요 내용 · Insight · 관련 기사)
-    //   - [수정] 시트 어디서나 되게 두니 기사를 읽으려는 위아래 스크롤과 겹쳤다.
-    //     이제 맨 위 손잡이 막대와 머리말(.sheet-grab)에서 시작한 손짓만 '닫기'로 본다.
+    //   - [수정] 시트 어디서나 되게 두니 기사를 읽으려는 위아래 스크롤과 겹쳤다 → 맨 위 손잡이 · 머리말에서만 시작하게 했었다.
+    //   - [수정] 아이폰에서는 본문을 쓸어도 닫혀야 한다는 요청으로 본문에서도 시작할 수 있게 하되,
+    //     시작 자리부터 바깥 상자까지 스크롤이 맨 위(scrollTop 0)일 때만 '닫기'로 본다.
+    //     본문을 내려 읽는 중이면 그 스크롤이 먼저라서 겹치지 않는다. (설정 창은 입력 중 실수로 닫히면
+    //     수정이 날아가므로 손잡이 · 머리말에서만 닫는다. 차트 창도 아래 SHEET_GRAB_ONLY 참고)
     //   - 세로로 조금(SHEET_SLOP) 내려야 '닫기'로 확정한다. 탭·가로 스와이프와 구분된다.
     // ---------------------------------------------------------------
     const SHEET_CLOSERS = {
@@ -6406,7 +6437,12 @@
       'insight-modal': closeInsight,
       'related-modal': closeRelated,
       'followup-modal': closeFollowup,
+      'scfi-modal': closeScfiChart,
+      'index-modal': closeIndexChart,
+      'prefs-modal': closePrefsModal,
     };
+    // 차트는 손가락으로 선을 짚는 터치(touchmove)와 겹치므로 같이 손잡이 · 머리말에서만 닫는다
+    const SHEET_GRAB_ONLY = new Set(['prefs-modal', 'scfi-modal', 'index-modal']);
     const SHEET_SLOP = 8;          // 이만큼 움직이기 전에는 방향을 정하지 않는다
     const SHEET_CLOSE_DIST = 96;   // 여기까지 내리고 놓으면 닫는다
     const SHEET_FLICK = 0.6;       // 짧게 튕겨도(px/ms) 닫는다
@@ -6423,8 +6459,16 @@
       const pop = modal.querySelector('.modal-pop');
       if (!pop || !pop.contains(target)) return null;   // 뒷배경은 원래대로 눌러서 닫는다
       // 손잡이 막대는 시트 자신의 ::before 라서 터치 대상이 시트 자체(pop)로 잡힌다.
-      if (target !== pop && !target.closest('.sheet-grab')) return null;
+      if (SHEET_GRAB_ONLY.has(modal.id) && target !== pop && !target.closest('.sheet-grab')) return null;
       return pop;
+    }
+
+    // 터치 자리에서 시트까지 올라가며, 이미 아래로 스크롤된 상자가 하나라도 있으면 true (= 아직 맨 위가 아님)
+    function sheetScrolledInside(target, pop) {
+      for (let n = target; n && n !== pop.parentElement; n = n.parentElement) {
+        if (n.scrollTop > 0) return true;
+      }
+      return false;
     }
 
     // 인라인 transform 을 반드시 지운다. 남겨 두면 다음에 열 때 내려간 자리에서 시작한다.
@@ -6437,9 +6481,9 @@
       sheetDrag = null;
       if (e.touches.length !== 1) return;
       const pop = sheetPopFrom(e.target);
-      if (!pop || pop.scrollTop > 0) return;   // 본문을 내려 읽는 중이면 그 스크롤이 먼저다
+      if (!pop || sheetScrolledInside(e.target, pop)) return;   // 본문을 내려 읽는 중이면 그 스크롤이 먼저다
       const t = e.touches[0];
-      sheetDrag = { pop, x0: t.clientX, y0: t.clientY, t0: performance.now(), dist: 0, active: false };
+      sheetDrag = { pop, target: e.target, x0: t.clientX, y0: t.clientY, t0: performance.now(), dist: 0, active: false };
     }
 
     function onSheetTouchMove(e) {
@@ -6455,7 +6499,7 @@
           return;
         }
         if (Math.abs(dx) > Math.abs(dy)) { sheetDrag = null; return; }
-        if (sheetDrag.pop.scrollTop > 0) { sheetDrag = null; return; }
+        if (sheetScrolledInside(sheetDrag.target, sheetDrag.pop)) { sheetDrag = null; return; }
         sheetDrag.active = true;
         sheetDrag.y0 = t.clientY;            // 방향 판정에 쓴 거리는 빼고 여기서부터 따라온다
         sheetDrag.t0 = performance.now();
