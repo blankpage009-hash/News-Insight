@@ -821,6 +821,11 @@
 
   .news-row:hover .row-title { color: rgb(var(--c-gold2)); }
 
+  /* [추가] 제목·요약문 = '주요 내용' 팝업 여는 자리. 누를 수 있다는 걸 손가락 커서와 금색으로 알린다 */
+  .brief-open { cursor: pointer; }
+  .bc-title.brief-open:hover, .bc-rtitle.brief-open:hover, .top-story .row-title.brief-open:hover { color: rgb(var(--c-gold2)); }
+  .brief-open:focus-visible { outline: 2px solid rgb(var(--c-gold)); outline-offset: 2px; border-radius: 2px; }
+
   /* [추가] 시안(개선안 01·03번) 기사 행
      박스 대신 아래 구분선 하나로 나눈다. 3열 = [번호] [본문] [버튼]
      번호 열은 Today's Briefing 에서만 붙으므로 .has-no 로 따로 켠다. */
@@ -5435,10 +5440,17 @@
       ).join('');
     }
 
-    // 주요 내용 / 원문보기 / 관련기사 버튼 묶음 (기사 제목 오른쪽에 배치)
+    // [추가] 기사 제목·요약문을 누르면 '주요 내용'(AI 정리) 팝업을 연다.
+    //   전용 버튼을 없앴으므로 키보드(Tab → Enter/Space)로도 열 수 있게 버튼 역할을 준다.
+    function briefOpenAttrs(item) {
+      return `onclick="openBrief(${item.id})" role="button" tabindex="0" title="주요 내용 보기"
+        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openBrief(${item.id});}"`;
+    }
+
+    // Insight / 원문보기 / 관련기사 버튼 묶음 (기사 제목 오른쪽에 배치)
     //  showRelated=false 이면 '관련기사' 버튼을 뺀다. (관련기사 팝업 안의 기사에는 넣지 않음)
+    //  '주요 내용'은 버튼 대신 제목·요약문을 눌러 연다. (briefOpenAttrs)
     // [수정] 시안(개선안 01번) 버튼 규칙으로 정리한다.
-    //   - '주요 내용'만 색을 채우고, 나머지는 테두리만 남긴다. → 시선이 한 곳에만 간다
     //   - 네 버튼 모두 글자를 유지하되, 아이콘은 글자보다 작게 줄여 라벨이 주인공이 되게 한다
     //   - 묶음은 기사 행의 오른쪽 '아래'에 붙는다 (제목이 두 줄이어도 밑선이 맞는다)
     //   big=true 는 TOP STORY 카드용(높이 32px), 기본은 목록용(높이 28px)
@@ -5451,7 +5463,6 @@
       const base = 'flex items-center gap-1.5 rounded-md transition whitespace-nowrap';
       // [수정] TOP STORY 도 목록 행과 같은 은은한 금색 배경 + 금색 아이콘/글자로 통일한다.
       //   전에는 TOP STORY 만 금색을 꽉 채워, 아이콘 색이 목록과 반대로 보였다.
-      const brief = 'bg-gold/10 hover:bg-gold/20 text-gold';
       const plain = 'text-muted hover:text-paper hover:bg-ink3 border border-line';
       const relatedBtn = showRelated ? `
           <button onclick="openRelated(${item.id})" title="관련 기사"
@@ -5474,10 +5485,6 @@
           </button>` : '';
       return `
         <div class="news-row-actions flex items-center gap-1.5 flex-wrap">
-          <button onclick="openBrief(${item.id})" title="주요 내용"
-            class="${base} ${h} ${brief}">
-            ${icon('sparkles', ic)} 주요 내용
-          </button>
           <button onclick="openInsight(${item.id})" title="Insight"
             class="${base} ${h} text-ok border border-ok/30 hover:bg-ok/10">
             ${icon('lightbulb', ic)} Insight
@@ -5510,7 +5517,7 @@
         <article class="news-row${no === null ? '' : ' has-no'}${isReadKey(readKey) ? ' is-read' : ''}" data-read-key="${esc(readKey)}">
           ${numCol}
           <div class="min-w-0 space-y-1.5">
-            <h3 class="row-title font-sans text-[1.3rem] font-semibold text-paper break-keep">${item.title}</h3>
+            <h3 class="row-title brief-open font-sans text-[1.3rem] font-semibold text-paper break-keep" ${briefOpenAttrs(item)}>${item.title}</h3>
             <div class="flex items-center gap-2 flex-wrap">
               ${badgesHtml(item)}
               <span class="text-muted2 font-mono text-[0.76rem]">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
@@ -5632,7 +5639,7 @@
         class="save-btn bc-save is-${kind}${on ? ' is-saved' : ''}">${bookmarkSvg(on, 'w-4 h-4')}</button>`;
     }
 
-    // 주요 내용 · Insight · 원문 보기 · 관련 기사 (기존과 같은 함수를 부른다)
+    // Insight · 원문 보기 · 관련 기사 (기존과 같은 함수를 부른다). 주요 내용은 제목·요약을 눌러 연다.
     //   saved : 저장 화면의 이어보기 버튼. .followup-btn · data-followup-key · [data-followup-count] 는
     //           primeFollowupBadges/updateFollowupBadge 가 찾는 표시라 모양을 바꿔도 그대로 둔다.
     //   noRelated : 관련 기사·이어보기 팝업 안의 행은 '관련 기사' 버튼을 빼서 팝업이 끝없이 이어지지 않게 한다
@@ -5641,7 +5648,6 @@
       const followup = saved ? `
           <button onclick="openFollowup(${item.id})" data-followup-key="${esc(key)}" title="이어보기" class="bc-act followup-btn">${icon('history')}이어보기 <span data-followup-count>${followupCache.has(key) ? followupCache.get(key).length : 0}</span></button>` : '';
       return `<div class="${wrapClass}">
-          <button onclick="openBrief(${item.id})" title="주요 내용" class="bc-act">${icon('sparkles')}주요 내용</button>
           <button onclick="openInsight(${item.id})" title="Insight" class="bc-act is-primary">${icon('lightbulb')}Insight</button>
           <a href="${esc(articleLink(item))}" target="_blank" rel="noopener noreferrer" draggable="false" title="원문 보기"
             onclick="markRead(${item.id})" class="bc-act">${icon('external-link')}원문 보기</a>
@@ -5726,8 +5732,8 @@
             </div>
           </div>
           <div class="bc-body">
-            <h3 class="bc-title bc-dim">${item.title}</h3>
-            <div class="bc-sum bc-dim">${lead ? `<p>${lead}</p>` : ''}${thumbSlotHtml(item)}</div>
+            <h3 class="bc-title bc-dim brief-open" ${briefOpenAttrs(item)}>${item.title}</h3>
+            <div class="bc-sum bc-dim">${lead ? `<p class="brief-open" onclick="openBrief(${item.id})">${lead}</p>` : ''}${thumbSlotHtml(item)}</div>
           </div>
           ${briefActionsHtml(item, 'bc-actions')}
         </article>`;
@@ -5761,9 +5767,9 @@
             <span class="bc-rno bc-dim">${String(i + 1).padStart(2, '0')}</span>
             <div class="bc-rmeta bc-dim">${briefTagsHtml(item)}<span>${briefMetaText(item)}</span></div>
             ${briefSaveBtnHtml(item, 'row')}
-            <h4 class="bc-rtitle bc-dim">${item.title}</h4>
+            <h4 class="bc-rtitle bc-dim brief-open" ${briefOpenAttrs(item)}>${item.title}</h4>
             <div class="bc-rbody">
-              <div class="bc-rmid">${lead ? `<p class="bc-rsum bc-dim">${lead}</p>` : ''}${thumbSlotHtml(item)}</div>
+              <div class="bc-rmid">${lead ? `<p class="bc-rsum bc-dim brief-open" onclick="openBrief(${item.id})">${lead}</p>` : ''}${thumbSlotHtml(item)}</div>
               ${briefActionsHtml(item, 'bc-racts', opts.saved)}
             </div>
           </article>`;
@@ -5915,8 +5921,8 @@
             ${badgesHtml(item)}
             <span class="text-muted2 font-mono text-[0.76rem]">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
           </div>
-          <h3 class="row-title font-sans text-[1.7rem] sm:text-[2rem] font-bold text-paper break-keep !leading-[1.32]">${item.title}</h3>
-          ${lead ? `<p class="text-muted text-[0.93rem] leading-[1.75] break-keep">${lead}</p>` : ''}
+          <h3 class="row-title brief-open font-sans text-[1.7rem] sm:text-[2rem] font-bold text-paper break-keep !leading-[1.32]" ${briefOpenAttrs(item)}>${item.title}</h3>
+          ${lead ? `<p class="brief-open text-muted text-[0.93rem] leading-[1.75] break-keep" onclick="openBrief(${item.id})">${lead}</p>` : ''}
           ${actionsHtml(item, true, true)}
         </article>`;
     }
@@ -6916,9 +6922,9 @@
             <span class="bc-rno bc-dim">${String(i + 1).padStart(2, '0')}</span>
             <div class="bc-rmeta bc-dim"><span>${briefMetaText(item)}</span></div>
             ${briefSaveBtnHtml(item, 'row')}
-            <h4 class="bc-rtitle bc-dim">${item.title}</h4>
+            <h4 class="bc-rtitle bc-dim brief-open" ${briefOpenAttrs(item)}>${item.title}</h4>
             <div class="bc-rbody">
-              ${lead ? `<p class="bc-rsum bc-dim">${lead}</p>` : ''}
+              ${lead ? `<p class="bc-rsum bc-dim brief-open" onclick="openBrief(${item.id})">${lead}</p>` : ''}
               ${briefActionsHtml(item, 'bc-racts', false, true)}
             </div>
           </article>`;
