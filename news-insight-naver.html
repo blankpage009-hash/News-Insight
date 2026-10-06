@@ -1437,7 +1437,7 @@
     .pv-shell > .pv-head { flex-wrap: nowrap; min-height: 52px; padding: 0 6px 0 16px; gap: 10px; }
     .pv-shell > .pv-head .pv-close { width: 44px; height: 44px; color: rgb(var(--c-paper)); }
     .pv-shell > .pv-head .pv-close svg { width: 22px; height: 22px; }
-    .pv-shell > .pv-foot { gap: 0; padding: 0 0 env(safe-area-inset-bottom, 0px); }
+    .pv-shell > .pv-foot { gap: 0; padding: 0 0 calc(22px + env(safe-area-inset-bottom, 0px)); }   /* 아이폰 둥근 모서리에 글자가 잘리지 않게 하단 탭(#tab-bar)과 같은 22px 를 더 띄움 */
     .pv-shell > .pv-foot .pv-note:empty { display: none; }
     .pv-shell > .pv-foot .pv-note { flex-basis: 100%; padding: 8px 16px; font-size: 11px; border-bottom: 1px solid rgb(var(--c-paper) / .4); }
     .pv-shell > .pv-foot .pv-actions { width: 100%; margin: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; }
