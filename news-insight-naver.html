@@ -434,6 +434,9 @@
     #search-clear-btn { width: 44px; height: 44px; }
     #search-body > p { padding: 0; background: none; border: 0; font-size: 12px; }
     #search-popup:not(:focus-within) #search-body > :not(.relative) { display: none; }
+    /* 검색 · 초기화 버튼은 늘 감춘다. 사파리는 버튼을 눌러도 포커스를 주지 않아서, 누르는 순간 칸의 포커스가 빠져
+       위 규칙으로 줄이 사라지고 눌림이 허공에 떨어진다. 검색은 키보드의 '검색'(enterkeyhint) · 지우기는 X 가 맡는다. */
+    #search-actions { display: none !important; }
   }
   .idx-item { display: inline-flex; align-items: baseline; gap: .533rem; flex: none; }   /* 시안 8px */
   button.idx-item { cursor: pointer; }
@@ -1120,7 +1123,7 @@
     .bc-head { gap: 10px; padding: 14px 14px 0 16px; }
     .bc-head-l { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; flex: none; }
     .bc-no { font-size: 40px; padding-top: 4px; }
-    .bc-thumb.is-m { width: 132px; height: 88px; }
+    .bc-thumb.is-m { width: 132px; height: 88px; cursor: pointer; }
     .bc-thumb.is-d { display: none !important; }
     .bc-meta { gap: 6px; padding-top: 2px; font-size: 12px; }
     .bc-tags { gap: 4px; }
@@ -1788,7 +1791,7 @@
                 </select>
               </div>
             </div>
-            <div class="flex gap-2 pt-1">
+            <div id="search-actions" class="flex gap-2 pt-1">
               <button id="search-btn" onclick="submitSearch()"
                 class="flex-1 flex items-center justify-center gap-2 bg-gold hover:bg-gold2 text-ink font-semibold px-4 py-2.5 rounded-xl transition whitespace-nowrap">
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg> 검색
@@ -5632,7 +5635,8 @@
     //   카드에는 두 칸이 다 있고 지금 폭에 맞는 칸만 채운다. 폭이 1024px 를 넘나들면 목록을 다시 그리므로 그때 다시 채운다.
     function thumbSlotHtml(item, where = '') {
       const k = thumbKeyOf(item);
-      return k ? `<span class="bc-thumb${where ? ' is-' + where : ''}" hidden data-thumb-key="${esc(k)}"></span>` : '';
+      const open = where === 'm' ? ` onclick="openBrief(${item.id})"` : '';   // 모바일 카드 사진은 가장 눈에 띄는 자리라 누르면 주요 내용
+      return k ? `<span class="bc-thumb${where ? ' is-' + where : ''}" hidden data-thumb-key="${esc(k)}"${open}></span>` : '';
     }
 
     function fillThumbSlots() {
