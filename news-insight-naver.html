@@ -909,7 +909,7 @@
   .view-toggle button.is-on { background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); }
 
   .bc { border-top: 2px solid rgb(var(--c-paper)); }   /* 카드형도 목록형(.bc-list)과 같은 검은 구분선 */
-  .bc-top { display: flex; justify-content: flex-end; align-items: baseline; gap: 4px; padding-top: .25rem; font-variant-numeric: tabular-nums; }
+  .bc-top { display: flex; justify-content: flex-end; align-items: baseline; gap: 4px; padding-top: .25rem; position: relative; top: .875rem; font-variant-numeric: tabular-nums; }   /* top 으로만 내려 아래 카드 위치는 그대로 두고 구분선과 간격을 띄운다 */
   .bc-cur { font-size: 2.133rem; font-weight: 800; line-height: .9; letter-spacing: -.04em; color: rgb(var(--c-gold)); }
   .bc-tot { font-size: .933rem; font-weight: 600; color: rgb(var(--c-muted2)); }
   /* 가장자리 카드가 본문 칸 끝(왼쪽 화면 끝 · 오른쪽 패널 선)까지 보이도록 칸 좌우 여백(2rem)만큼 넓힌다 */
@@ -1008,7 +1008,7 @@
   .bc-row .bc-thumb { grid-area: 2 / 3 / 4 / 4; align-self: start; width: 120px; height: 80px; }
   /* 본 목록(#news-list)은 사진을 번호 옆 왼쪽에 둔다 : 번호 · 사진 · 글 · 저장 4열.
      사진이 없는 행도 글 위치가 같도록 열 간격은 0 으로 두고 사진·저장 쪽에 여백을 준다 */
-  #news-list .bc-row { grid-template-columns: 52px auto minmax(0, 1fr) auto; column-gap: 0; }
+  #news-list .bc-row { grid-template-columns: 52px 166px minmax(0, 1fr) auto; column-gap: 0; }   /* 사진 칸 폭 고정(150 + 여백 16) : 사진이 없거나 못 가져온 행도 빈 칸을 남겨 글 위치를 맞춘다 */
   #news-list .bc-rmeta  { grid-area: 1 / 3; }
   #news-list .bc-rtitle { grid-area: 2 / 3; font-size: calc(1.267rem + 1px); }   /* 글자 크기 설정과 함께 움직이도록 rem 에 1px 를 더한다 */
   #news-list .bc-rbody  { grid-area: 3 / 3; }
@@ -1748,8 +1748,8 @@
                 <label for="search-sort-select" class="text-muted whitespace-nowrap">정렬</label>
                 <select id="search-sort-select" onchange="onSearchClick()" title="검색 결과 정렬 기준"
                   class="bg-ink border border-line rounded-lg px-2 py-1.5 text-paper font-mono focus:outline-none focus:border-gold/70">
-                  <option value="sim" selected>정확도순</option>
-                  <option value="date">최신순</option>
+                  <option value="sim">정확도순</option>
+                  <option value="date" selected>최신순</option>
                 </select>
               </div>
             </div>
@@ -2724,7 +2724,7 @@
     }
     function getSort() {
       const id = isKeywordMode() ? 'search-sort-select' : 'sort-select';
-      return document.getElementById(id).value || 'sim';
+      return document.getElementById(id).value || 'date';
     }
 
     // 지정한 정렬값에 맞춰 목록 정렬 (최신순=date만 클라이언트 정렬, 정확도순=서버 순서 유지)
@@ -4088,14 +4088,14 @@
     //   바꾸면 다른 섹션으로 옮겨도 10건이 그대로 따라다녔다.
     //   이제 섹션을 떠날 때 그 섹션의 값을 저장해 두고, 들어가는 섹션은
     //   저장된 값(없으면 기본값)으로 셀렉트를 되돌린다.
-    //   기본값 : 게재 기간 1일 · 정렬 정확도순
+    //   기본값 : 게재 기간 1일 · 정렬 최신순 (The Daily Brief 만 정확도순)
     //   [수정] 노출 건수 기본값은 설정 화면에서 조절한다.
     //          (defaultCountFor · 기본 섹션 5개 / 하위 섹션 5개 / Briefing 10개)
-    const SECTION_FILTER_DEFAULTS = { hours: '24', sort: 'sim' };
+    const SECTION_FILTER_DEFAULTS = { hours: '24', sort: 'date' };
     const sectionFilterMemory = {};   // { 카테고리키: { count, hours, sort } }
 
     function defaultSectionFilters(cat) {
-      return { ...SECTION_FILTER_DEFAULTS, count: defaultCountFor(cat) };
+      return { ...SECTION_FILTER_DEFAULTS, sort: cat === 'briefing' ? 'sim' : SECTION_FILTER_DEFAULTS.sort, count: defaultCountFor(cat) };   // The Daily Brief 만 정확도순 기본
     }
     // 좌측(숨김) 셀렉트 = 카테고리 모드의 실제 필터 값 저장소
     function readCategoryFilters() {
@@ -4163,7 +4163,7 @@
       document.getElementById('sort-select').value = 'sim';
       document.getElementById('search-count-select').value = defaultCounts.search;
       document.getElementById('search-hours-select').value = '720';
-      document.getElementById('search-sort-select').value = 'sim';
+      document.getElementById('search-sort-select').value = 'date';
       currentCategory = 'briefing';
       expandedLogistics = false;
       expandedStock = false;
