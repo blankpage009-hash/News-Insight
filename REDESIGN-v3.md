@@ -94,7 +94,8 @@ v2(어두운 금색 톤 · 좌측 사이드바 + 우측 마켓 레일 3단)를 �
 - [x] **Phase 2** 골격 교체 (2026-10-06)
 - [x] **Phase 3** Daily Brief 카드 (2026-10-06)
 - [x] **Phase 4** 오른쪽 패널 (2026-10-06)
-- [ ] Phase 5a 사진 서버 ← 다음 (Opus 5.5 · high — 새 창에서 시작)
+- [ ] Phase 5a 사진 서버 ← 진행 중 (서버 코드·로컬 측정 끝, main push 승인 → Render 실측 남음)
+- [ ] Phase 5b 사진 화면
 
 ### Phase 0 에서 한 것 (2026-10-06)
 
@@ -214,3 +215,27 @@ LIVE rgb(5,137,62) · 모서리가 0 이 아닌 요소 0개 · 본문 글꼴 `Ar
 
 - 키워드 랭킹이 로컬에서 비어 있으므로(Phase 2 기록) 모양은 `railKeywordRowHtml` 에 가짜 데이터를 직접 넣어 확인했다. 그렇게 넣은 줄에는 `onclick` 이 안 붙으니 클릭은 `searchRailKeyword()` 로 시험할 것.
 - `ICON_PATHS` 에 `x` 아이콘이 없다(`history` 는 있음) → X 는 인라인 SVG.
+
+### Phase 5a 에서 한 것 (2026-10-06) — `server.js` 한 파일
+
+- **`POST /api/news-images`** : `{ items:[{url, naverUrl}] }` → `{ images:{url: 사진주소|''}, pending:[url] }`. 한 번에 30건까지.
+  원문 `<head>`(최대 200KB)만 읽어 `og:image` → `og:image:url` → `og:image:secure_url` → `twitter:image` 순으로 찾는다.
+  원문에서 못 찾으면 `n.news.naver.com` 주소로 한 번 더(네이버 쪽 og:image 는 기사 본문 사진 `imgnews.pstatic.net/..._001_` 이다 — 12건 확인, 기자 사진·로고 없음).
+- **5초 마감** : 느린 언론사 때문에 전체가 늦지 않게, 5초 안에 못 끝낸 기사는 `pending` 으로 돌려준다. 읽기는 뒤에서 계속돼 캐시에 들어가므로 **화면(5b)은 pending 만 몇 초 뒤 한 번 더 물으면 된다.**
+- **분리** : `respCache`·프리워밍·Supabase 사본·네이버 슬롯 어느 것도 안 쓴다. 전용 `imageCache`(성공 24시간 · 실패 30분 · 3000칸) + 같은 기사 동시 요청 1회(`imageInflight`) + 원문 동시 접속 8(`IMAGE_MAX_CONCURRENT`) · 대기열 200 넘으면 그 기사는 pending.
+- **SSRF 차단** 3겹 : ① 주소 모양(http/https · 포트 80/443 · 계정 정보 금지 · 사설/루프백/169.254 IP 글자 · 점 없는 이름) ② 접속 직전 DNS 결과 검사(전용 Agent 의 `lookup`) ③ 재전송을 자동으로 안 따라가고 한 칸씩 ①을 다시.
+- `/healthz` 에 `cache.image`(사진 캐시 칸 수)와 `image: {ok, viaNaver, fail, busy}`(확보 통계)를 붙였다 → Render 에서 확보율을 그냥 볼 수 있다.
+
+로컬 실측(내 PC, 브리핑 + 전체 섹션에서 기사 90건) : **찾음 90/90(100%)**, 전부 원문에서(네이버 우회 0) · 30건 요청 380~528ms · pending 0 ·
+같은 사진이 여러 기사에 나온 것(로고 의심) 0 · Referer 없이 받아 보면 90/90 열림 · 브리핑 응답 영향 없음(14ms → 1ms, 캐시).
+SSRF 시험 : localhost · 127.0.0.1 · [::1] · [::ffff:127.0.0.1] · 2130706433 · 0x7f.1 · 169.254.169.254 · file: · gopher: · 점 없는 이름 · 8443 포트 → 모두 ①에서 거절.
+`localtest.me`·`127.0.0.1.nip.io`(공개 도메인인데 127.0.0.1 로 풀림) → ②에서 거절(대조군 : 일반 fetch 로는 로컬 서버까지 닿음 = 검사가 실제로 막고 있다). httpbin 재전송 → 내부망 : ③에서 거절.
+
+**접는 기준(측정 전에 정함)** : Render 에서 "쓸 수 있는 사진"(찾음 + Referer 없이 열림 + 로고 아님)이 **60% 미만이면 5b 를 하지 않는다.**
+
+### Phase 5a 에서 배운 것
+
+- 저장소 안의 `server.js` 는 원래 **LF** 로 저장돼 있다(`git ls-files --eol` → `i/lf w/crlf`). 작업 폴더의 CRLF 는 이 PC 의 `autocrlf=true` 가 꺼낼 때 붙인 것이다. 그래서 `autocrlf=false` 로 만든 worktree 에서는 LF 로 보이는 게 정상이다.
+- main 에 서버만 보낼 때 이 폴더에서 `git checkout main` 을 하지 않았다(HTML 이 CRLF 로 풀린다). 대신 임시 worktree(`git -c core.autocrlf=false worktree add`)에서 cherry-pick 했다.
+- node-fetch v2 는 중간에 끊으면(abort) 응답 본문 스트림에 `'error'` 를 직접 쏜다. 듣는 쪽이 없으면 서버가 죽으므로 응답을 받자마자 `r.body.on('error', () => {})` 를 단다.
+- Node 24 는 접속할 때 `lookup` 을 `{all:true}` 로 부른다(IPv4/IPv6 번갈아 시도). 직접 만든 lookup 은 배열 모양과 낱개 모양 둘 다 돌려줄 수 있어야 한다.
