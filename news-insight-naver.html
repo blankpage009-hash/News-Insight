@@ -2506,8 +2506,10 @@
       document.getElementById('index-row')?.addEventListener('wheel', (e) => {
         const row = e.currentTarget;
         if (row.scrollWidth <= row.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-        row.scrollLeft += e.deltaY;
-        e.preventDefault();
+        // 줄 끝에 닿아 더 안 밀리면 막지 않는다 → 그 위에서 휠을 굴려도 페이지는 아래로 내려간다
+        const before = row.scrollLeft;
+        row.scrollLeft += e.deltaY * (e.deltaMode === 1 ? 16 : 1);   // Firefox 는 '줄' 단위로 준다
+        if (row.scrollLeft !== before) e.preventDefault();
       }, { passive: false });
 
       // [추가] 레일 하단 키워드 랭킹 (Phase 7 C1) · 서버 캐시를 읽기만 하므로 가볍다
