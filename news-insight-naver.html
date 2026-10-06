@@ -160,8 +160,11 @@
   #app-logo {
     --logo-h: 1.5rem;
   }
-  @media (min-width: 640px)  { #app-logo { --logo-h: 1.9rem; } }
-  @media (min-width: 1024px) { #app-logo { --logo-h: 2.4rem; } }   /* 15px 기준 36px */
+  @media (min-width: 640px)  { #app-logo { --logo-h: 1.8rem; } }
+  @media (min-width: 1024px) { #app-logo { --logo-h: 2.27rem; } }  /* 15px 기준 34px (글자 2px 줄인 만큼 마크도 축소) */
+  /* 부제(Real-Time Wire Desk)는 기존 크기보다 1px 축소 */
+  #app-subtitle { font-size: calc(0.75rem - 1px); }
+  @media (min-width: 1024px) { #app-subtitle { font-size: calc(0.87rem - 1px); } }
 
   .logo-mark {
     display: block;
@@ -170,7 +173,7 @@
     height: var(--logo-h);
   }
   .logo-word {
-    font-size: calc(var(--logo-h) * 1.1);   /* 2.4rem → 2.64rem ≈ 40px */
+    font-size: calc(var(--logo-h) * 1.1 - 2px);   /* 데스크톱 약 40px → 38px */
     font-weight: 800;
     letter-spacing: -0.03em;
     line-height: 1;
@@ -990,7 +993,7 @@
   .bc-list { margin: 1rem 0 2rem; border-top: 2px solid rgb(var(--c-paper)); }
   .bc-row {
     display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 4px 16px;
-    padding: 18px 0; border-bottom: 1px solid rgb(var(--c-paper) / .4);
+    padding: 14px 0; border-bottom: 1px solid rgb(var(--c-paper) / .4);
     transition: background-color .15s;
   }
   .bc-row:hover { background: rgb(var(--c-ink2)); }
@@ -1000,9 +1003,10 @@
   .bc-rbody { grid-area: 3 / 2; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
   .bc-rmid { display: flex; gap: 16px; align-items: flex-start; }
   .bc-rmid > .bc-rsum { flex: 1; min-width: 0; }
-  .bc-row .bc-thumb { width: 120px; height: 80px; }
+  /* 사진은 제목 윗줄에 맞춰 오른쪽 열에 둔다(요약 아래 빈 칸이 생기지 않게) */
+  .bc-row .bc-thumb { grid-area: 2 / 3 / 4 / 4; align-self: start; width: 120px; height: 80px; }
   .bc-rsum  { font-size: .933rem; line-height: 1.6; color: #444141; text-wrap: pretty; word-break: keep-all; }
-  .bc-row .bc-save { grid-area: 1 / 3 / 4 / 4; align-self: start; }
+  .bc-row .bc-save { grid-area: 1 / 3 / 2 / 4; align-self: center; margin: -6px 0; }
   .bc-racts { display: flex; flex-wrap: wrap; gap: 6px; }
   .bc-row .bc-act { padding: 5px 10px; font-size: .8rem; border: 1px solid rgb(var(--c-paper) / .4); }
   .bc-row .bc-act + .bc-act { border-left-width: 1px; }
@@ -1976,10 +1980,7 @@
     <div class="modal-pop pv-shell max-w-[880px]" onclick="event.stopPropagation()">
       <!-- sheet-grab : 모바일에서 아래로 쓸어 닫기를 시작할 수 있는 구역 -->
       <div class="pv-head sheet-grab">
-        <span class="pv-label">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
-          주요 내용
-        </span>
+        <span class="pv-label">주요 내용</span>
         <span id="brief-meta" class="pv-meta"></span>
         <button onclick="closeBrief()" title="닫기" aria-label="닫기" class="pv-close">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -2278,7 +2279,7 @@
       moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
       monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
       lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
-      bookmark: '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/>',
+      bookmark: '<path d="M6 3h12v18l-6-5-6 5Z"/>',   // 모서리를 둥글리지 않은 각진 모양
       history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
       link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
       lightbulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
@@ -2382,7 +2383,7 @@
     // 담긴 상태는 안을 채워서 표시한다. (테두리만으로는 켜졌는지 알기 어렵다)
     function bookmarkSvg(on, cls) {
       return `<svg class="${cls || ''}" viewBox="0 0 24 24" fill="${on ? 'currentColor' : 'none'}"
-        stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS.bookmark}</svg>`;
+        stroke="currentColor" stroke-width="1.75" stroke-linecap="butt" stroke-linejoin="miter">${ICON_PATHS.bookmark}</svg>`;
     }
 
     // 팝업(주요 내용 · Insight) 아래 버튼 바의 저장 버튼을 지금 기사 기준으로 맞춘다.
@@ -5769,9 +5770,10 @@
             ${briefSaveBtnHtml(item, 'row')}
             <h4 class="bc-rtitle bc-dim brief-open" ${briefOpenAttrs(item)}>${item.title}</h4>
             <div class="bc-rbody">
-              <div class="bc-rmid">${lead ? `<p class="bc-rsum bc-dim brief-open" onclick="openBrief(${item.id})">${lead}</p>` : ''}${thumbSlotHtml(item)}</div>
+              <div class="bc-rmid">${lead ? `<p class="bc-rsum bc-dim brief-open" onclick="openBrief(${item.id})">${lead}</p>` : ''}</div>
               ${briefActionsHtml(item, 'bc-racts', opts.saved)}
             </div>
+            ${thumbSlotHtml(item)}
           </article>`;
           }).join('')}
         </div>`;
