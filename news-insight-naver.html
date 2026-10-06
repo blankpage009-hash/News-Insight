@@ -181,7 +181,7 @@
     height: var(--logo-h);
   }
   .logo-word {
-    font-size: calc(var(--logo-h) * 1.1 - 1px);   /* 데스크톱 약 34px */
+    font-size: calc(var(--logo-h) * 1.1);   /* 데스크톱 약 35px */
     font-weight: 800;
     letter-spacing: -0.03em;
     line-height: 1;
@@ -374,9 +374,9 @@
   @media (max-width: 1023.98px) {
     #sidebar, #nav-scrim { display: none !important; }
 
-    #app-header { padding: 10px 16px; }
+    #app-header { padding: 10px 16px 8px; }   /* 아래를 2px 줄여 부제 아래 여백을 좁힘 */
     #app-logo { --logo-h: 24px; }
-    #app-logo .logo-word { font-size: 20px; letter-spacing: -.025em; margin-left: 8px; }
+    #app-logo .logo-word { font-size: 21px; letter-spacing: -.025em; margin-left: 8px; }
     #live-badge { gap: 8px; }
     #current-date { display: none; }
     #current-time { font-size: 13px; font-weight: 400; letter-spacing: 0; color: rgb(var(--c-muted)); }
@@ -415,7 +415,7 @@
     #cat-header-icon { display: none; }
     #cat-header h2 {
       flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      font-size: 20px; font-weight: 800; line-height: 1.2; letter-spacing: -.02em; color: rgb(var(--c-paper));
+      font-size: 20px; font-weight: 800; line-height: 1.2; letter-spacing: -.02em; color: rgb(var(--c-gold2));   /* 데스크톱 제목(text-gold2)과 같은 강조색 */
     }
     #cat-header-count { font-size: 12px; color: rgb(var(--c-muted)); }
     #status-line { order: 9; flex-basis: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: rgb(var(--c-muted)); padding-bottom: 4px; }
@@ -769,7 +769,7 @@
       background: rgb(var(--c-ink)); border-bottom: 2px solid rgb(var(--c-paper));
     }
     .pv-instabs button {
-      display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px;
+      display: flex; align-items: center; justify-content: center; gap: 6px; height: 38px; padding: 0 16px;
       font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
       transition: background-color .15s, color .15s;
     }
@@ -1437,7 +1437,7 @@
     .pv-shell > .pv-head { flex-wrap: nowrap; min-height: 52px; padding: 0 6px 0 16px; gap: 10px; }
     .pv-shell > .pv-head .pv-close { width: 44px; height: 44px; color: rgb(var(--c-paper)); }
     .pv-shell > .pv-head .pv-close svg { width: 22px; height: 22px; }
-    .pv-shell > .pv-foot { gap: 0; padding: 0 0 calc(22px + env(safe-area-inset-bottom, 0px)); }   /* 아이폰 둥근 모서리에 글자가 잘리지 않게 하단 탭(#tab-bar)과 같은 22px 를 더 띄움 */
+    .pv-shell > .pv-foot { gap: 0; padding: 0 0 calc(12px + env(safe-area-inset-bottom, 0px)); }   /* 아이폰 둥근 모서리에 글자가 잘리지 않게 12px 를 더 띄움 */
     .pv-shell > .pv-foot .pv-note:empty { display: none; }
     .pv-shell > .pv-foot .pv-note { flex-basis: 100%; padding: 8px 16px; font-size: 11px; border-bottom: 1px solid rgb(var(--c-paper) / .4); }
     .pv-shell > .pv-foot .pv-actions { width: 100%; margin: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; }
@@ -1526,7 +1526,7 @@
   <!-- 헤더 + 지수 티커 (스크롤해도 상단 고정) -->
   <div class="sticky top-0 z-40" id="top-bar">
   <header id="app-header" class="border-b-2 border-paper bg-rail/90 backdrop-blur px-4 py-3 lg:px-8 lg:pt-6 lg:pb-4 flex justify-between items-center">
-    <div class="flex items-center gap-2 lg:gap-3 min-w-0">
+    <div class="flex flex-col items-start sm:flex-row sm:items-center gap-0 sm:gap-2 lg:gap-3 min-w-0">
       <!-- 로고(오렌지 뉴스피드 마크 + Beyond News 워드마크) + 오른쪽에 밑선 맞춰 붙는 문구 -->
       <div class="flex items-end gap-2 lg:gap-3 min-w-0">
         <h1 class="min-w-0 shrink">
@@ -1538,13 +1538,12 @@
               <rect x="4" y="10.25" width="11" height="3.5" fill="rgb(var(--c-ink))"/>
               <rect x="4" y="16" width="6" height="3.5" fill="rgb(var(--c-ink))"/>
             </svg>
-            <span class="logo-word">Beyond News</span>
-            <!-- 부제(v3.0 포함)가 숨는 좁은 화면(sm 미만)에서만 버전을 로고 옆에 보인다 -->
-            <span class="sm:hidden ml-1.5 self-end text-[calc(0.65rem+1px)] font-semibold leading-none text-muted pb-[3px]">v3.0</span>
-          </span>
+            <span class="logo-word">Beyond News</span>          </span>
         </h1>
         <p id="app-subtitle" class="font-sans text-muted uppercase tracking-[0.08em] leading-none text-[0.75rem] lg:text-[0.87rem] pb-[2px] whitespace-nowrap hidden sm:block">Real-Time Wire Desk <span class="text-[calc(0.7125rem+1px)] tracking-normal normal-case ml-1.5">v3.0</span></p>
       </div>
+      <!-- 부제가 숨는 좁은 화면(sm 미만)에서는 로고 글자 아래(글자 시작선에 맞춤)에 작게 보인다 -->
+      <p class="sm:hidden ml-[35px] mt-2 text-[calc(0.65rem+1px)] font-normal leading-none text-muted whitespace-nowrap">Real-Time Wire Desk&ensp;v3.0</p>
     </div>
 
     <!-- [추가] Phase 7 D1 · 시안 01번 : 헤더 가운데 검색창 (데스크톱 전용)
@@ -6745,9 +6744,11 @@
           return;
         }
         document.getElementById('insight-body').innerHTML = insightHtml(data);
-        document.getElementById('insight-note').textContent = data.partial
-          ? `원문 본문을 읽지 못해 네이버 요약문만으로 분석했습니다 · 자세한 내용은 원문 보기를 이용하세요`
-          : `AI(${data.model || 'Gemini'})가 원문을 읽고 두 관점으로 분석했습니다 · 해석·전망은 참고용입니다`;
+        // 모바일(1024px 미만)에서는 ' · ' 자리에서 줄을 바꾼다
+        const noteBreak = '<span class="hidden lg:inline"> · </span><br class="lg:hidden">';
+        document.getElementById('insight-note').innerHTML = data.partial
+          ? `원문 본문을 읽지 못해 네이버 요약문만으로 분석했습니다${noteBreak}자세한 내용은 원문 보기를 이용하세요`
+          : `AI(${esc(data.model || 'Gemini')})가 원문을 읽고 두 관점으로 분석했습니다${noteBreak}해석·전망은 참고용입니다`;
       } catch (e) {
         console.error(e);
         document.getElementById('insight-body').innerHTML = `<div class="p-7">${popupErrHtml('인사이트를 불러오지 못했습니다.')}</div>`;
