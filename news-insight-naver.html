@@ -220,7 +220,7 @@
   #top-bar, main { max-width: 100%; }
   ::selection { background: rgb(var(--c-gold) / .33); }
 
-  /* [수정] 흐르는 지수 티커를 없애고, 데스크톱은 우측 마켓 레일 · 모바일은 간이 지수 바로 나눴다.
+  /* [수정] 흐르는 지수 티커를 없애고, 데스크톱은 헤더 아래 지수 가로 줄(v3 #index-row) · 모바일은 간이 지수 바로 나눴다.
      (시안 01번 / 10번) 값이 제자리에 멈춰 있어야 읽기가 쉽고, 흐름을 붙잡을 필요도 없다. */
 
   /* --- 모바일 : 헤더 아래 가로 지수 바 (손가락으로 밀어서 본다) --- */
@@ -291,81 +291,141 @@
   }
   .strip-sep { flex: none; width: 1px; background: rgb(var(--c-line)); }
 
-  /* --- 데스크톱 : 우측 마켓 레일 --- */
-  #market-rail { display: none; }
+  /* ---------------------------------------------------------------
+     [수정] v3 Phase 2 : 데스크톱(≥1024px) 골격 = 시안 2a
+       헤더 아래로 [지수 가로 줄] → [카테고리 탭] → [하위 섹션 칩] 이 상단바(#top-bar)에 붙고,
+       본문 오른쪽에 300px 패널이 선다. 좌측 사이드바는 데스크톱에서 숨긴다(모바일 드로어로는 그대로 쓴다).
+       이 요소들의 보이기/숨기기는 전부 여기 @media 한 곳에서 정한다.
+       (id 선택자가 lg:hidden 같은 클래스를 이겨서, 둘을 섞으면 어느 쪽이 이길지 헷갈린다)
+     --------------------------------------------------------------- */
+  #index-row, #cat-tabs, #cat-chips, #market-rail { display: none; }
   @media (min-width: 1024px) {
-    /* 위 여백은 좌측 사이드바(.side-scroll)와 똑같은 규칙을 쓴다.
-       '가만히 있을 때 위치(margin-top)' 와 '틀고정 위치(top)' 를 같은 값으로 맞춰야
-       스크롤을 시작해도 상단바와의 간격이 변하지 않고, 좌측 SECTION · 본문과 윗선이 맞는다. */
+    #sidebar { display: none; }
+
+    /* 지수 가로 줄 : 흐르지 않는다. 1024px 처럼 다 안 들어가는 폭에서는 이 줄만 옆으로 밀어서 본다 */
+    #index-row {
+      display: flex;
+      align-items: center;
+      gap: 1.333rem;                        /* 시안 20px */
+      padding: .667rem 2rem;                /* 시안 10px 32px */
+      border-bottom: 2px solid rgb(var(--c-paper));
+      background: rgb(var(--c-ink));
+      font-size: .8rem;                     /* 시안 12px */
+      white-space: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    #index-row::-webkit-scrollbar { height: 0; }
+
+    /* 카테고리 탭 : 켜진 탭만 검정 바탕 */
+    #cat-tabs {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .667rem 2rem;                /* 시안 10px 32px */
+      border-bottom: 1px solid rgb(var(--c-line));
+      background: rgb(var(--c-ink));
+    }
+    #cat-chips {
+      background: rgb(var(--c-ink));
+      border-bottom: 1px solid rgb(var(--c-line));
+    }
+    #cat-chips:empty { display: none; }
+    #cat-chips:not(:empty) {
+      display: flex;
+      gap: .4rem;
+      padding: .5rem 2rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    /* 본문 | 오른쪽 패널 300px. 사이에 틈을 두지 않고 패널의 굵은 왼쪽 선으로만 나눈다 (시안 2a) */
+    #main-grid {
+      grid-template-columns: minmax(0, 1fr) 300px;
+      column-gap: 0;
+      padding: 0;
+    }
+    /* 시안 본문 좌우 32px. 아래 여백도 main 이 아니라 여기서 준다 :
+       main 에 주면 '화면 높이 − 상단바' 로 꽉 찬 패널 + 그 여백만큼 기사가 적은 화면에서도 페이지가 밀려,
+       패널 머리가 상단바 밑으로 숨는다. */
+    #content-col { grid-column: auto; padding: 0 2rem 1.5rem; }
+    /* 패널을 숨기면 칸 자체를 없앤다 (예전 레일처럼 펼치기 버튼만 남는 띠는 두지 않는다) */
+    body.rail-collapsed #main-grid { grid-template-columns: minmax(0, 1fr); }
+
     #market-rail {
       display: flex;
       flex-direction: column;
-      gap: 0.85rem;
       position: sticky;
-      margin-top: 1.5rem;
-      top: calc(var(--stick-top, 121px) + 1.5rem);
-      max-height: calc(100vh - var(--stick-top, 121px) - 3rem);
+      top: var(--stick-top, 121px);
+      /* 목록이 짧아도 왼쪽 선이 화면 아래 끝까지 내려오도록 높이를 채운다 */
+      height: calc(100vh - var(--stick-top, 121px));
+      border-left: 2px solid rgb(var(--c-paper));
       overflow-y: auto;
-      overflow-x: hidden;   /* [수정] overflow-y만 auto로 두면 브라우저가 overflow-x도 auto로 계산해
-                                내용이 살짝만 넘쳐도 가로 스크롤 막대가 하단에 뜬다. 세로만 허용한다. */
+      overflow-x: hidden;   /* overflow-y 만 auto 로 두면 가로 막대가 같이 뜰 수 있다 */
       overscroll-behavior: contain;
     }
-    /* [수정] 지수 카드(원/달러 환율까지)는 창이 낮아져도 절대 줄어들지 않는다.
-       공간이 모자라면 그 아래(키워드 랭킹)만 스크롤해서 본다. */
-    #market-rail > .rail-head,
-    #market-rail > #rail-extra {
-      flex-shrink: 0;
-    }
+    body.rail-collapsed #market-rail { display: none; }
   }
-  /* 지수 목록 상자 : 칸을 나누는 건 테두리 하나뿐 (시안 240행) */
-  .rail-box {
+  .idx-item { display: inline-flex; align-items: baseline; gap: .533rem; flex: none; }   /* 시안 8px */
+  button.idx-item { cursor: pointer; }
+  @media (hover: hover) { button.idx-item:hover .idx-name { color: rgb(var(--c-gold)); } }
+  .cat-tab {
+    padding: .333rem .733rem;             /* 시안 5px 11px */
+    font-size: .867rem;                   /* 시안 13px */
+    color: rgb(var(--c-paper));
+    white-space: nowrap;
+    transition: background-color .15s, color .15s;
+  }
+  .cat-tab:hover { background: rgb(var(--c-ink2)); }
+  .cat-tab.is-on { background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); font-weight: 600; }
+  .cat-chip {
+    flex: none;
+    padding: .25rem .7rem;
     border: 1px solid rgb(var(--c-line));
-    border-radius: 0;
-    overflow: hidden;
-    background: rgb(var(--c-ink2));
-    flex-shrink: 0;   /* [수정] overflow:hidden이 걸린 flex 자식은 기본적으로 내용보다 더 줄어들 수 있어,
-                          창 높이가 낮아지면 안의 지수 줄(NASDAQ·DOW 등)이 잘려 보이던 문제를 막는다 */
+    font-size: .8rem;
+    color: rgb(var(--c-muted));
+    white-space: nowrap;
+    transition: background-color .15s, color .15s, border-color .15s;
   }
-  .rail-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 11px 13px;
+  .cat-chip:hover { color: rgb(var(--c-paper)); border-color: rgb(var(--c-paper)); }
+  /* 탭(검정)과 헷갈리지 않게 칩은 연한 레드(#fff2ef) + 레드 글자로 켠다 */
+  .cat-chip.is-on { background: #fff2ef; border-color: rgb(var(--c-gold)); color: rgb(var(--c-gold)); font-weight: 600; }
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: none; color: rgb(var(--c-paper));
+    transition: background-color .15s, color .15s;
+  }
+  .icon-btn:hover { background: rgb(var(--c-ink2)); }
+  .icon-btn.is-on { color: rgb(var(--c-gold)); }
+
+  /* 오른쪽 패널의 칸 머리 (시안 : 13px · 800 · 자간 .12em · 아래 2px 선) */
+  .panel-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: .5rem;
+    padding: 1.333rem 1.333rem .667rem;   /* 시안 20px 20px 10px */
+    border-bottom: 2px solid rgb(var(--c-paper));
+  }
+  .panel-head h2 { font-size: .867rem; font-weight: 800; letter-spacing: .12em; }
+  .panel-sec { flex-shrink: 0; }
+  .panel-more {
+    display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+    width: 100%; padding: .6rem 1.333rem;
+    font-size: .867rem; color: rgb(var(--c-paper));
     border-bottom: 1px solid rgb(var(--c-line));
-    width: 100%;
-    text-align: left;
     transition: background-color .15s;
   }
-  .rail-row:last-child { border-bottom: 0; }
-  /* 차트가 있는 지수만 눌러서 팝업을 열 수 있다 */
-  .rail-row.is-chart { cursor: pointer; }
-  @media (hover: hover) {
-    .rail-row.is-chart:hover { background: rgb(var(--c-gold) / .08); }
-  }
-  /* 항목이 홀수면 마지막 카드가 반 칸만 차지해 어색하다 → 한 줄을 다 쓰게 한다 */
-  #rail-extra > :last-child:nth-child(odd) { grid-column: 1 / -1; }
-  .rail-card {
-    padding: 10px 12px;
-    border: 1px solid rgb(var(--c-line));
-    border-radius: 0;
-    background: rgb(var(--c-ink2));
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
+  .panel-more:hover, .panel-more.is-on { background: rgb(var(--c-ink2)); }
 
   /* --- [추가] 키워드 랭킹 (Phase 7 C1 · 시안 01번 레일 하단) --- */
   /* 보이기/숨기기를 Tailwind 의 .hidden + .flex 조합으로 하면 어느 쪽이 이기는지가
      CDN 출력 순서에 달린다. 이 블록은 자체 클래스 하나로만 여닫는다. */
-  .rail-kw { display: none; flex-direction: column; gap: 0.7rem; }
+  .rail-kw { display: none; flex-direction: column; flex-shrink: 0; }
   .rail-kw.is-on { display: flex; }
   .rail-kw-row {
     display: flex;
     align-items: center;
     gap: 10px;
     width: 100%;
-    padding: 8px 4px;
+    padding: .6rem 1.333rem;   /* [수정] v3 : 오른쪽 패널 안쪽 여백(시안 9px 20px). 글자 모양은 Phase 4 에서 맞춘다 */
     text-align: left;
     border-bottom: 1px solid rgb(var(--c-line) / .7);
     cursor: pointer;
@@ -671,28 +731,6 @@
 
   select { background-image: none; }
 
-  /* 좌측 카테고리바 : 화면에 고정 + 사이드바 안에서만 따로 스크롤
-     [수정] 위 여백을 main 의 padding 이 아니라 사이드바 자신의 margin 으로 준다.
-            그래야 '가만히 있을 때 위치(margin)' 와 '틀고정 위치(top)' 가 같은 값이 되어
-            스크롤을 시작해도 상단바와의 간격이 변하지 않는다. */
-  @media (min-width: 1024px) {
-    .side-scroll {
-      position: sticky;
-      margin-top: 1.5rem;
-      top: calc(var(--stick-top, 121px) + 1.5rem);
-      max-height: calc(100vh - var(--stick-top, 121px) - 3rem);
-      /* 구분선이 목록 길이에 따라 중간에서 끊기지 않도록 높이를 화면 끝까지 채운다 */
-      min-height: calc(100vh - var(--stick-top, 121px) - 3rem);
-      overflow-y: auto;
-      overscroll-behavior: contain;   /* 사이드바 끝에 닿아도 본문이 따라 움직이지 않음 */
-      scrollbar-gutter: stable;
-      /* [수정] 사이드바 박스를 없애고, 기사 영역과는 세로 구분선 하나로만 나눈다.
-         선을 안쪽 div 가 아니라 스크롤 컨테이너에 두어야 목록이 짧아도 선이 끝까지 내려온다. */
-      padding-right: 1.25rem;
-      border-right: 1px solid rgb(var(--c-line));
-    }
-  }
-
   /* ---------------------------------------------------------------
      [추가] 모바일(<1024px) 전용 조정
        데스크톱 레이아웃은 건드리지 않고 이 블록 안에서만 다르게 잡는다.
@@ -820,62 +858,40 @@
   header .sec-filters.is-open { display: flex; }
   .sec-filter-btn.is-open { color: rgb(var(--c-gold)); border-color: rgb(var(--c-gold) / .5); }
 
-  /* [추가] 데스크톱(≥1024px) : 필터를 펼치면 '필터' 토글 버튼 왼쪽에 나란히 펼쳐진다.
-     (토글 버튼의 순서를 뒤로 밀어, 같은 줄에서 필터 묶음이 버튼보다 앞에 오게 한다) */
+  /* [수정] v3 Phase 2 : 데스크톱(≥1024px) 제목 바 필터 = 시안 2a 의 '필터' 아이콘(26px)
+     누르면 같은 줄에 펼치지 않고, 아이콘 아래 오른쪽 정렬 드롭다운으로 뜬다. (모바일과 같은 방식)
+     섹션 박스(.sec-filter-btn · '전체' 화면)는 Phase 6 전까지 예전처럼 같은 줄에 펼친다. */
   @media (min-width: 1024px) {
-    #cat-header-filter-btn { order: 1; }
     .sec-filter-btn { order: 1; }
 
-    /* [수정] 제목 바 : 접혀 있을 땐 토글 버튼이(ml-auto로) 오른쪽 끝에 붙고,
-       펼치면 오른쪽으로 밀리는 역할을 필터 묶음이 넘겨받아 버튼 바로 왼쪽에 붙는다. */
-    body.hf-open #cat-header-filter-btn { margin-left: 0; }
-    body.hf-open #cat-header-filters { margin-left: auto; }
-  }
-
-  /* ---------------------------------------------------------------
-     [추가] 데스크톱(≥1024px) : 좌측 사이드바 폭 / 접기·펼치기
-       body.side-collapsed 하나로만 상태를 관리한다.
-         · 접으면 사이드바를 완전히 없애지 않고, 구분선과 펼치기 버튼만 남는
-           좁은 띠로 줄인다. (선이 사라졌다 나타나면 화면이 출렁여 보인다)
-         · 모바일(<1024px)에서는 사이드바가 이미 드로어라서 이 상태를 무시한다.
-     --------------------------------------------------------------- */
-  @media (min-width: 1024px) {
-    /* [수정] 시안 01번의 3단 구조 : 좌측 섹션 224 / 본문 / 우측 마켓 레일 300 */
-    #main-grid { grid-template-columns: 224px minmax(0, 1fr) 300px; }
-    #content-col { grid-column: span 1 / span 1; }
-
-    body.side-collapsed #main-grid { grid-template-columns: 46px minmax(0, 1fr) 300px; }
-    /* [추가] 마켓 레일도 접을 수 있다. 접으면 펼치기 버튼 하나만 남는 띠가 된다. */
-    body.rail-collapsed #main-grid { grid-template-columns: 224px minmax(0, 1fr) 34px; }
-    body.rail-collapsed.side-collapsed #main-grid { grid-template-columns: 46px minmax(0, 1fr) 34px; }
-    body.rail-collapsed #market-rail > :not(.rail-head) { display: none; }
-    body.rail-collapsed .rail-head > :not(#rail-toggle-btn) { display: none; }
-    body.rail-collapsed .rail-head { justify-content: center; }
-    body.rail-collapsed #rail-toggle-btn { margin-right: 0; }
-    body.side-collapsed #sidebar > div { display: none; }
-    body.side-collapsed .side-scroll {
-      padding-right: 0;
-      overflow: hidden;
-      scrollbar-gutter: auto;
-    }
-  }
-  /* 펼치기(») 버튼 : 접혀 있는 동안 남은 띠의 맨 위에 놓인다 */
-  #sidebar-expand-btn { display: none; }
-  @media (min-width: 1024px) {
-    body.side-collapsed #sidebar-expand-btn {
-      display: inline-flex;
-      align-items: center;
+    #cat-header > div { position: relative; }
+    #cat-header-filter-btn {
+      width: 26px; height: 26px; padding: 0;
       justify-content: center;
-      padding: .45rem;
-      margin-right: .5rem;
-      color: rgb(var(--c-muted));
-      border-radius: 0;
-      transition: color .15s ease, background-color .15s ease;
+      border: 0;
+      color: rgb(var(--c-paper));
     }
-    body.side-collapsed #sidebar-expand-btn:hover {
-      color: rgb(var(--c-gold));
-      background: rgb(var(--c-ink3));
+    #cat-header-filter-btn svg { width: 18px; height: 18px; stroke-width: 2; }
+    #cat-header-filter-btn .hf-label { display: none; }
+    #cat-header-filter-btn:hover { background: rgb(var(--c-ink2)); }
+    body.hf-open #cat-header-filter-btn { color: rgb(var(--c-gold)); }
+    body.hf-open #cat-header-filters {
+      position: absolute;
+      top: calc(100% + .25rem);
+      right: .25rem;
+      z-index: 45;
+      width: max-content;
+      min-width: 11rem;
+      padding: .5rem;
+      flex-direction: column;
+      align-items: stretch;
+      flex-wrap: nowrap;
+      gap: .375rem;
+      background: rgb(var(--c-ink2));
+      border: 2px solid rgb(var(--c-paper));
+      box-shadow: 0 14px 30px rgb(0 0 0 / .12);
     }
+    body.hf-open #cat-header-filters > select { width: 100%; }
   }
 
   ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -1243,8 +1259,21 @@
     </div>
   </header>
 
-  <!-- [수정] 지수 : 데스크톱에서는 우측 마켓 레일(#market-rail)로 옮겼다. (시안 01번)
-       모바일에는 시안 10번처럼 간이 지수 바만 남긴다. 흐르지 않고, 손가락으로 밀어서 본다. -->
+  <!-- [추가] v3 Phase 2 · 시안 2a : 데스크톱(≥1024px) 전용 세 줄. 보이기/숨기기는 <style> 의 @media 한 곳에서 정한다.
+       ① 지수 가로 줄 (흐르지 않음 · 누르면 차트)  ② 카테고리 탭 + 관리자 Setting  ③ 하위 섹션 칩 (물류·경제·증시·스포츠에서만)
+       예전 좌측 사이드바(#sidebar)는 지우지 않았다. 모바일 드로어로 그대로 쓴다. -->
+  <div id="index-row" aria-label="시장 지표"></div>
+  <nav id="cat-tabs" aria-label="섹션">
+    <div id="cat-tab-list" class="flex items-center gap-1 min-w-0"></div>
+    <!-- 시안 2a 탭 줄 오른쪽 끝 아이콘(title "관리자 Setting"). Phase 8 에서 화면 설정과 한 창으로 합친다 -->
+    <button id="admin-setting-btn" onclick="toggleSettingPanel()" title="관리자 Setting" aria-label="관리자 Setting"
+      class="icon-btn ml-auto w-[32px] h-[32px]">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg>
+    </button>
+  </nav>
+  <div id="cat-chips" aria-label="하위 섹션"></div>
+
+  <!-- [수정] 지수 : 데스크톱은 위 #index-row, 모바일은 아래 간이 지수 바. 둘 다 흐르지 않는다. -->
   <!-- [추가] 시안 10번 : 헤더 아래 알약 모양 카테고리 가로 스크롤 (모바일 전용) -->
   <div id="mobile-cats" class="lg:hidden bg-rail/90 backdrop-blur overflow-x-auto"></div>
   <div id="index-strip" class="lg:hidden bg-rail border-b border-line overflow-x-auto"></div>
@@ -1267,14 +1296,9 @@
        각자 자기 padding/margin 으로 만든다. (그래야 스크롤해도 그 간격이 변하지 않는다) -->
   <main id="main-grid" class="max-w-[1500px] mx-auto px-4 pb-4 lg:px-6 lg:pb-6 grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
 
-    <!-- 좌측 사이드바 (모바일에서는 햄버거로 여는 슬라이드 드로어) -->
-    <aside id="sidebar" class="lg:col-span-1 side-scroll">
-      <!-- [수정] 데스크톱 : 사이드바가 접혀 있을 때만 띠 맨 위에 나타나는 펼치기 버튼 (»)
-           (화면 왼쪽 가장자리에 띄우던 것을 사이드바 안으로 옮겨, 남은 구분선과 나란히 보이게 했다) -->
-      <button id="sidebar-expand-btn" onclick="toggleSidebar()" aria-controls="sidebar" aria-expanded="false"
-        aria-label="사이드바 펼치기" title="사이드바 펼치기 (Ctrl+\)">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg>
-      </button>
+    <!-- 좌측 사이드바 = 모바일 슬라이드 드로어 전용.
+         [수정] v3 Phase 2 : 데스크톱에서는 숨기고 상단 가로 탭(#cat-tabs)이 대신한다. 그래서 접기·펼치기 버튼은 없앴다. -->
+    <aside id="sidebar" class="side-scroll">
 
       <!-- [수정] 카드 박스(배경/테두리/둥근 모서리) 제거 : 구분선만으로 구획을 나눈다 -->
       <div class="space-y-2">
@@ -1282,12 +1306,6 @@
         <!-- 제목(영문) : 기존 1.18rem → 3pt(=4px) 크게 → 1pt 축소 → 사이드바 전체 1pt 재축소 (2026-08-16) -->
         <div class="flex items-center justify-between gap-2">
           <h2 class="font-semibold text-muted uppercase tracking-[0.14em] text-[1.20rem]">SECTION</h2>
-          <!-- [추가] 데스크톱 : 사이드바 접기 («) -->
-          <button id="sidebar-collapse-btn" onclick="toggleSidebar()" aria-controls="sidebar" aria-expanded="true"
-            aria-label="사이드바 접기" title="사이드바 접기 (Ctrl+\)"
-            class="hidden lg:inline-flex -mr-1 p-1.5 rounded-lg text-muted hover:text-gold hover:bg-ink3 transition shrink-0">
-            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></svg>
-          </button>
           <!-- [추가] 모바일 드로어 닫기 -->
           <button onclick="closeNav()" aria-label="메뉴 닫기"
             class="lg:hidden -mr-1 p-1.5 rounded-lg text-muted hover:text-gold hover:bg-ink3 transition shrink-0">
@@ -1346,7 +1364,7 @@
     </aside>
 
     <!-- 우측 콘텐츠 -->
-    <section id="content-col" class="lg:col-span-3 space-y-6 relative">
+    <section id="content-col" class="space-y-6 relative">
 
       <!-- [수정] 키워드 검색 패널 : 사이드바 '키워드 검색'을 누르면 팝업이 아니라
            이 기사 영역 맨 위에 바로 펼쳐지고, 검색 결과를 보는 동안 상단에 틀고정된다. -->
@@ -1456,12 +1474,13 @@
           <h2 id="cat-header-title" class="font-sans font-bold text-gold2 text-[1.42rem] leading-tight break-keep min-w-0"></h2>
           <span id="cat-header-count" class="text-paper/70 font-mono whitespace-nowrap"></span>
 
-          <!-- [추가] 모바일 전용 : 필터 열기/닫기 (제목이 필터에 밀려 잘리지 않도록 기본은 숨김) -->
+          <!-- 필터 열기/닫기 (제목이 필터에 밀려 잘리지 않도록 기본은 숨김)
+               [수정] v3 Phase 2 : 데스크톱은 글자 없이 시안 2a 의 26px 아이콘만 남는다 (.hf-label 숨김) -->
           <button id="cat-header-filter-btn" onclick="toggleHeaderFilters()" aria-expanded="false"
-            aria-controls="cat-header-filters" title="필터"
+            aria-controls="cat-header-filters" title="필터" aria-label="필터 (노출 건수 · 게재 기간 · 정렬)"
             class="ml-auto shrink-0 flex items-center gap-1 text-muted hover:text-gold border border-line rounded-lg px-2 py-1 text-[0.8rem] transition">
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
-            필터
+            <span class="hf-label">필터</span>
           </button>
 
           <!-- 제목 바 오른쪽 필터 (노출 건수 / 게재 기간 / 정렬) -->
@@ -1578,26 +1597,29 @@
 
     </section>
 
-    <!-- [추가] 우측 마켓 레일 (시안 01번) : 헤더에서 뺀 지수를 여기 세로로 세운다.
-         1024px 미만에서는 숨기고, 대신 헤더 아래 #index-strip 이 그 역할을 한다. -->
-    <aside id="market-rail" aria-label="시장 지표">
-      <div class="rail-head flex items-center justify-between gap-2">
-        <span class="font-mono text-[0.63rem] font-semibold label-wide text-muted2">MARKETS</span>
-        <span id="rail-time" class="font-mono text-[0.66rem] text-muted ml-auto"></span>
-        <!-- [추가] 마켓 레일 접기(») / 펼치기(«) · 사이드바와 같은 방식으로 기억한다 -->
-        <button id="rail-toggle-btn" onclick="toggleRail()" aria-controls="market-rail" aria-expanded="true"
-          aria-label="마켓 레일 접기" title="마켓 레일 접기"
-          class="-mr-1 p-1 rounded-lg text-muted hover:text-gold hover:bg-ink3 transition shrink-0">
-          <svg id="rail-toggle-icon" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg>
-        </button>
-      </div>
-      <div id="rail-indices" class="rail-box"></div>
-      <div id="rail-extra" class="grid grid-cols-2 gap-2"></div>
-      <!-- [추가] 키워드 랭킹 Top 5 (Phase 7 C1) : 셀 기사가 없으면 통째로 감춘다 -->
-      <div id="rail-keywords" class="rail-kw">
-        <span class="font-mono text-[0.63rem] font-semibold label-wide text-muted2">키워드 랭킹</span>
+    <!-- [수정] v3 Phase 2 : 우측 마켓 레일 → 시안 2a 의 '오른쪽 패널' (데스크톱 전용, 300px)
+         지수는 상단 #index-row 로 올라갔다. 여기엔 키워드 랭킹과 저장 기사만 남는다.
+         id(market-rail · rail-collapsed 저장값)는 예전 이름 그대로 쓴다. 모양은 Phase 4 에서 시안대로 다듬는다. -->
+    <aside id="market-rail" aria-label="오른쪽 패널">
+      <!-- 키워드 랭킹 Top 5 (Phase 7 C1) : 셀 기사가 없으면 통째로 감춘다 -->
+      <section id="rail-keywords" class="rail-kw">
+        <div class="panel-head">
+          <h2>키워드 랭킹</h2>
+          <span id="rail-time" class="text-[0.73rem] text-muted"></span>
+        </div>
         <div id="rail-keyword-list"></div>
-      </div>
+      </section>
+      <!-- 저장 기사 : 사이드바가 데스크톱에서 사라져, 저장 화면으로 가는 길을 여기 둔다 (Phase 4 에서 목록 + 이어보기) -->
+      <section class="panel-sec">
+        <div class="panel-head">
+          <h2>저장 기사</h2>
+          <span id="panel-saved-count" class="text-[0.73rem] text-muted"></span>
+        </div>
+        <button id="panel-saved-btn" onclick="selectCategory('saved')" class="panel-more">
+          <span>저장한 기사 전체 보기</span>
+          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </button>
+      </section>
     </aside>
   </main>
 
@@ -1646,7 +1668,7 @@
           <div id="count-setting-selects"></div>
         </div>
 
-        <!-- [추가] 화면 옵션 (Phase 7 A4) : 읽음 흐리게 · 마켓 레일 -->
+        <!-- [추가] 화면 옵션 (Phase 7 A4) : 읽음 흐리게 · 오른쪽 패널 -->
         <div class="space-y-2">
           <span class="popup-label block">화면 옵션</span>
           <div id="pref-toggles"></div>
@@ -2105,11 +2127,15 @@
       applySaveBtn(btn, isSavedKey(key));
     }
 
-    // 좌측 사이드바 맨 아래 '저장한 기사 (n)' 줄
+    // 좌측 사이드바(모바일 드로어) 맨 아래 '저장한 기사 (n)' 줄 + [추가] v3 오른쪽 패널 '저장 기사' 칸
     function renderSavedNav() {
+      const on = currentCategory === 'saved' && !settingMode;
+      const pCount = document.getElementById('panel-saved-count');
+      if (pCount) pCount.textContent = savedArticles.length + '건';
+      document.getElementById('panel-saved-btn')?.classList.toggle('is-on', on && !isKeywordMode());
+
       const btn = document.getElementById('saved-nav-btn');
       if (!btn) return;
-      const on = currentCategory === 'saved' && !settingMode;
       btn.querySelector('[data-saved-count]').textContent = savedArticles.length ? String(savedArticles.length) : '';
       btn.classList.toggle('bg-gold', on);
       btn.classList.toggle('text-ink', on);
@@ -2402,8 +2428,7 @@
       renderSettingToggle();        // [추가]
       renderThemeButtons();         // [추가] 테마 선택 버튼
       renderKeywordSettings();      // [추가]
-      restoreSidebarCollapsed();    // [추가] 지난번 사이드바 접힘 상태 복원
-      restoreRailCollapsed();       // [추가] 지난번 마켓 레일 접힘 상태 복원
+      restoreRailCollapsed();       // [추가] 지난번 오른쪽 패널(옛 마켓 레일) 숨김 상태 복원
       updateStickTop();
       window.addEventListener('resize', updateStickTop);
       // [수정] 로고 이미지·웹폰트가 늦게 로드되면 상단바가 그만큼 높아지는데,
@@ -2423,11 +2448,7 @@
       });
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && document.body.classList.contains('nav-open')) closeNav();
-        // [추가] 데스크톱 : Ctrl(⌘) + \ 로 사이드바 접기/펼치기
-        if ((e.ctrlKey || e.metaKey) && e.key === '\\' && !isMobileLayout()) {
-          e.preventDefault();
-          toggleSidebar();
-        }
+        // [삭제] v3 Phase 2 : Ctrl(⌘) + \ 사이드바 접기는 데스크톱 사이드바가 없어져 뺐다.
         // [추가] Phase 7 D1 : Ctrl(⌘) + K 로 헤더 검색창에 커서
         if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
           e.preventDefault();
@@ -2479,6 +2500,15 @@
 
       refreshIndexTicker();
       setInterval(refreshIndexTicker, 30000);
+      // [추가] v3 Phase 2 : 데스크톱 지수 가로 줄은 9칸이라 1440px 에서도 다 안 들어간다.
+      //   스크롤 막대를 숨겼으므로 마우스 휠(세로)을 가로 밀기로 바꿔 줘야 뒤쪽 지수를 볼 수 있다.
+      //   (트랙패드의 가로 밀기는 브라우저가 알아서 하므로 deltaX 가 큰 손짓은 건드리지 않는다)
+      document.getElementById('index-row')?.addEventListener('wheel', (e) => {
+        const row = e.currentTarget;
+        if (row.scrollWidth <= row.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+        row.scrollLeft += e.deltaY;
+        e.preventDefault();
+      }, { passive: false });
 
       // [추가] 레일 하단 키워드 랭킹 (Phase 7 C1) · 서버 캐시를 읽기만 하므로 가볍다
       refreshKeywordRank();
@@ -2518,66 +2548,20 @@
     function toggleNav() { setNav(!document.body.classList.contains('nav-open')); }
     function closeNav() { setNav(false); }
 
-    // ---------------------------------------------------------------
-    // [추가] 데스크톱 : 좌측 사이드바 숨김 / 펼치기
-    //   - 접으면 기사 영역이 화면 전체 폭을 쓴다.
-    //   - 마지막 상태는 localStorage 에 남겨 다음 방문 때도 그대로 열린다.
-    //   - 모바일은 드로어(nav-open)가 따로 있으므로 버튼 자체를 숨긴다.
-    // ---------------------------------------------------------------
-    const SIDEBAR_STORAGE_KEY = 'news-insight-sidebar-collapsed';
+    // [삭제] v3 Phase 2 : 데스크톱 좌측 사이드바 접기/펼치기(side-collapsed)는 사이드바가
+    //   데스크톱에서 사라지면서 없앴다. (예전 저장값 news-insight-sidebar-collapsed 는 이제 읽지 않는다)
 
-    function setSidebarCollapsed(collapsed, persist = true) {
-      document.body.classList.toggle('side-collapsed', collapsed);
-      // 사이드바 안의 접기(«) / 화면 왼쪽의 펼치기(») 버튼은 서로 반대 상태일 때만 보인다
-      ['sidebar-collapse-btn', 'sidebar-expand-btn'].forEach((id) => {
-        const btn = document.getElementById(id);
-        if (btn) btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-      });
-      if (persist) { try { localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? '1' : '0'); } catch {} }
-      updateStickTop();   // 폭이 바뀌면서 제목 바 높이도 달라질 수 있어 고정 기준값을 다시 잰다
-    }
-
-    function toggleSidebar() {
-      setSidebarCollapsed(!document.body.classList.contains('side-collapsed'));
-    }
-
-    function restoreSidebarCollapsed() {
-      let saved = '0';
-      try { saved = localStorage.getItem(SIDEBAR_STORAGE_KEY) || '0'; } catch {}
-      setSidebarCollapsed(saved === '1', false);
-    }
-
-    // [추가] 우측 마켓 레일 접기 · 사이드바와 같은 방식이다.
-    //   접으면 지수 목록이 사라지고 펼치기(«) 버튼만 남아, 기사 영역이 그만큼 넓어진다.
+    // [수정] v3 Phase 2 : 오른쪽 패널(옛 우측 마켓 레일) 숨기기.
+    //   예전엔 레일 머리의 » 버튼으로 접어 펼치기 버튼만 남는 띠가 됐지만,
+    //   이제 화면 설정의 '오른쪽 패널 표시' 토글로만 켜고 끄며, 끄면 칸 자체가 사라진다.
+    //   저장값(news-insight-rail-collapsed)은 그대로 이어 쓴다.
     const RAIL_STORAGE_KEY = 'news-insight-rail-collapsed';
-    let railBeforeSetting = null;   // 설정 화면에 들어오기 전의 레일 상태 (나갈 때 되돌린다)
-    // 겹화살표 두 방향 : 접기는 오른쪽(»), 펼치기는 왼쪽(«)
-    const RAIL_ARROW = {
-      collapse: '<path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/>',
-      expand: '<path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>',
-    };
+    let railBeforeSetting = null;   // 설정 화면에 들어오기 전의 패널 상태 (나갈 때 되돌린다)
 
     function setRailCollapsed(collapsed, persist = true) {
       document.body.classList.toggle('rail-collapsed', collapsed);
-      const btn = document.getElementById('rail-toggle-btn');
-      const ic = document.getElementById('rail-toggle-icon');
-      if (btn) {
-        btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-        const label = collapsed ? '마켓 레일 펼치기' : '마켓 레일 접기';
-        btn.setAttribute('aria-label', label);
-        btn.title = label;
-      }
-      if (ic) ic.innerHTML = collapsed ? RAIL_ARROW.expand : RAIL_ARROW.collapse;
       if (persist) { try { localStorage.setItem(RAIL_STORAGE_KEY, collapsed ? '1' : '0'); } catch {} }
       updateStickTop();
-    }
-
-    function toggleRail() {
-      const next = !document.body.classList.contains('rail-collapsed');
-      setRailCollapsed(next);
-      // 설정 화면에서 직접 접거나 편 것은 사용자의 새 취향이다.
-      //  (설정을 닫을 때 예전 상태로 되돌리면 방금 한 조작이 취소돼 버린다)
-      if (settingMode) railBeforeSetting = next;
     }
 
     function restoreRailCollapsed() {
@@ -2811,11 +2795,17 @@
       [...openSectionFilters].forEach((key) => toggleSectionFilters(key));
     }
 
-    // 드롭다운 바깥을 누르면 닫는다. (데스크톱은 같은 줄에 펼쳐 두므로 그대로 둔다)
+    // 드롭다운 바깥을 누르면 닫는다.
     function onDocClickCloseFilters(e) {
-      if (!isMobileLayout()) return;
       const el = (e.target instanceof Element) ? e.target : null;
       if (!el) return;
+      if (!isMobileLayout()) {
+        // [수정] v3 Phase 2 : 데스크톱도 제목 바 필터는 드롭다운이 됐다 → 바깥을 누르면 닫는다.
+        //   섹션 박스 필터('전체' 화면)는 아직 같은 줄에 펼쳐 두므로 그대로 둔다. (Phase 6)
+        if (document.body.classList.contains('hf-open')
+            && !el.closest('#cat-header-filters, #cat-header-filter-btn')) toggleHeaderFilters();
+        return;
+      }
       if (el.closest('#cat-header-filters, #cat-header-filter-btn, .sec-filters, .sec-filter-btn')) return;
       closeAllFilterDropdowns();
     }
@@ -3020,6 +3010,12 @@
       btn.classList.toggle('text-gold2', settingMode);
       btn.classList.toggle('bg-ink3', settingMode);
       btn.classList.toggle('text-muted', !settingMode);
+      // [추가] v3 Phase 2 : 데스크톱 탭 줄 오른쪽 '관리자 Setting' 아이콘도 같은 상태로 켠다
+      const adminBtn = document.getElementById('admin-setting-btn');
+      if (adminBtn) {
+        adminBtn.classList.toggle('is-on', settingMode);
+        adminBtn.setAttribute('aria-pressed', String(settingMode));
+      }
     }
 
     // [수정] 설정은 비밀번호로 잠겨 있다. 이미 확인한 세션이면 바로 열린다.
@@ -3276,9 +3272,10 @@
         set: (on) => { screenPrefs.dimRead = on; saveScreenPrefs(); applyDimRead(); },
       },
       {
-        key: 'rail', label: '마켓 레일 표시', hint: '오른쪽 지수 목록 · 넓은 화면에서만', wideOnly: true,
+        // [수정] v3 : '마켓 레일 표시' → '오른쪽 패널 표시'. 이름만 바꾸고 저장값은 그대로 쓴다.
+        key: 'rail', label: '오른쪽 패널 표시', hint: '키워드 랭킹 · 저장 기사 · 넓은 화면에서만', wideOnly: true,
         get: () => !document.body.classList.contains('rail-collapsed'),
-        // 설정 화면에서 바꾼 것도 사용자의 새 취향으로 본다. (toggleRail 과 같은 규칙)
+        // 설정 화면에서 바꾼 것도 사용자의 새 취향으로 본다. (설정을 닫을 때 되돌리면 방금 한 조작이 취소된다)
         set: (on) => { setRailCollapsed(!on); if (settingMode) railBeforeSetting = !on; },
       },
     ];
@@ -3704,6 +3701,44 @@
         </button>`;
 
       wrap.innerHTML = html;
+      renderCatTabs();   // [추가] v3 Phase 2 : 데스크톱 가로 탭·칩도 같은 순간에 맞춘다
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] v3 Phase 2 · 시안 2a : 데스크톱 가로 카테고리 탭 + 하위 섹션 칩 줄
+    //   사이드바와 같은 목록(topLevelCategories · EXPANDABLE)을 쓴다.
+    //   탭은 모두 selectCategory() 로 간다. (onExpandableClick 은 같은 묶음을 다시 누르면
+    //   하위 목록을 '접는' 사이드바용 동작이라, 탭에서 쓰면 아무 일도 안 일어난 것처럼 보인다)
+    //   보이기/숨기기는 CSS(@media)가 맡으므로 폭과 상관없이 항상 그려 둔다.
+    //   부르는 곳 : renderCategoryButtons(섹션 이동) · renderMobileCats(검색 결과·설정 화면 열고 닫기)
+    // ---------------------------------------------------------------
+    const TAB_LABELS = { briefing: 'The Daily Brief' };   // 탭에만 쓰는 이름 (제목 바·모바일 알약은 categoryLabels 그대로)
+
+    function renderCatTabs() {
+      const list = document.getElementById('cat-tab-list');
+      const chips = document.getElementById('cat-chips');
+      if (!list || !chips) return;
+
+      // 키워드 검색 중·설정 화면에서는 켜진 탭이 없다. 하위 섹션을 보는 중이면 그 상위 탭을 켠다.
+      const keyword = document.getElementById('search-input').value.trim();
+      const active = (keyword || settingMode) ? null
+        : (parentCategoryOf(currentCategory) || currentCategory);
+
+      list.innerHTML = topLevelCategories.map((cat) => {
+        const on = cat === active;
+        return `<button onclick="selectCategory('${cat}')" class="cat-tab${on ? ' is-on' : ''}"${on ? ' aria-current="page"' : ''}>${TAB_LABELS[cat] || categoryLabels[cat]}</button>`;
+      }).join('');
+
+      // 칩 : 하위 섹션이 있는 탭(물류·경제·증시·스포츠)을 보고 있을 때만. 없으면 비워서 줄 자체를 숨긴다(:empty).
+      //   맨 앞 칩은 상위 섹션 화면이다. 모바일 칩(renderMobileSubnav)과 같은 이름을 쓴다.
+      const exp = active && EXPANDABLE[active];
+      if (!exp) { chips.innerHTML = ''; return; }
+      const chip = (cat, label) => {
+        const on = currentCategory === cat;
+        return `<button onclick="selectCategory('${cat}')" class="cat-chip${on ? ' is-on' : ''}"${on ? ' aria-current="page"' : ''}>${label}</button>`;
+      };
+      const headLabel = categoryLabels[active] + (DIGEST_CATEGORIES.includes(active) ? ' 주요' : ' 전체');
+      chips.innerHTML = chip(active, headLabel) + exp.subs.map((s) => chip(s.key, s.label)).join('');
     }
 
     // 상단바(헤더+티커) 높이를 재서 고정 위치 기준값으로 저장
@@ -4787,6 +4822,7 @@
     //   (하위 섹션은 그 아래 #mobile-subnav 칩이 계속 맡는다)
     // ---------------------------------------------------------------
     function renderMobileCats() {
+      renderCatTabs();   // [추가] v3 Phase 2 : 데스크톱 탭도 같은 시점(검색 결과·설정 열고 닫기)에 맞춘다
       const el = document.getElementById('mobile-cats');
       if (!el) return;
       if (window.innerWidth >= 1024) { el.innerHTML = ''; return; }
@@ -5449,7 +5485,7 @@
 
     // ---------------------------------------------------------------
     // 지수 표시 (시안 01번 · 10번)
-    //   데스크톱 : 우측 마켓 레일(#market-rail)에 세로로 세운다
+    //   데스크톱 : [수정] v3 : 헤더 아래 지수 가로 줄(#index-row)에 한 줄로 늘어놓는다
     //   모바일   : 헤더 아래 간이 지수 바(#index-strip)
     //   흐르는 애니메이션은 없앴다. 값이 제자리에 있어야 읽기 쉽다.
     // ---------------------------------------------------------------
@@ -5481,41 +5517,23 @@
 
     const num2 = (v) => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    // --- 우측 레일 : 지수 한 줄 ---
-    function railIndexRowHtml(item) {
+    // --- [수정] v3 Phase 2 : 데스크톱 지수 가로 줄의 한 칸 (시안 2a : 이름 · 값 · ▲등락 (등락률%)) ---
+    //   예전 우측 레일의 세로 목록(지수 줄 + 기준금리·환율 카드)을 이 한 줄로 합쳤다.
+    function indexRowItemHtml(item) {
       const m = moveOf(item.change);
-      const chart = hasIndexChart(item.key);
-      const tag = chart ? 'button' : 'div';
-      const attr = chart
-        ? ` onclick="openIndexChart('${item.key}')" title="눌러서 기간별 차트 보기"`
-        : '';
-      return `<${tag} class="rail-row${chart ? ' is-chart' : ''}"${attr}>
-        <span class="flex flex-col gap-[3px] min-w-0">
-          <span class="font-mono text-[0.73rem] font-semibold tracking-wider text-muted">${item.name}</span>
-          <span class="font-mono text-[1rem] font-semibold text-paper tabular-nums">${num2(item.price)}</span>
-        </span>
-        <span class="font-mono text-[0.73rem] font-medium ${m.cls} text-right tabular-nums leading-[1.5] shrink-0">
-          ${m.arrow}${num2(Math.abs(item.change))}<br>${item.change >= 0 ? '+' : '-'}${Math.abs(item.changePercent).toFixed(2)}%
-        </span>
-      </${tag}>`;
-    }
-
-    // --- 우측 레일 : 기준금리·환율 작은 카드 ---
-    function railExtraCardHtml(item) {
-      const m = moveOf(item.change);
-      const changeText = item.change === 0
-        ? '동결'
-        : `${m.arrow}${Math.abs(item.change).toFixed(2)}`;
-      const key = EXTRA_CHART_KEYS[item.name];
+      const value = item.priceStr !== undefined ? item.priceStr : num2(item.price);
+      const change = item.change === 0 ? '동결'
+        : item.changePercent !== undefined
+          ? `${m.arrow}${num2(Math.abs(item.change))} (${Math.abs(item.changePercent).toFixed(2)}%)`
+          : `${m.arrow}${Math.abs(item.change).toFixed(2)}`;
+      const key = item.key || EXTRA_CHART_KEYS[item.name];
       const chart = hasIndexChart(key);
-      const tag = chart ? 'button' : 'div';
-      const attr = chart
-        ? ` onclick="openIndexChart('${key}')" title="눌러서 기간별 차트 보기"`
-        : '';
-      return `<${tag} class="rail-card${chart ? ' is-chart' : ''} text-left"${attr}>
-        <span class="font-mono text-[0.66rem] text-muted2">${item.name}</span>
-        <span class="font-mono text-[0.93rem] font-semibold text-paper tabular-nums">${item.priceStr}</span>
-        <span class="font-mono text-[0.7rem] font-medium ${item.change === 0 ? 'text-muted2' : m.cls}">${changeText}</span>
+      const tag = chart ? 'button' : 'span';
+      const attr = chart ? ` onclick="openIndexChart('${key}')" title="${item.name} · 눌러서 기간별 차트 보기"` : '';
+      return `<${tag} class="idx-item"${attr}>
+        <span class="idx-name text-muted">${item.name}</span>
+        <span class="font-semibold text-paper tabular-nums">${value}</span>
+        <span class="tabular-nums ${item.change === 0 ? 'text-muted' : m.cls}">${change}</span>
       </${tag}>`;
     }
 
@@ -5550,37 +5568,30 @@
       }
     }
 
-    // 레일과 모바일 바를 한 번에 다시 그린다 (이름은 기존 호출부 때문에 그대로 둔다)
+    // 데스크톱 지수 가로 줄과 모바일 바를 한 번에 다시 그린다 (이름은 기존 호출부 때문에 그대로 둔다)
     function renderIndexTicker(items) {
       const sorted = [...(items || [])].sort(
         (a, b) => INDEX_ORDER.indexOf(a.name) - INDEX_ORDER.indexOf(b.name)
       );
+      const all = [...sorted, ...lastExtraItems];
+      const waitText = indexItemsError ? '지수 정보를 불러올 수 없습니다.' : '지수 정보를 불러오는 중입니다…';
 
-      const rail = document.getElementById('rail-indices');
-      if (rail) {
-        rail.innerHTML = sorted.length
-          ? sorted.map(railIndexRowHtml).join('')
-          : `<div class="rail-row"><span class="text-muted text-[0.8rem]">${indexItemsError ? '지수 정보를 불러올 수 없습니다.' : '지수 정보를 불러오는 중입니다…'}</span></div>`;
+      const row = document.getElementById('index-row');
+      if (row) {
+        row.innerHTML = all.length
+          ? all.map(indexRowItemHtml).join('')
+          : `<span class="text-muted">${waitText}</span>`;
       }
-
-      const extra = document.getElementById('rail-extra');
-      if (extra) extra.innerHTML = lastExtraItems.map(railExtraCardHtml).join('');
 
       const strip = document.getElementById('index-strip');
       if (strip) {
-        const all = [...sorted, ...lastExtraItems];
         strip.innerHTML = all.length
           ? `<div class="flex items-stretch gap-3.5 px-4 w-max">${
               all.map(stripItemHtml).join('<span class="strip-sep"></span>')}</div>`
-          : `<div class="px-4 py-2.5 font-mono text-[0.72rem] text-muted">${indexItemsError ? '지수 정보를 불러올 수 없습니다.' : '지수 정보를 불러오는 중입니다…'}</div>`;
+          : `<div class="px-4 py-2.5 font-mono text-[0.72rem] text-muted">${waitText}</div>`;
       }
-
-      const time = document.getElementById('rail-time');
-      if (time) {
-        time.textContent = new Date().toLocaleTimeString('ko-KR', {
-          hour: '2-digit', minute: '2-digit', hour12: false,
-        }) + ' KST';
-      }
+      // [수정] v3 : 레일 머리의 'HH:MM KST'(지수 갱신 시각)는 지수가 위로 올라가면서
+      //   오른쪽 패널 '키워드 랭킹 HH:MM 기준'(refreshKeywordRank)으로 바뀌었다.
     }
 
     async function refreshIndexTicker() {
@@ -5658,6 +5669,13 @@
         list.querySelectorAll('.rail-kw-row').forEach((b) => {
           b.onclick = () => searchRailKeyword(b.dataset.kw);
         });
+        // [추가] v3 : 시안 2a 패널 머리의 '14:27 기준' = 랭킹을 받아 온 시각
+        const time = document.getElementById('rail-time');
+        if (time) {
+          time.textContent = new Date().toLocaleTimeString('ko-KR', {
+            hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Seoul',
+          }) + ' 기준';
+        }
       } catch (err) {
         console.error(err);
         wrap.classList.remove('is-on');
