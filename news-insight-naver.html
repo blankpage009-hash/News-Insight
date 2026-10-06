@@ -319,6 +319,8 @@
       scrollbar-width: none;
     }
     #index-row::-webkit-scrollbar { height: 0; }
+    #index-row { cursor: grab; }
+    #index-row.is-dragging { cursor: grabbing; user-select: none; }
 
     /* 카테고리 탭 : 켜진 탭만 검정 바탕 */
     #cat-tabs {
@@ -937,7 +939,7 @@
   .bc-head-r { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
   .bc-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 0; font-size: .867rem; color: rgb(var(--c-muted)); text-align: right; }
   .bc-tags { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-  .bc-tag { display: inline-flex; align-items: center; padding: 3px 10px; font-size: .733rem; letter-spacing: .02em; background: #fff2ef; color: #7c1405; }
+  .bc-tag { display: inline-flex; align-items: center; padding: 3px 10px; font-size: .733rem; letter-spacing: .02em; background: #6b7280; color: #fff; }
   .bc-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 16px; padding: 20px 28px 22px; }
   .bc-title {
     font-size: 1.8rem; line-height: 1.25; letter-spacing: -.02em; font-weight: 800; text-wrap: pretty; word-break: keep-all;
@@ -1475,7 +1477,7 @@
             <span class="logo-word">Beyond News</span>
           </span>
         </h1>
-        <p id="app-subtitle" class="font-sans text-muted uppercase tracking-[0.08em] leading-none text-[0.75rem] lg:text-[0.87rem] pb-[2px] whitespace-nowrap hidden sm:block">Real-Time Wire Desk</p>
+        <p id="app-subtitle" class="font-sans text-muted uppercase tracking-[0.08em] leading-none text-[0.75rem] lg:text-[0.87rem] pb-[2px] whitespace-nowrap hidden sm:block">Real-Time Wire Desk <span class="text-[0.7125rem] tracking-normal normal-case ml-1.5">v3.0</span></p>
       </div>
     </div>
 
@@ -1490,6 +1492,11 @@
         <input type="text" id="hsearch-input" aria-label="키워드 검색" placeholder="키워드 검색"
           oninput="onHeaderSearchInput()" onkeydown="onHeaderSearchKey(event)"
           class="flex-1 min-w-0 bg-transparent text-[0.95rem] placeholder:text-muted focus:outline-none">
+        <button id="hsearch-clear-btn" type="button" onclick="clearHeaderSearch()" hidden
+          title="입력 지우기" aria-label="입력 지우기"
+          class="shrink-0 p-1 rounded text-muted hover:text-gold hover:bg-ink3 transition">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
         <!-- [수정] 단축키 배지 → 필터 아이콘 버튼. 누르면 작은 드롭다운(노출건수·게재기간·정렬)이 펼쳐진다 -->
         <button id="hsearch-filter-btn" type="button" onclick="toggleHsearchFilters(event)" aria-expanded="false" aria-controls="hsearch-filter-pop"
           title="검색 필터 (노출 건수 · 게재 기간 · 정렬)" aria-label="검색 필터"
@@ -1771,7 +1778,7 @@
            카테고리 제목 바만 상단에 틀고정된다. -->
       <!-- 상태 바 (틀고정 아님 · 스크롤하면 같이 숨겨짐) -->
       <div id="status-bar" class="pt-6 px-1">
-        <p class="text-muted text-[0.85rem]" id="status-line">주요 뉴스를 불러오는 중입니다...</p>
+        <p class="text-muted text-[0.783rem] self-baseline" id="status-line">주요 뉴스를 불러오는 중입니다...</p>
       </div>
 
       <div id="top-stick" class="sticky z-30 !mt-0 pt-3 pb-3 bg-ink space-y-2"
@@ -1789,7 +1796,7 @@
         <div class="flex items-center gap-x-3 gap-y-2 flex-wrap px-1 pt-1 pb-2.5 border-b border-gold/30">
           <span id="cat-header-icon" class="text-gold2 shrink-0"></span>
           <!-- [수정] 제목 글자 크기 2pt 확대 (1.25rem → 1.42rem) -->
-          <h2 id="cat-header-title" class="font-sans font-bold text-gold2 text-[1.42rem] leading-tight break-keep min-w-0"></h2>
+          <h2 id="cat-header-title" class="font-sans font-bold text-gold2 text-[1.42rem] leading-tight break-keep min-w-0 self-baseline"></h2>
           <span id="cat-header-count" class="text-paper/70 font-mono whitespace-nowrap"></span>
 
           <!-- 필터 열기/닫기 (제목이 필터에 밀려 잘리지 않도록 기본은 숨김)
@@ -1979,7 +1986,7 @@
         </button>
       </div>
       <div class="st-lock-body">
-        <p class="st-lock-lead">관리자 Setting 탭을 열려면 비밀번호를 입력하세요.</p>
+        <p class="st-lock-lead">관리자 Setting 을 열려면 비밀번호를 입력하세요.</p>
         <input type="password" id="password-input" inputmode="numeric" autocomplete="current-password" placeholder="비밀번호" class="st-input">
         <p id="password-error" class="st-lock-err hidden" role="alert">비밀번호가 올바르지 않습니다.</p>
         <div class="st-lock-btns">
@@ -2378,6 +2385,7 @@
     function applySaveBtn(btn, on) {
       const pop = btn.dataset.saveStyle === 'pop';
       const brief = btn.dataset.saveStyle === 'brief';   // v3 브리핑 카드·목록 행 : 아이콘만, 조금 크게
+      const act = btn.dataset.saveStyle === 'act';       // v3 카드 아래 버튼 줄 : 아이콘 + 글자
       const label = on ? '저장됨' : '저장';
       btn.classList.toggle('is-saved', on);
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -2385,6 +2393,7 @@
       btn.setAttribute('title', on ? '저장 취소' : '기사 저장');
       btn.innerHTML = pop
         ? `${bookmarkSvg(on, 'w-3 h-3')}${label}`
+        : act ? `${bookmarkSvg(on, '')}${on ? '저장됨' : '기사 저장'}`
         : brief ? bookmarkSvg(on, 'w-4 h-4')
         : bookmarkSvg(on, 'w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0');
     }
@@ -2847,6 +2856,31 @@
         if (row.scrollLeft !== before) e.preventDefault();
       }, { passive: false });
 
+      // [추가] 마우스로 잡고 끌어서 뒤쪽 지수 보기. 터치는 브라우저가 이미 밀어 주므로 마우스만 다룬다.
+      //   4px 넘게 움직였을 때만 '끌기'로 보고, 그때만 뒤따라오는 클릭(차트 열기)을 막는다.
+      (() => {
+        const row = document.getElementById('index-row');
+        if (!row) return;
+        let startX = 0, startLeft = 0, down = false, dragged = false;
+        row.addEventListener('pointerdown', (e) => {
+          if (e.pointerType !== 'mouse' || e.button !== 0) return;
+          down = true; dragged = false; startX = e.clientX; startLeft = row.scrollLeft;
+        });
+        row.addEventListener('pointermove', (e) => {
+          if (!down) return;
+          const dx = e.clientX - startX;
+          if (!dragged && Math.abs(dx) < 4) return;
+          if (!dragged) { dragged = true; row.classList.add('is-dragging'); row.setPointerCapture(e.pointerId); }
+          row.scrollLeft = startLeft - dx;
+        });
+        const end = () => { down = false; row.classList.remove('is-dragging'); };
+        row.addEventListener('pointerup', end);
+        row.addEventListener('pointercancel', end);
+        row.addEventListener('click', (e) => {
+          if (dragged) { e.preventDefault(); e.stopPropagation(); dragged = false; }
+        }, true);
+      })();
+
       // [추가] 레일 하단 키워드 랭킹 (Phase 7 C1) · 서버 캐시를 읽기만 하므로 가볍다
       refreshKeywordRank();
       setInterval(refreshKeywordRank, KEYWORD_RANK_INTERVAL);
@@ -3248,6 +3282,23 @@
       // 값이 같으면 손대지 않는다 : 타이핑 중에 h.value 를 다시 넣으면 커서가 끝으로 튄다.
       // (커서가 헤더 칸에 있다고 건너뛰면 안 된다. 섹션 이동·초기화는 커서와 상관없이 반영돼야 한다)
       if (h.value !== inp.value) h.value = inp.value;
+      renderHeaderSearchClear();
+    }
+
+    // 글자가 있을 때만 X 를 보인다
+    function renderHeaderSearchClear() {
+      const h = document.getElementById('hsearch-input');
+      const btn = document.getElementById('hsearch-clear-btn');
+      if (h && btn) btn.hidden = !h.value;
+    }
+
+    // X : 입력만 지우고 커서를 돌려준다 (검색은 새로 실행하지 않는다)
+    function clearHeaderSearch() {
+      const h = document.getElementById('hsearch-input');
+      if (!h) return;
+      h.value = '';
+      onHeaderSearchInput();
+      h.focus();
     }
 
     // 헤더 칸 → #search-input
@@ -3256,6 +3307,7 @@
       const inp = document.getElementById('search-input');
       if (!h || !inp) return;
       inp.value = h.value;
+      renderHeaderSearchClear();
       renderSearchCollapse();   // 접힌 패널 머리의 '현재 검색어' 요약도 같이 갱신
     }
 
@@ -3392,22 +3444,20 @@
     // ---------------------------------------------------------------
     // [추가] 설정 접근 잠금 (비밀번호)
     //   - 기본 비밀번호는 7780. 설정 화면에서 바꿀 수 있고 이 기기에 저장된다.
-    //   - 한 번 통과하면 탭을 닫기 전까지는 다시 묻지 않는다.
+    //   - 설정 창을 열어 둔 동안만 통과 상태가 유지되고, 닫으면 다시 잠긴다.
     // ---------------------------------------------------------------
     const DEFAULT_SETTING_PASSWORD = '7780';
     const PASSWORD_STORAGE_KEY = 'newsInsightSettingPw_v1';
-    const UNLOCK_SESSION_KEY = 'newsInsightSettingUnlocked_v1';
 
     function getSettingPassword() {
       try { return localStorage.getItem(PASSWORD_STORAGE_KEY) || DEFAULT_SETTING_PASSWORD; }
       catch { return DEFAULT_SETTING_PASSWORD; }
     }
-    function isSettingUnlocked() {
-      try { return sessionStorage.getItem(UNLOCK_SESSION_KEY) === '1'; } catch { return false; }
-    }
-    function markSettingUnlocked() {
-      try { sessionStorage.setItem(UNLOCK_SESSION_KEY, '1'); } catch {}
-    }
+    // 통과 기록은 메모리에만 둔다. 설정 창을 닫으면 다시 잠겨서, 관리자 아이콘을 누를 때마다 비밀번호를 묻는다.
+    //   (예전에는 sessionStorage 에 남겨서 한 번 통과하면 탭을 닫기 전까지 잠금 창이 사라졌다)
+    let settingUnlocked = false;
+    function isSettingUnlocked() { return settingUnlocked; }
+    function markSettingUnlocked() { settingUnlocked = true; }
 
     // 잠금 창은 설정 창 위에 떠야 한다. 두 창의 z-index 가 고정값이면 설정 창(85)이 잠금 창(80)을 덮고,
     //   Sub Page 팝업을 열수록 modalZ 가 올라가므로 열 때마다 맨 위로 올린다.
@@ -3431,7 +3481,8 @@
       if (input.value === getSettingPassword()) {
         markSettingUnlocked();
         closePasswordModal();
-        showSettingsTab('admin');
+        if (isPrefsOpen()) showSettingsTab('admin');
+        else openPrefsModal(pendingSettingsTab);
       } else {
         document.getElementById('password-error').classList.remove('hidden');
         input.value = '';
@@ -3671,11 +3722,17 @@
     // 창을 열 때의 키워드 사본. 저장하지 않고 닫으면 이 값으로 되돌린다.
     //   (고친 값은 곧바로 userKeywords 에 들어가므로, 되돌리지 않으면 저장 안 한 키워드로 기사를 불러오게 된다)
     let keywordsAtOpen = null;
+    let pendingSettingsTab = 'prefs';   // 잠금 창을 통과한 뒤 열 설정 탭
 
     function openPrefsModal(tab = 'prefs') {
       closeNav();                        // 모바일 : 드로어가 열려 있으면 닫는다
       const el = document.getElementById('prefs-modal');
       if (!el) return;
+      // 관리자 진입(탭 줄 아이콘·드로어)만 잠근다. 잠겨 있으면 설정 창은 아직 열지 않고 잠금 창만 띄우고,
+      //   통과하면 submitPassword 가 이어서 연다. 헤더 ⋮ (유저용)는 비밀번호 없이 열리고 관리자 탭도 숨긴다.
+      const asAdmin = tab === 'admin';
+      if (asAdmin && !isSettingUnlocked()) { pendingSettingsTab = tab; openPasswordModal(); return; }
+      document.getElementById('st-tab-admin').style.display = asAdmin ? '' : 'none';
       renderThemeButtons();              // 현재 선택 상태로 갱신
       renderFontSizeSetting();
       renderCountSetting();
@@ -3695,6 +3752,7 @@
       const el = document.getElementById('prefs-modal');
       if (!el || el.classList.contains('hidden')) return;
       closePasswordModal();
+      settingUnlocked = false;
       el.classList.add('hidden');
       // 저장(저장 후 새로고침 · 기본값)하면 사본도 새 값이 되므로, 여기서 되돌려지는 건 저장 안 한 수정뿐이다.
       if (keywordsAtOpen) { userKeywords = keywordsAtOpen; keywordsAtOpen = null; }
@@ -4040,14 +4098,36 @@
       // 칩 : 하위 섹션이 있는 탭(물류·경제·증시·스포츠)을 보고 있을 때만. 없으면 비워서 줄 자체를 숨긴다(:empty).
       //   맨 앞 칩은 상위 섹션 화면이다. 모바일 칩(renderMobileSubnav)과 같은 이름을 쓴다.
       const exp = active && EXPANDABLE[active];
-      if (!exp) { chips.innerHTML = ''; return; }
+      if (!exp) { chips.innerHTML = ''; chips.style.paddingLeft = ''; return; }
       const chip = (cat, label) => {
         const on = currentCategory === cat;
         return `<button onclick="selectCategory('${cat}')" class="cat-chip${on ? ' is-on' : ''}"${on ? ' aria-current="page"' : ''}>${label}</button>`;
       };
       const headLabel = categoryLabels[active] + (DIGEST_CATEGORIES.includes(active) ? ' 주요' : ' 전체');
       chips.innerHTML = chip(active, headLabel) + exp.subs.map((s) => chip(s.key, s.label)).join('');
+      positionCatChips();
     }
+
+    // 하위 섹션 칩 줄 전체의 가운데가 켜진 상위 탭의 가운데 아래에 오도록 왼쪽 여백을 정한다.
+    //   화면 밖으로 나가지 않게 양끝은 기본 여백(2rem)에서 멈춘다. 모바일(칩 줄 숨김)에서는 잴 값이 없어 건너뛴다.
+    function positionCatChips() {
+      const chips = document.getElementById('cat-chips');
+      const tab = document.querySelector('#cat-tab-list .cat-tab.is-on');
+      if (!chips || !chips.children.length) return;
+      chips.style.paddingLeft = '';
+      const box = chips.getBoundingClientRect();
+      if (!tab || !box.width) return;
+      const first = chips.firstElementChild.getBoundingClientRect();
+      const last = chips.lastElementChild.getBoundingClientRect();
+      const total = last.right - first.left;
+      const base = first.left - box.left;               // 기본 왼쪽 여백(2rem)
+      const t = tab.getBoundingClientRect();
+      const want = t.left + t.width / 2 - box.left - total / 2;
+      const max = box.width - base - total;             // 오른쪽도 같은 여백을 남긴다
+      chips.style.paddingLeft = Math.max(base, Math.min(want, max)) + 'px';
+    }
+    window.addEventListener('resize', positionCatChips);
+    document.fonts?.ready.then(positionCatChips);   // 글꼴이 늦게 들어오면 글자 폭이 달라진다
 
     // 상단바(헤더+티커) 높이를 재서 고정 위치 기준값으로 저장
     //  offsetHeight 는 정수라 소수점이 버려져 미세한 유격이 생길 수 있어
@@ -5677,15 +5757,21 @@
     //   saved : 저장 화면의 이어보기 버튼. .followup-btn · data-followup-key · [data-followup-count] 는
     //           primeFollowupBadges/updateFollowupBadge 가 찾는 표시라 모양을 바꿔도 그대로 둔다.
     //   noRelated : 관련 기사·이어보기 팝업 안의 행은 '관련 기사' 버튼을 빼서 팝업이 끝없이 이어지지 않게 한다
-    function briefActionsHtml(item, wrapClass, saved = false, noRelated = false) {
+    //   withSave : 카드 아래 줄의 '기사 저장' 버튼 (카드는 오른쪽 위 아이콘 대신 여기에 둔다)
+    function briefActionsHtml(item, wrapClass, saved = false, noRelated = false, withSave = false) {
       const key = savedKeyOf(item);
+      const on = isSavedKey(key);
+      const save = withSave ? `
+          <button onclick="toggleSave(${item.id})" data-save-key="${esc(key)}" data-save-style="act" aria-pressed="${on}"
+            aria-label="${on ? '저장 취소' : '기사 저장'}" title="${on ? '저장 취소' : '기사 저장'}"
+            class="save-btn bc-act${on ? ' is-saved' : ''}">${bookmarkSvg(on, '')}${on ? '저장됨' : '기사 저장'}</button>` : '';
       const followup = saved ? `
           <button onclick="openFollowup(${item.id})" data-followup-key="${esc(key)}" title="이어보기" class="bc-act followup-btn">${icon('history')}이어보기 <span data-followup-count>${followupCache.has(key) ? followupCache.get(key).length : 0}</span></button>` : '';
       return `<div class="${wrapClass}">
           <button onclick="openInsight(${item.id})" title="Insight" class="bc-act is-primary">${icon('lightbulb')}Insight</button>
           <a href="${esc(articleLink(item))}" target="_blank" rel="noopener noreferrer" draggable="false" title="원문 보기"
             onclick="markRead(${item.id})" class="bc-act">${icon('external-link')}원문 보기</a>
-          ${noRelated ? '' : `<button onclick="openRelated(${item.id})" title="관련 기사" class="bc-act">${icon('link')}관련 기사</button>`}${followup}
+          ${noRelated ? '' : `<button onclick="openRelated(${item.id})" title="관련 기사" class="bc-act">${icon('link')}관련 기사</button>`}${followup}${save}
         </div>`;
     }
 
@@ -5762,14 +5848,13 @@
             <span class="bc-no bc-dim">${String(i + 1).padStart(2, '0')}</span>
             <div class="bc-head-r">
               <div class="bc-meta bc-dim"><span class="bc-tags">${briefTagsHtml(item)}</span><span>${briefMetaText(item)}</span></div>
-              ${briefSaveBtnHtml(item, 'card')}
             </div>
           </div>
           <div class="bc-body">
             <h3 class="bc-title bc-dim brief-open" ${briefOpenAttrs(item)}>${item.title}</h3>
             <div class="bc-sum bc-dim">${lead ? `<p class="brief-open" onclick="openBrief(${item.id})">${lead}</p>` : ''}${thumbSlotHtml(item)}</div>
           </div>
-          ${briefActionsHtml(item, 'bc-actions')}
+          ${briefActionsHtml(item, 'bc-actions', false, false, true)}
         </article>`;
     }
 
