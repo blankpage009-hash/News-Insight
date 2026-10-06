@@ -908,6 +908,7 @@
   .view-toggle button:not(.is-on):hover { background: rgb(var(--c-ink2)); }
   .view-toggle button.is-on { background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); }
 
+  .bc { border-top: 2px solid rgb(var(--c-paper)); }   /* 카드형도 목록형(.bc-list)과 같은 검은 구분선 */
   .bc-top { display: flex; justify-content: flex-end; align-items: baseline; gap: 4px; padding-top: .25rem; font-variant-numeric: tabular-nums; }
   .bc-cur { font-size: 2.133rem; font-weight: 800; line-height: .9; letter-spacing: -.04em; color: rgb(var(--c-gold)); }
   .bc-tot { font-size: .933rem; font-weight: 600; color: rgb(var(--c-muted2)); }
@@ -1206,6 +1207,14 @@
      섹션 상자('전체' 화면) 필터는 Phase 6 에서 같은 모양이 됐다 → 위 .sec-box 규칙. */
   @media (min-width: 1024px) {
     #cat-header > div { position: relative; }
+    /* 제목 아래 붉은(금색) 선은 없애고, 아래 본문의 검은 2px 선 하나로만 나눈다.
+       선이 없어진 만큼 제목 줄·본문 사이 여백도 줄여 본문을 위로 올린다. */
+    #cat-header > div { border-bottom: 0; padding-bottom: 1.1rem; }   /* 제목과 검은 선 사이 여백 : 검은 선이 오른쪽 '저장 기사' 선 높이에 오도록 맞춘 값 */
+    #status-bar { padding-top: 0; }
+    #top-stick { padding-top: 0; padding-bottom: 0; }
+    #cat-header > div { padding-top: .775rem; }   /* 아래 여백을 줄인 만큼 제목을 내려 검은 선 높이는 그대로 */
+    #news-list { margin-top: 0; }
+    .bc-list { margin-top: 0; }
     #cat-header-filter-btn {
       width: 26px; height: 26px; padding: 0;
       justify-content: center;
@@ -4324,7 +4333,19 @@
     // ---------------------------------------------------------------
     // 카테고리 제목 고정 바
     // ---------------------------------------------------------------
+    // 데스크톱(v3)은 안내 문구를 제목 줄의 건수 옆에 두고, 모바일은 원래 자리(제목 위)로 되돌린다.
+    //   문구를 쓰는 곳이 많아 요소(#status-line)는 그대로 두고 자리만 옮긴다.
+    function placeStatusLine() {
+      const line = document.getElementById('status-line');
+      const host = isMobileLayout()
+        ? document.getElementById('status-bar')
+        : document.getElementById('cat-header-count').parentElement;
+      if (line.parentElement !== host) host.insertBefore(line, isMobileLayout() ? null : document.getElementById('cat-header-filter-btn'));
+    }
+    window.addEventListener('resize', placeStatusLine);
+
     function updateCatHeader() {
+      placeStatusLine();
       const el = document.getElementById('cat-header');
       const keyword = document.getElementById('search-input').value.trim();
 
@@ -4347,8 +4368,12 @@
         label = categoryLabels[currentCategory] || '뉴스';
       }
       const iconName = keyword ? 'search' : (categoryIcons[currentCategory] || 'grid');
-      document.getElementById('cat-header-icon').innerHTML = icon(iconName, 'w-5 h-5');
+      // v3 : 데스크톱 The Daily Brief 제목에는 아이콘을 붙이지 않는다
+      const noBriefIcon = !keyword && currentCategory === 'briefing' && !isMobileLayout();
+      document.getElementById('cat-header-icon').innerHTML = noBriefIcon ? '' : icon(iconName, 'w-5 h-5');
       document.getElementById('cat-header-title').textContent = label;
+      // 안내 문구에 이미 '10건'이 들어 있어 중복이라 건수는 감춘다 (textContent 는 다른 곳에서도 쓰므로 hidden 으로만 가린다)
+      document.getElementById('cat-header-count').classList.toggle('hidden', noBriefIcon);
 
       // [추가] '지수 차트'는 기사 목록이 아니라서 건수·필터(노출 건수/게재 기간/정렬)가 의미 없다 → 감춘다
       const chartView = isIndexCardView();
