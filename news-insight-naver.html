@@ -379,7 +379,8 @@
 
     /* 카테고리 탭 : 켜진 탭만 검정 바탕. 관리자 아이콘은 하단 '설정' 탭 → 관리자 탭이 맡는다 */
     #cat-tabs {
-      display: flex; gap: 4px; padding: 8px 16px;
+      display: flex; gap: 4px; padding: 6px 16px;
+      box-sizing: border-box; height: 50px;   /* 하위 칩 줄과 높이를 똑같이 맞춘다 (둘 다 50px) */
       border-bottom: 1px solid rgb(var(--c-paper) / .4); background: rgb(var(--c-ink));
       overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
     }
@@ -389,6 +390,7 @@
     /* 하위 칩 : 면(#eae9e9) 바탕 · 아래 2px 검정 선. 켜진 칩은 탭과 같이 검정 채움 (시안 1a) */
     #cat-chips:not(:empty) {
       display: flex; gap: 4px; padding: 6px 16px;
+      box-sizing: border-box; height: 50px;   /* 상위 탭 줄과 같은 높이 */
       background: rgb(var(--c-ink2)); border-bottom: 2px solid rgb(var(--c-paper));
       overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
     }
@@ -398,7 +400,12 @@
 
     /* 제목 줄 : [제목 20px/800 · 건수] [카드/목록] [필터 44px] / 아래 줄에 안내 문구 12px */
     #status-bar { display: none; }
-    #top-stick { padding-top: 12px; padding-bottom: 0; }
+    /* 좌우 여백(1rem)까지 배경이 덮이도록 화면 끝까지 늘린다 → 스크롤되는 기사가 양끝으로 비쳐 보이지 않게 */
+    #top-stick { padding: 12px 1rem 0; margin-left: -1rem; margin-right: -1rem; }
+    /* 제목 아래 검은 선 : 원래 기사 목록(.bc-list)의 위쪽 테두리라 스크롤하면 같이 올라가 사라졌다.
+       제목 바가 보이는 화면에서는 고정 영역의 아래 테두리가 대신 맡고, 목록 쪽 선은 겹치지 않게 뺀다. */
+    #top-stick:has(#cat-header:not(.hidden)) { border-bottom: 2px solid rgb(var(--c-paper)); }
+    #top-stick:has(#cat-header:not(.hidden)) ~ #news-list .bc-list { border-top: 0; }
     #news-list { margin-top: 0 !important; }
     #cat-header > div { flex-wrap: wrap; align-items: center; gap: 3px 6px; padding: 0; border-bottom: 0; }
     #cat-header-icon { display: none; }
@@ -422,14 +429,14 @@
     /* 검색 탭 (시안 1f) : 둥근 상자 대신 평평한 머리 = 큰 제목 · 48px 검색 칸 · 아래 2px 검정 선.
        결과를 볼 자리가 좁아 틀고정하지 않는다(updateSearchStick 도 0). 접기·닫기 버튼은 없다(다른 탭을 누르면 닫힌다).
        검색어 규칙 · 노출 건수/기간/정렬은 칸에 커서가 있을 때만 펼친다 → 평소에는 시안처럼 칸 하나만 보인다. */
-    #search-popup { position: static !important; margin: 0 -1rem !important; padding: 6px 1rem 14px !important; border-bottom: 2px solid rgb(var(--c-paper)); }
+    #search-popup { position: static !important; margin: 0 -1rem !important; padding: 16px 1rem 14px !important; border-bottom: 2px solid rgb(var(--c-paper)); }
     #search-popup > div { max-height: none; overflow: visible; background: none; border: 0; border-radius: 0; box-shadow: none; }
     #search-popup header { position: static; padding: 0 0 12px; border: 0; border-radius: 0; background: none; }
-    #search-popup header h2 { font-size: 28px; font-weight: 800; letter-spacing: -.03em; color: rgb(var(--c-paper)); }
+    #search-popup header h2 { font-size: 26px; font-weight: 800; letter-spacing: -.03em; color: rgb(var(--c-paper)); }
     #search-collapse-btn { pointer-events: none; }
     #search-collapse-btn > svg, #search-collapse-chev, #search-collapsed-query, #search-popup header > button + button { display: none !important; }
     #search-body { padding: 0; }
-    #search-input { min-height: 48px; padding: 0 48px 0 40px; font-size: 16px; border-radius: 0; background: rgb(var(--c-ink2)); border-color: rgb(var(--c-paper) / .4); }
+    #search-input { min-height: 42px; padding: 0 48px 0 40px; font-size: 16px; border-radius: 0; background: rgb(var(--c-ink2)); border-color: rgb(var(--c-paper) / .4); }
     #search-body > .relative > svg { left: 12px; top: 15px; width: 18px; height: 18px; }
     #search-clear-btn { width: 44px; height: 44px; }
     #search-body > p { padding: 0; background: none; border: 0; font-size: 12px; }
@@ -1433,7 +1440,7 @@
     .pv-shell > .pv-foot .pv-btn {
       flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px;
       min-height: 56px; padding: 10px 8px 10px 10px; border: 0;
-      font-size: 11px; font-weight: 600; line-height: 1.2; white-space: nowrap;
+      font-size: 13px; font-weight: 600; line-height: 1.2; white-space: nowrap;
     }
     .pv-shell > .pv-foot .pv-btn + .pv-btn { border-left: 1px solid rgb(var(--c-paper) / .4); }
     .pv-shell > .pv-foot .pv-btn svg { order: -1; width: 18px; height: 18px; }
