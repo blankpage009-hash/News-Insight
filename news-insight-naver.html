@@ -886,6 +886,53 @@
   .bc-card.is-read:hover .bc-dim, .bc-row.is-read:hover .bc-dim { opacity: 1; }
   body.no-read-dim .bc-card.is-read .bc-dim, body.no-read-dim .bc-row.is-read .bc-dim { opacity: 1; }
 
+  /* ---------------------------------------------------------------
+     [추가] v3 Phase 6 : '전체' 화면 섹션 상자 (1024px 이상 · JS 가 데스크톱에서만 이 마크업을 그린다)
+       시안에 없는 화면이라 2a 목록형 말투를 따른다 : 위 2px 검정 선 · 800 굵기 제목 · 26px 필터 아이콘 → 드롭다운.
+       .sec-filters 의 열고 닫기(display)는 아래 공용 규칙(header .sec-filters)이 맡고, 여기서는 위치·모양만 정한다.
+     --------------------------------------------------------------- */
+  .sec-box { margin-bottom: 2rem; border-top: 2px solid rgb(var(--c-paper)); }
+  .sec-head { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgb(var(--c-paper) / .4); }
+  .sec-toggle { display: flex; align-items: center; gap: 8px; min-width: 0; color: rgb(var(--c-paper)); text-align: left; }
+  .sec-toggle h2 { font-size: 1.6rem; font-weight: 800; line-height: 1.2; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sec-toggle:hover h2 { color: rgb(var(--c-gold)); }
+  .sec-count { font-size: .867rem; font-weight: 600; color: rgb(var(--c-muted)); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .sec-filter-wrap { position: relative; margin-left: auto; }
+  .sec-box .sec-filter-btn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; color: rgb(var(--c-paper)); transition: background-color .15s, color .15s; }
+  .sec-box .sec-filter-btn:hover { background: rgb(var(--c-ink2)); }
+  .sec-box .sec-filter-btn.is-open { color: rgb(var(--c-gold)); }
+  .sec-box .sec-filter-btn svg { width: 18px; height: 18px; }
+  .sec-box .sec-filters.is-open {
+    position: absolute; top: calc(100% + .25rem); right: 0; z-index: 45;
+    width: max-content; min-width: 11rem; padding: .5rem;
+    flex-direction: column; align-items: stretch; gap: .375rem;
+    background: rgb(var(--c-ink2)); border: 2px solid rgb(var(--c-paper)); box-shadow: 0 14px 30px rgb(0 0 0 / .12);
+  }
+  .sec-box .sec-filters > select { width: 100%; }
+  .sec-empty { padding: 2rem 0; text-align: center; color: rgb(var(--c-muted)); }
+  /* 상자 안 목록은 상자 머리가 이미 선을 그었으니 위 2px 선 · 바깥 여백을 뺀다 */
+  .bc-list.is-in-box { margin: 0; border-top: 0; }
+  .bc-list.is-in-box .bc-row:last-child { border-bottom: 0; }
+
+  /* [추가] v3 Phase 6 : 운임지수 SCFI 패널 — 둥근 금색 상자 → 평평한 면 + 왼쪽 레드 막대 (모든 폭) */
+  .scfi-box {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px;
+    padding: 12px 16px; background: rgb(var(--c-ink2)); border-left: 4px solid rgb(var(--c-gold));
+    font-variant-numeric: tabular-nums;
+  }
+  .scfi-box.is-link { cursor: pointer; transition: background-color .15s; }
+  .scfi-box.is-link:hover { background: rgb(var(--c-ink3)); }
+  .scfi-box.is-link:focus-visible { outline: 2px solid rgb(var(--c-gold)); outline-offset: 2px; }
+  .scfi-name { font-size: .867rem; font-weight: 800; letter-spacing: .06em; white-space: nowrap; }
+  .scfi-val { font-size: 1.6rem; font-weight: 800; line-height: 1.1; letter-spacing: -.02em; color: rgb(var(--c-paper)); }
+  .scfi-chg { font-weight: 600; white-space: nowrap; }
+  .scfi-sub { font-size: .8rem; color: rgb(var(--c-muted)); white-space: nowrap; }
+  .scfi-chart { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: .75rem; font-weight: 600; white-space: nowrap; border: 1px solid rgb(var(--c-paper)); transition: background-color .15s, color .15s; }
+  .scfi-box.is-link:hover .scfi-chart { background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); }
+  .scfi-src { margin-left: auto; }
+  .scfi-src a { text-decoration: underline dotted; }
+  .scfi-src a:hover { color: rgb(var(--c-gold)); }
+
   select { background-image: none; }
 
   /* ---------------------------------------------------------------
@@ -1017,10 +1064,8 @@
 
   /* [수정] v3 Phase 2 : 데스크톱(≥1024px) 제목 바 필터 = 시안 2a 의 '필터' 아이콘(26px)
      누르면 같은 줄에 펼치지 않고, 아이콘 아래 오른쪽 정렬 드롭다운으로 뜬다. (모바일과 같은 방식)
-     섹션 박스(.sec-filter-btn · '전체' 화면)는 Phase 6 전까지 예전처럼 같은 줄에 펼친다. */
+     섹션 상자('전체' 화면) 필터는 Phase 6 에서 같은 모양이 됐다 → 위 .sec-box 규칙. */
   @media (min-width: 1024px) {
-    .sec-filter-btn { order: 1; }
-
     #cat-header > div { position: relative; }
     #cat-header-filter-btn {
       width: 26px; height: 26px; padding: 0;
@@ -1424,12 +1469,12 @@
     <div id="cat-tab-list" class="flex items-center gap-1 min-w-0"></div>
     <!-- 시안 2a 탭 줄 오른쪽 끝 아이콘(title "관리자 Setting"). Phase 8 에서 화면 설정과 한 창으로 합친다 -->
     <div class="ml-auto flex items-center gap-3">
-      <!-- [추가] v3 Phase 3 : 카드/목록 토글 (브리핑 화면에서만 보인다 · syncViewToggle). 섹션 화면은 Phase 6 -->
+      <!-- [추가] v3 Phase 3·6 : 카드/목록 토글 (브리핑 · 단일 목록 섹션 화면에서만 보인다 · syncViewToggle) -->
       <div id="view-toggle" class="view-toggle" role="group" aria-label="보기 방식">
-        <button type="button" data-view="card" onclick="setBriefView('card')">
+        <button type="button" data-view="card" onclick="setView('card')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5"/></svg>카드
         </button>
-        <button type="button" data-view="list" onclick="setBriefView('list')">
+        <button type="button" data-view="list" onclick="setView('list')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 5h18"/><path d="M3 12h18"/><path d="M3 19h18"/></svg>목록
         </button>
       </div>
@@ -3025,10 +3070,13 @@
       const el = (e.target instanceof Element) ? e.target : null;
       if (!el) return;
       if (!isMobileLayout()) {
-        // [수정] v3 Phase 2 : 데스크톱도 제목 바 필터는 드롭다운이 됐다 → 바깥을 누르면 닫는다.
-        //   섹션 박스 필터('전체' 화면)는 아직 같은 줄에 펼쳐 두므로 그대로 둔다. (Phase 6)
+        // [수정] v3 Phase 2·6 : 데스크톱도 제목 바 · 섹션 상자 필터가 드롭다운이다 → 바깥을 누르면 닫는다.
+        //   상자 필터는 서로 독립이라, 누른 자리가 그 상자의 필터·버튼이 아니면 그것만 닫는다.
         if (document.body.classList.contains('hf-open')
             && !el.closest('#cat-header-filters, #cat-header-filter-btn')) toggleHeaderFilters();
+        [...openSectionFilters].forEach((key) => {
+          if (!el.closest(`[data-sec-filters="${key}"], [data-sec-filter-btn="${key}"]`)) toggleSectionFilters(key);
+        });
         return;
       }
       if (el.closest('#cat-header-filters, #cat-header-filter-btn, .sec-filters, .sec-filter-btn')) return;
@@ -4311,12 +4359,11 @@
 
     function scfiPanelHtml() {
       if (!scfiData) {
-        return `<div class="flex items-center gap-2 px-5 py-3 bg-panel/70 border border-line rounded-xl text-muted font-mono text-[0.9rem]">
+        return `<div class="scfi-box scfi-sub">
           ${icon('loader-2', 'w-4 h-4 animate-spin')}<span>SCFI 지수를 불러오는 중입니다...</span></div>`;
       }
       if (scfiData.error) {
-        return `<div class="px-5 py-3 bg-panel/70 border border-line rounded-xl text-muted font-mono text-[0.9rem]">
-          SCFI 지수를 불러오지 못했습니다.</div>`;
+        return `<div class="scfi-box scfi-sub">SCFI 지수를 불러오지 못했습니다.</div>`;
       }
       const d = scfiData;
       const isUp = d.change > 0, isDown = d.change < 0;
@@ -4329,19 +4376,15 @@
       // [추가] 패널 자체가 차트 팝업을 여는 버튼이다. 안쪽 출처 링크만 예외로 둔다.
       return `<div onclick="openScfiChart()" role="button" tabindex="0"
         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openScfiChart();}"
-        title="눌러서 지수 차트 보기"
-        class="flex items-center gap-x-4 gap-y-2 flex-wrap px-5 py-3 bg-panel/70 border border-gold/25 rounded-xl cursor-pointer transition hover:border-gold/60 hover:bg-panel">
-        <span class="text-gold2 shrink-0">${icon('line-chart', 'w-4 h-4')}</span>
-        <span class="text-gold font-semibold tracking-wider whitespace-nowrap">SCFI 종합지수</span>
-        <span class="font-mono text-paper text-xl tabular-nums">${d.current.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-        <span class="font-mono ${colorClass} tabular-nums whitespace-nowrap">${changeText}</span>
-        <span class="text-muted font-mono text-[0.8rem] whitespace-nowrap">전주(${scfiDateText(d.lastDate)}) ${d.previous.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 대비</span>
-        <span class="text-gold2 font-mono text-[0.75rem] flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-md border border-gold/30 bg-gold/10">
-          ${icon('line-chart', 'w-3 h-3')} 차트
-        </span>
-        <span class="text-muted font-mono text-[0.8rem] ml-auto whitespace-nowrap">
+        title="눌러서 지수 차트 보기" class="scfi-box is-link">
+        <span class="scfi-name">SCFI 종합지수</span>
+        <span class="scfi-val">${d.current.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        <span class="scfi-chg ${colorClass}">${changeText}</span>
+        <span class="scfi-sub">전주(${scfiDateText(d.lastDate)}) ${d.previous.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 대비</span>
+        <span class="scfi-chart">${icon('line-chart', 'w-3 h-3')} 차트</span>
+        <span class="scfi-sub scfi-src">
           ${scfiDateText(d.currentDate)} 발표${d.stale ? ' (캐시)' : ''} ·
-          <a href="${d.sourceUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="hover:text-gold underline decoration-dotted">상하이해운거래소</a>
+          <a href="${d.sourceUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">상하이해운거래소</a>
         </span>
       </div>`;
     }
@@ -5514,47 +5557,71 @@
       catch (e) { console.error('보기 방식을 기록하지 못했습니다.', e); }
     }
 
-    let briefViewMode = getViewMode('briefing');   // 저장소를 못 써도 이번 방문 동안은 이 값으로 동작한다
-    let briefIdx = 0;                              // 지금 가운데 카드 (0부터)
+    // 저장소를 못 써도 이번 방문 동안은 이 값으로 동작한다. section = 단일 목록 섹션 화면 전체가 한 값을 쓴다 (v3 Phase 6)
+    const viewModes = { briefing: getViewMode('briefing'), section: getViewMode('section') };
+    let briefIdx = 0;                              // 지금 가운데 카드 (0부터) — 캐러셀은 화면에 하나뿐이라 브리핑·섹션이 같이 쓴다
     const BC_SLOP = 6;     // 이만큼 움직이기 전에는 끌기로 보지 않는다 (버튼 클릭을 살리려고)
     const BC_DIST = 60;    // 이만큼 끌고 놓으면 다음 카드로
     const BC_FLICK = 0.5;  // 짧게 튕겨도(px/ms) 넘긴다
 
-    // 탭 줄 오른쪽 토글 : 브리핑 화면(검색·설정 화면 제외)에서만 보인다
+    // 지금 화면이 어느 토글 값을 쓰는가. null = 토글 없음(목록 고정)
+    //   '전체'(섹션 상자 여러 개)는 캐러셀을 하나만 띄울 수 있어서, 저장 화면은 이어보기 버튼 자리가 없어서,
+    //   검색 결과는 사용자 결정(목록만)으로 토글을 달지 않는다.
+    function viewScope() {
+      if (settingMode || document.getElementById('search-input').value.trim()) return null;
+      if (currentCategory === 'briefing') return 'briefing';
+      if (['all', 'saved', 'stock_chart', 'keywords'].includes(currentCategory)) return null;
+      return 'section';
+    }
+
+    // 탭 줄 오른쪽 토글 : 브리핑·단일 목록 섹션 화면에서만 보인다
     function syncViewToggle() {
       const box = document.getElementById('view-toggle');
       if (!box) return;
-      const show = currentCategory === 'briefing' && !settingMode && !document.getElementById('search-input').value.trim();
-      box.classList.toggle('is-shown', show);
+      const scope = viewScope();
+      box.classList.toggle('is-shown', !!scope);
       box.querySelectorAll('button').forEach((b) => {
-        const on = b.dataset.view === briefViewMode;
+        const on = !!scope && b.dataset.view === viewModes[scope];
         b.classList.toggle('is-on', on);
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
     }
 
-    function setBriefView(mode) {
-      if (mode !== 'card' && mode !== 'list') return;
-      briefViewMode = mode;
-      persistViewMode('briefing', mode);
+    function setView(mode) {
+      const scope = viewScope();
+      if (!scope || (mode !== 'card' && mode !== 'list')) return;
+      viewModes[scope] = mode;
+      persistViewMode(scope, mode);
       syncViewToggle();
-      rerenderBriefingIfShown();
+      rerenderListIfShown();
     }
 
-    // 지금 화면에 브리핑이 떠 있으면 같은 기사로 다시 그린다 (토글 · 1024px 를 넘나드는 창 크기 변화)
+    // 지금 화면의 기사를 같은 데이터로 다시 그린다 (토글 · 1024px 를 넘나드는 창 크기 변화)
     //   보던 카드 번호는 유지한다. 서버를 다시 부르지 않는다.
-    //   #bc 는 카드형·목록형 둘 다의 바깥 상자 id, .top-story 는 좁은 화면 모양의 1위 카드다.
-    function briefingOnScreen() {
-      return !!document.querySelector('#news-list #bc, #news-list .top-story');
+    //   저장 화면은 savedArticles 가 아니라 currentResults 로 그린다 → 방금 저장을 푼 줄도 남아 있어 되돌릴 수 있다.
+    function rerenderListIfShown() {
+      if (isLoading || settingMode) return;
+      if (document.getElementById('search-input').value.trim()) {
+        if (currentResults.length) renderNews(currentResults);
+      } else if (currentCategory === 'briefing') {
+        if (currentResults.length) renderBriefing(currentResults, true);
+      } else if (currentCategory === 'all') {
+        if (sectionState.length) renderSectionsFromState();
+      } else if (currentCategory === 'saved') {
+        if (currentResults.length) renderNews(currentResults, true, true);
+      } else if (!['stock_chart', 'keywords'].includes(currentCategory)) {
+        if (currentResults.length) renderNews(currentResults, false, true);
+      }
     }
-    function rerenderBriefingIfShown() {
-      if (isLoading || !currentResults.length || !briefingOnScreen()) return;
-      renderBriefing(currentResults, true);
+
+    // 좁은 화면 모양의 1위 카드(.top-story) 또는 데스크톱 브리핑(#bc)이 떠 있는가
+    function briefingOnScreen() {
+      return currentCategory === 'briefing' && !!document.querySelector('#news-list #bc, #news-list .top-story');
     }
 
     const briefDesktopMQ = window.matchMedia('(min-width: 1024px)');
     briefDesktopMQ.addEventListener('change', () => {
-      rerenderBriefingIfShown();
+      rerenderListIfShown();
       if (!settingMode && briefingOnScreen()) updateCatHeader();   // 제목 이름(BRIEFING ↔ The Daily Brief)도 맞춘다
     });
 
@@ -5573,13 +5640,18 @@
     }
 
     // 주요 내용 · Insight · 원문 보기 · 관련 기사 (기존과 같은 함수를 부른다)
-    function briefActionsHtml(item, wrapClass) {
+    //   saved : 저장 화면의 이어보기 버튼. .followup-btn · data-followup-key · [data-followup-count] 는
+    //           primeFollowupBadges/updateFollowupBadge 가 찾는 표시라 모양을 바꿔도 그대로 둔다.
+    function briefActionsHtml(item, wrapClass, saved = false) {
+      const key = savedKeyOf(item);
+      const followup = saved ? `
+          <button onclick="openFollowup(${item.id})" data-followup-key="${esc(key)}" title="이어보기" class="bc-act followup-btn">${icon('history')}이어보기 <span data-followup-count>${followupCache.has(key) ? followupCache.get(key).length : 0}</span></button>` : '';
       return `<div class="${wrapClass}">
           <button onclick="openBrief(${item.id})" title="주요 내용" class="bc-act">${icon('sparkles')}주요 내용</button>
           <button onclick="openInsight(${item.id})" title="Insight" class="bc-act is-primary">${icon('lightbulb')}Insight</button>
           <a href="${esc(articleLink(item))}" target="_blank" rel="noopener noreferrer" draggable="false" title="원문 보기"
             onclick="markRead(${item.id})" class="bc-act">${icon('external-link')}원문 보기</a>
-          <button onclick="openRelated(${item.id})" title="관련 기사" class="bc-act">${icon('link')}관련 기사</button>
+          <button onclick="openRelated(${item.id})" title="관련 기사" class="bc-act">${icon('link')}관련 기사</button>${followup}
         </div>`;
     }
 
@@ -5667,12 +5739,12 @@
         </article>`;
     }
 
-    function briefCarouselHtml(list) {
+    function briefCarouselHtml(list, label) {
       const n = list.length;
       return `
         <div id="bc" class="bc">
           <div class="bc-top"><span class="bc-cur">${String(briefIdx + 1).padStart(2, '0')}</span><span class="bc-tot">/ ${String(n).padStart(2, '0')}</span></div>
-          <div class="bc-stage" tabindex="0" role="group" aria-roledescription="carousel" aria-label="The Daily Brief · ← → 키로 넘깁니다">
+          <div class="bc-stage" tabindex="0" role="group" aria-roledescription="carousel" aria-label="${esc(label)} · ← → 키로 넘깁니다">
             ${list.map(briefCardHtml).join('')}
           </div>
           <div class="bc-nav">
@@ -5683,9 +5755,10 @@
         </div>`;
     }
 
-    function briefListHtml(list) {
+    //   opts.saved : 이어보기 버튼 · opts.inBox : '전체' 화면 섹션 상자 안 (상자가 여럿이라 id 를 달지 않는다)
+    function briefListHtml(list, opts = {}) {
       return `
-        <div id="bc" class="bc-list">
+        <div${opts.inBox ? '' : ' id="bc"'} class="bc-list${opts.inBox ? ' is-in-box' : ''}">
           ${list.map((item, i) => {
             const lead = (item.summary || []).join(' ').trim();
             const readKey = savedKeyOf(item);
@@ -5697,7 +5770,7 @@
             <h4 class="bc-rtitle bc-dim">${item.title}</h4>
             <div class="bc-rbody">
               <div class="bc-rmid">${lead ? `<p class="bc-rsum bc-dim">${lead}</p>` : ''}${thumbSlotHtml(item)}</div>
-              ${briefActionsHtml(item, 'bc-racts')}
+              ${briefActionsHtml(item, 'bc-racts', opts.saved)}
             </div>
           </article>`;
           }).join('')}
@@ -5801,12 +5874,18 @@
       if (!list.length) { wrap.innerHTML = emptyBoxHtml('브리핑에 표시할 뉴스가 없습니다.'); return; }
       if (isMobileLayout()) { renderBriefingClassic(list); return; }
 
+      renderDeskList(list, viewModes.briefing, keepIdx, { label: TAB_LABELS.briefing });
+    }
+
+    // 데스크톱 기사 목록 공통 (브리핑 · 섹션 · 검색 결과 · 저장) : 카드 캐러셀 또는 목록 행
+    function renderDeskList(list, mode, keepIdx, opts = {}) {
+      const wrap = document.getElementById('news-list');
       briefIdx = keepIdx ? Math.min(briefIdx, list.length - 1) : 0;
-      if (briefViewMode === 'list') {
-        wrap.innerHTML = briefListHtml(list);
-      } else {
-        wrap.innerHTML = briefCarouselHtml(list);
+      if (mode === 'card') {
+        wrap.innerHTML = briefCarouselHtml(list, opts.label || '기사');
         wireBriefStage();
+      } else {
+        wrap.innerHTML = briefListHtml(list, opts);
       }
       fillThumbSlots();            // 이미 아는 사진은 바로
       loadBriefThumbs(list);       // 모르는 것만 서버에 (목록은 이미 그려진 뒤)
@@ -5848,9 +5927,16 @@
         </article>`;
     }
 
-    function renderNews(list, savedView = false) {
+    // 섹션 · 검색 결과 · 저장 화면. 1024px 이상 = 브리핑과 같은 카드/목록(v3 Phase 6), 좁으면 v2 행.
+    //   카드는 토글이 있는 화면(viewScope 'section')에서만. 검색 결과 · 저장은 늘 목록이다.
+    function renderNews(list, savedView = false, keepIdx = false) {
       const wrap = document.getElementById('news-list');
       if (!list.length) { wrap.innerHTML = emptyBoxHtml('검색 조건에 맞는 뉴스가 없습니다.'); return; }
+      if (!isMobileLayout()) {
+        const mode = !savedView && viewScope() === 'section' ? viewModes.section : 'list';
+        renderDeskList(list, mode, keepIdx, { saved: savedView, label: categoryLabels[currentCategory] });
+        return;
+      }
       // 행들이 구분선으로 이어 붙도록 하나의 상자로 감싼다.
       //  (#news-list 의 space-y-5 가 행 사이를 벌리면 구분선이 끊겨 보인다)
       wrap.innerHTML = `<div>${list.map((it) => newsCardHtml(it, null, true, savedView)).join('')}</div>`;
@@ -5965,6 +6051,7 @@
       const wrap = document.getElementById('news-list');
       const total = sectionState.reduce((s, sec) => s + sec.items.length, 0);
       if (total === 0) { wrap.innerHTML = emptyBoxHtml('검색 조건에 맞는 뉴스가 없습니다.'); return; }
+      if (!isMobileLayout()) { renderSectionBoxesDesk(); updateCatHeader(); return; }
 
       wrap.innerHTML = sectionState.map((sec) => {
         const shown = sec.items.slice(0, sec.count);
@@ -6012,6 +6099,54 @@
       }).join('');
 
       updateCatHeader();
+    }
+
+    // [추가] v3 Phase 6 : '전체' 화면 섹션 상자 (1024px 이상). 상자 머리 = 섹션 이름(누르면 접기) · 건수 · 필터 아이콘(아래로 드롭다운).
+    //   목록은 브리핑 목록형과 같은 행이고 번호는 상자마다 01 부터. 필터·접기 상태(openSectionFilters · collapsed)는 v2 와 같은 것을 쓴다.
+    function renderSectionBoxesDesk() {
+      const wrap = document.getElementById('news-list');
+      const selCls = 'bg-ink border border-line px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold';
+      wrap.innerHTML = sectionState.map((sec) => {
+        const shown = sec.items.slice(0, sec.count);
+        const filtersOpen = openSectionFilters.has(sec.key);
+        return `
+        <section class="sec-box">
+          <header class="sec-head">
+            <button onclick="toggleSection('${sec.key}')" class="sec-toggle" aria-expanded="${sec.collapsed ? 'false' : 'true'}">
+              <h2>${sec.label}</h2>
+              ${icon(sec.collapsed ? 'chevron-down' : 'chevron-up', 'w-4 h-4 shrink-0')}
+            </button>
+            <span class="sec-count">${sec._loading ? icon('loader-2', 'w-4 h-4 animate-spin') : shown.length + '건'}</span>
+            <div class="sec-filter-wrap">
+              <button data-sec-filter-btn="${sec.key}" onclick="toggleSectionFilters('${sec.key}')"
+                aria-expanded="${filtersOpen ? 'true' : 'false'}" title="필터" aria-label="${sec.label} 필터 (노출 건수 · 게재 기간 · 정렬)"
+                class="sec-filter-btn${filtersOpen ? ' is-open' : ''}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
+              </button>
+              <div data-sec-filters="${sec.key}" class="sec-filters${filtersOpen ? ' is-open' : ''}">
+                <select onchange="changeSectionCount('${sec.key}', this.value)" title="노출 건수" class="${selCls}">
+                  ${[3, 5, 10, 15, 20, 30].map(n => `<option value="${n}" ${sec.count === n ? 'selected' : ''}>${n}개</option>`).join('')}
+                </select>
+                <select onchange="changeSectionHours('${sec.key}', this.value)" title="게재 기간" class="${selCls}">
+                  ${Object.entries(HOURS_LABEL).map(([v, label]) => `<option value="${v}" ${sec.hours === v ? 'selected' : ''}>${label}</option>`).join('')}
+                </select>
+                <select onchange="changeSectionSort('${sec.key}', this.value)" title="정렬" class="${selCls}">
+                  <option value="sim" ${sec.sort === 'sim' ? 'selected' : ''}>정확도순</option>
+                  <option value="date" ${sec.sort === 'date' ? 'selected' : ''}>최신순</option>
+                </select>
+              </div>
+            </div>
+          </header>
+          <div${sec.collapsed ? ' hidden' : ''}>
+            ${shown.length
+              ? briefListHtml(shown, { inBox: true })
+              : `<p class="sec-empty">해당 카테고리의 기사를 찾지 못했습니다.</p>`}
+          </div>
+        </section>`;
+      }).join('');
+      // 접기·필터·불러오는 중 표시마다 다시 그려 사진 칸이 비므로, 아는 사진은 바로 다시 채운다
+      fillThumbSlots();
+      loadBriefThumbs(sectionState.flatMap((sec) => sec.collapsed ? [] : sec.items.slice(0, sec.count)));
     }
 
     function formatDate(iso) {
