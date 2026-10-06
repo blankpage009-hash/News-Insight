@@ -260,7 +260,7 @@
     left: 0; right: 0; bottom: 0;
     z-index: 45;                      /* 본문·상단바 위, 팝업(60~) 아래 */
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));   /* 아이콘을 화면 아래 끝에서 띄우려고 바 안쪽 여백을 늘림 */
+    padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px));   /* 아이콘을 화면 아래 끝에서 띄우려고 바 안쪽 여백을 늘림 (아이폰 둥근 모서리에 글자가 잘리지 않게) */
     border-top: 2px solid rgb(var(--c-paper));
     background: rgb(var(--c-ink));
   }
@@ -284,7 +284,7 @@
   #tab-saved-count[hidden] { display: none; }
   /* 탭 바(50px + 위 선 2px)에 가려 마지막 기사가 안 보이지 않도록 본문 아래를 비워 둔다 */
   @media (max-width: 1023.98px) {
-    body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+    body { padding-bottom: calc(74px + env(safe-area-inset-bottom, 0px)); }
   }
 
   /* ---------------------------------------------------------------
