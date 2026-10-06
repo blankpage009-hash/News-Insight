@@ -100,7 +100,17 @@ v2(어두운 금색 톤 · 좌측 사이드바 + 우측 마켓 레일 3단)를 �
 - [x] **Phase 7** Sub Page 팝업 (2026-10-06)
 - [x] **Phase 8** 설정 한 창 (2026-10-06)
 - [x] **Phase 9** Mobile (2026-10-06)
-- [ ] Phase 10 App Icon ← 다음 (Sonnet 5.5 · low)
+- [x] **Phase 10** App Icon (2026-10-06) — 1d(1면) 선택
+- [ ] Phase 11 다크·시스템 테마 — 마지막으로 미룸 (사용자 결정)
+- [ ] Phase 12 출시 v3.0 ← 다음
+
+### Phase 10 에서 한 것 (2026-10-06)
+
+- **선택** : 1d 1면(밝은 바탕 #f3f2f2 · 레드 헤드라인 · 굵은 룰 · 2단 본문 줄 · 가운데 단 나눔 선). 시안의 사각형 좌표(100×100)를 그대로 썼다.
+- **파일(루트)** : `icon.svg`(파비콘 · 모서리 둥근 버전) · `favicon-32.png` · `apple-touch-icon.png`(180) · `icon-192.png` · `icon-512.png`(꽉 찬 정사각형 — iOS/안드로이드가 알아서 모서리를 깎는다) · `manifest.webmanifest`.
+- **HTML** : `<head>` 에 icon(svg·png) · apple-touch-icon · manifest · theme-color 추가. 옛 `apple-touch-icon.jpg` 는 삭제.
+- **PNG 만든 법** : 의존성 없이 node(zlib)로 사각형 면적을 계산해 그렸다(안티앨리어싱 포함). 다시 만들 일이 있으면 시안 좌표로 같은 방식.
+- 루트의 `icon.png`(옛 로고) · `beyond news_icon.JPG` 는 쓰지 않는다(커밋 안 함).
 
 ### Phase 0 에서 한 것 (2026-10-06)
 
