@@ -653,6 +653,139 @@
   }
   .save-btn.is-saved:hover { background: rgb(var(--c-gold) / .2); color: rgb(var(--c-gold2)); }
 
+  /* ---------------------------------------------------------------
+     [추가] v3 Phase 7 : Sub Page 팝업 (시안 1a 주요 내용 · 1b Insight · 1c 관련 기사 · 1d 지수 차트)
+       머리말(레드 라벨 + 메타 + 닫기) / 본문 / 아래 바. 2px 검정 테두리 · 직각 · 그림자.
+       설정 팝업(.popup-shell)은 Phase 8 에서 바꾸므로 따로 pv- 접두어 클래스를 쓴다.
+       폭은 모든 화면에 적용하되, 두 칸(Insight)·여백 같은 레이아웃은 아래 미디어 규칙이 좁은 화면을 따로 맡는다.
+     --------------------------------------------------------------- */
+  .pv-shell {
+    display: flex; flex-direction: column; width: 100%; max-height: 94vh;
+    background: rgb(var(--c-ink)); color: rgb(var(--c-paper));
+    border: 2px solid rgb(var(--c-paper)); box-shadow: 0 12px 32px rgb(var(--c-paper) / .22);
+  }
+  .pv-head { flex: none; display: flex; align-items: center; gap: 12px; padding: 16px 28px; border-bottom: 2px solid rgb(var(--c-paper)); }
+  .pv-label {
+    flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+    background: rgb(var(--c-gold)); color: rgb(var(--c-ink));
+    font-size: 13px; font-weight: 700; letter-spacing: .06em; white-space: nowrap;
+  }
+  .pv-label svg { width: 14px; height: 14px; }
+  .pv-meta { min-width: 0; font-size: 12px; color: rgb(var(--c-muted)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pv-meta b { font-weight: 700; color: rgb(var(--c-paper)); }
+  .pv-headtitle { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pv-h2 { font-size: 20px; font-weight: 800; letter-spacing: -.015em; line-height: 1.2; white-space: nowrap; }
+  .pv-close {
+    flex: none; margin-left: auto; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    color: rgb(var(--c-gold)); border: 1px solid transparent; transition: background-color .15s, border-color .15s;
+  }
+  .pv-close:hover { background: rgb(var(--c-gold) / .08); border-color: rgb(var(--c-gold)); }
+  .pv-close svg { width: 18px; height: 18px; }
+  .pv-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 28px 28px 28px; display: flex; flex-direction: column; gap: 24px; }
+  .pv-body.is-flush { padding: 0; gap: 0; }
+  .pv-body.is-rows { padding: 0 28px 12px; gap: 0; }
+  .pv-body.is-chart { padding: 20px 28px 20px; gap: 12px; }
+  .pv-stack { display: flex; flex-direction: column; gap: 24px; }
+  .pv-foot { flex: none; display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 16px 28px; border-top: 2px solid rgb(var(--c-paper)); }
+  .pv-note { flex: 1 1 220px; min-width: 0; font-size: 12px; line-height: 1.5; color: rgb(var(--c-muted)); }
+  .pv-actions { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .pv-btn {
+    display: inline-flex; align-items: center; gap: 5px; padding: 7px 11px;
+    border: 1px solid rgb(var(--c-paper) / .4); color: rgb(var(--c-paper));
+    font-size: 13px; font-weight: 800; line-height: 16px; white-space: nowrap; transition: background-color .15s, color .15s, border-color .15s;
+  }
+  .pv-btn svg { width: 13px; height: 13px; }
+  .pv-btn:hover { background: rgb(var(--c-paper)); border-color: rgb(var(--c-paper)); color: rgb(var(--c-ink)); }
+  .pv-btn.is-primary { background: rgb(var(--c-gold)); border-color: rgb(var(--c-gold)); color: rgb(var(--c-ink)); }
+  .pv-btn.is-primary:hover { background: rgb(var(--c-gold2)); border-color: rgb(var(--c-gold2)); }
+
+  /* 주요 내용 본문 */
+  .pv-title { font-size: 28px; font-weight: 800; letter-spacing: -.02em; line-height: 1.3; word-break: keep-all; text-wrap: pretty; }
+  .pv-headline { font-size: 17px; font-weight: 800; line-height: 1.45; word-break: keep-all; }
+  .pv-lead { font-size: 15px; line-height: 1.7; color: #444141; word-break: keep-all; text-wrap: pretty; }
+  .pv-h4 { margin-bottom: 8px; font-size: 15px; font-weight: 800; letter-spacing: -.015em; }
+  .pv-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .pv-table thead tr { border-top: 2px solid rgb(var(--c-paper)); border-bottom: 1px solid rgb(var(--c-paper)); }
+  .pv-table th { padding: 8px 0; text-align: left; font-size: 12px; font-weight: 600; color: rgb(var(--c-muted)); }
+  .pv-table td { padding: 10px 0; vertical-align: top; line-height: 1.55; word-break: keep-all; border-bottom: 1px solid rgb(var(--c-paper) / .4); }
+  .pv-table th:first-child, .pv-table td:first-child { width: 140px; padding-right: 16px; }
+  .pv-table td:first-child { font-weight: 700; color: rgb(var(--c-up)); }
+  .pv-list { display: flex; flex-direction: column; gap: 8px; }
+  .pv-list li { display: grid; grid-template-columns: 16px minmax(0, 1fr); font-size: 15px; line-height: 1.65; word-break: keep-all; }
+  .pv-list li::before { content: 'ㆍ'; color: rgb(var(--c-gold)); }
+  .pv-list.is-sm { gap: 10px; }
+  .pv-list.is-sm li { font-size: 14px; line-height: 1.6; }
+  .pv-notes { padding-top: 14px; border-top: 1px solid rgb(var(--c-paper) / .4); }
+  .pv-notes h4 { margin-bottom: 8px; font-size: 11px; font-weight: 800; letter-spacing: .12em; color: rgb(var(--c-muted)); }
+  .pv-notes ul { display: flex; flex-direction: column; gap: 6px; }
+  .pv-notes li { font-size: 13px; line-height: 1.6; color: rgb(var(--c-muted)); word-break: keep-all; }
+  .pv-notes b { font-weight: 700; color: rgb(var(--c-paper)); }
+  .pv-err { padding: 12px 16px; border: 1px solid rgb(var(--c-up)); color: rgb(var(--c-up)); font-size: 14px; line-height: 1.5; }
+  .pv-wait { display: flex; flex-direction: column; gap: 12px; }
+  .pv-wait p { font-size: 13px; color: rgb(var(--c-muted)); padding-top: 4px; }
+
+  /* Insight 본문 : 두 관점 나란히 (1024px 이상) */
+  .pv-cols { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .pv-col { display: flex; flex-direction: column; gap: 14px; padding: 24px 28px 28px; }
+  .pv-col + .pv-col { border-top: 2px solid rgb(var(--c-paper)); }
+  @media (min-width: 1024px) {
+    .pv-cols.is-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .pv-cols.is-2 > .pv-col + .pv-col { border-top: 0; border-left: 2px solid rgb(var(--c-paper)); }
+  }
+  .pv-kind { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+  .pv-kind svg { width: 15px; height: 15px; }
+  .pv-verdict { font-size: 19px; font-weight: 800; letter-spacing: -.01em; line-height: 1.4; word-break: keep-all; text-wrap: pretty; }
+  .pv-sign-list { display: flex; flex-direction: column; gap: 10px; }
+  .pv-sign-list li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.6; word-break: keep-all; }
+  .pv-sign { font-size: 12px; font-weight: 800; line-height: 1.9; }
+  .pv-sign.is-ok { color: rgb(var(--c-ok)); }
+  .pv-sign.is-risk { color: rgb(var(--c-up)); }
+  .pv-sublabel { display: block; margin-bottom: 8px; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+  .pv-chip { display: inline-block; padding: 3px 8px; border: 1px solid rgb(var(--c-paper) / .4); font-size: 11px; line-height: 1.3; color: rgb(var(--c-muted)); }
+  .pv-stocks { margin-top: 6px; padding-top: 14px; border-top: 2px solid rgb(var(--c-paper)); display: flex; flex-direction: column; gap: 12px; }
+  .pv-stock { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; word-break: keep-all; }
+  .pv-stock b { font-size: 14px; font-weight: 700; }
+  .pv-stock .sector { font-size: 11px; color: rgb(var(--c-muted)); }
+  .pv-stock .reason { flex-basis: 100%; font-size: 13px; line-height: 1.5; color: #444141; }
+  .pv-tag { padding: 1px 6px; border: 1px solid currentColor; font-size: 11px; font-weight: 600; color: rgb(var(--c-muted)); }
+  .pv-tag.is-ok { color: rgb(var(--c-ok)); }
+  .pv-tag.is-down { color: rgb(var(--c-down)); }
+  .pv-disclaimer { font-size: 11px; line-height: 1.5; color: rgb(var(--c-muted)); }
+
+  /* 관련 기사·이어보기 : 목록형 행(.bc-row)을 팝업 폭에 맞게 한 단계 작게 */
+  .pv-rows .bc-row { grid-template-columns: 40px minmax(0, 1fr) auto; }
+  .pv-rows .bc-rno { font-size: 22px; }
+  .pv-rows .bc-rtitle { font-size: 18px; letter-spacing: -.01em; }
+  .pv-rows .bc-rsum { font-size: 14px; line-height: 1.6; }
+  .pv-rows .bc-act { font-size: 12px; font-weight: 800; }
+
+  /* 지수 차트 */
+  .pv-rangebar { flex: none; display: flex; flex-wrap: wrap; gap: 4px; padding: 14px 28px; border-bottom: 1px solid rgb(var(--c-paper) / .4); }
+  .pv-range { padding: 5px 11px; font-size: 13px; font-weight: 500; color: rgb(var(--c-paper)); transition: background-color .15s, color .15s; }
+  .pv-range:hover { background: rgb(var(--c-ink2)); }
+  .pv-range.is-on { background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); font-weight: 700; }
+  .pv-fig { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+  .pv-big { font-size: 32px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .pv-diff { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pv-sub { font-size: 12px; color: rgb(var(--c-muted)); }
+  .pv-plot { padding-top: 8px; border-top: 2px solid rgb(var(--c-paper)); }
+  .pv-fine { font-size: 12px; line-height: 1.5; color: rgb(var(--c-muted)); }
+
+  @media (max-width: 639.98px) {
+    .pv-head { padding: 12px 16px; flex-wrap: wrap; gap: 8px 10px; }
+    .pv-body { padding: 20px 16px 16px; gap: 20px; }
+    .pv-body.is-rows { padding: 0 16px 8px; }
+    .pv-body.is-chart { padding: 16px 16px 12px; }
+    .pv-col { padding: 20px 16px 22px; }
+    .pv-foot { padding: 12px; }
+    .pv-note { flex-basis: 100%; }
+    .pv-actions { margin-left: 0; width: 100%; }
+    .pv-rangebar { padding: 12px 16px; }
+    .pv-title { font-size: 22px; }
+    .pv-big { font-size: 26px; }
+    .pv-table th:first-child, .pv-table td:first-child { width: 92px; }
+  }
+
   /* 화면 설정(시안 07번) : 테마 3종 썸네일 + 설정 줄 */
   .theme-card {
     flex: 1; display: flex; flex-direction: column; gap: .5rem;
@@ -1915,51 +2048,50 @@
     </div>
   </div>
 
-  <!-- 주요 내용(AI 정리) 팝업 모달 -->
+  <!-- [수정] v3 Phase 7 : Sub Page 팝업 6종 (시안 1a~1d). 머리말 / 본문 / 아래 바. pv-* 스타일은 위 CSS 참고. -->
+
+  <!-- 주요 내용(AI 정리) 팝업 모달 (시안 1a · 880px) -->
   <div id="brief-modal" class="hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeBriefOnBackdrop(event)">
-    <!-- [수정] 시안 05번 : 620px · 머리말(라벨·출처·제목) / 본문 / 아래 버튼 바 -->
-    <div class="modal-pop popup-shell bg-ink2 border border-line rounded-xl shadow-2xl w-full max-w-[620px] max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
+    <div class="modal-pop pv-shell max-w-[880px]" onclick="event.stopPropagation()">
       <!-- sheet-grab : 모바일에서 아래로 쓸어 닫기를 시작할 수 있는 구역 -->
-      <div class="popup-head sheet-grab shrink-0">
-        <div class="flex-1 min-w-0 space-y-2">
-          <div class="flex items-center gap-2">
-            <span class="popup-kind">주요 내용</span>
-            <span class="dot-sep"></span>
-            <span id="brief-meta" class="font-mono text-[0.72rem] text-muted2 truncate"></span>
-          </div>
-          <h2 id="brief-title" class="popup-title font-sans break-keep"></h2>
-        </div>
-        <button onclick="closeBrief()" title="닫기" class="shrink-0 text-muted2 hover:text-paper transition">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      <div class="pv-head sheet-grab">
+        <span class="pv-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+          주요 내용
+        </span>
+        <span id="brief-meta" class="pv-meta"></span>
+        <button onclick="closeBrief()" title="닫기" aria-label="닫기" class="pv-close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
-      <div id="brief-body" class="popup-body overflow-y-auto grow space-y-4"></div>
-      <span id="brief-note" class="shrink-0 px-5 pb-3 text-muted font-mono text-[0.72rem] leading-relaxed"></span>
-      <!-- [수정] 시안 05번 : 안내 문구는 본문 끝으로 내리고, 버튼은 한 줄 바로 모은다 -->
-      <div class="popup-foot popup-bar shrink-0">
-        <div class="popup-actions flex items-center gap-2 flex-wrap w-full">
-          <button id="brief-insight-btn" onclick="openInsightFromBrief()" title="Insight"
-            class="pop-btn is-ok">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+      <div class="pv-body">
+        <h3 id="brief-title" class="pv-title"></h3>
+        <div id="brief-body" class="pv-stack"></div>
+      </div>
+      <div class="pv-foot popup-foot">
+        <span id="brief-note" class="pv-note"></span>
+        <div class="pv-actions popup-actions">
+          <button id="brief-insight-btn" onclick="openInsightFromBrief()" title="Insight" class="pv-btn is-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
             Insight
           </button>
-          <a id="brief-link" href="#" target="_blank" rel="noopener noreferrer" class="pop-btn is-plain">
+          <a id="brief-link" href="#" target="_blank" rel="noopener noreferrer" class="pv-btn">
             원문 보기
-            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
           </a>
-          <button id="brief-related-btn" onclick="openRelatedFromBrief()" title="관련 기사" class="pop-btn is-plain">
-            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          <button id="brief-related-btn" onclick="openRelatedFromBrief()" title="관련 기사" class="pv-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             관련 기사
           </button>
-          <!-- [추가] 저장(북마크) : 이 브라우저의 보관함에 담는다 -->
+          <!-- 저장(북마크) : 이 브라우저의 보관함에 담는다 -->
           <button id="brief-save-btn" onclick="toggleSave(currentBriefId)" data-save-style="pop" data-save-key=""
-            aria-pressed="false" aria-label="기사 저장" title="기사 저장" class="save-btn pop-btn is-plain">
-            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>
+            aria-pressed="false" aria-label="기사 저장" title="기사 저장" class="save-btn pv-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>
             저장
           </button>
-          <!-- 'PDF 저장' : 팝업 내용을 인쇄창(→ PDF로 저장)으로 넘긴다. 시안의 오른쪽 끝 채움 버튼 자리다. -->
-          <button onclick="savePopupAsPdf('brief')" title="PDF 저장" class="pop-btn is-gold ml-auto">
-            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+          <!-- 'PDF 저장' : 팝업 내용을 인쇄창(→ PDF로 저장)으로 넘긴다 -->
+          <button onclick="savePopupAsPdf('brief')" title="PDF 저장" class="pv-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
             PDF 저장
           </button>
         </div>
@@ -1967,38 +2099,34 @@
     </div>
   </div>
 
-  <!-- Insight(AI 두 관점 인사이트) 팝업 모달 -->
+  <!-- Insight(AI 두 관점 인사이트) 팝업 모달 (시안 1b · 960px) -->
   <div id="insight-modal" class="hidden fixed inset-0 z-[65] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeInsightOnBackdrop(event)">
-    <!-- [수정] 시안 06번 : 620px · 초록 테두리 · 머리말(라벨·제목) / 본문 / 아래 버튼 바 -->
-    <div class="modal-pop popup-shell is-ok bg-ink2 border border-line rounded-xl shadow-2xl w-full max-w-[620px] max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
-      <div class="popup-head is-ok sheet-grab shrink-0">
-        <div class="flex-1 min-w-0 space-y-2">
-          <div class="flex items-center gap-2 text-ok">
-            <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
-            <span class="popup-kind text-ok">INSIGHT · AI 분석</span>
-          </div>
-          <h2 id="insight-title" class="popup-title font-sans break-keep"></h2>
-        </div>
-        <button onclick="closeInsight()" title="닫기" class="shrink-0 text-muted2 hover:text-paper transition">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    <div class="modal-pop pv-shell max-w-[960px]" onclick="event.stopPropagation()">
+      <div class="pv-head sheet-grab">
+        <span class="pv-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+          Insight
+        </span>
+        <span id="insight-title" class="pv-headtitle"></span>
+        <button onclick="closeInsight()" title="닫기" aria-label="닫기" class="pv-close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
-      <div id="insight-body" class="popup-body overflow-y-auto grow space-y-4"></div>
-      <span id="insight-note" class="shrink-0 px-5 pb-3 text-muted font-mono text-[0.72rem] leading-relaxed"></span>
-      <div class="popup-foot popup-bar shrink-0">
-        <div class="popup-actions flex items-center gap-2 flex-wrap w-full">
-          <a id="insight-link" href="#" target="_blank" rel="noopener noreferrer" class="pop-btn is-plain">
+      <div id="insight-body" class="pv-body is-flush"></div>
+      <div class="pv-foot popup-foot">
+        <span id="insight-note" class="pv-note"></span>
+        <div class="pv-actions popup-actions">
+          <a id="insight-link" href="#" target="_blank" rel="noopener noreferrer" class="pv-btn">
             원문 보기
-            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
           </a>
-          <!-- [추가] 저장(북마크) -->
           <button id="insight-save-btn" onclick="toggleSave(currentInsightId)" data-save-style="pop" data-save-key=""
-            aria-pressed="false" aria-label="기사 저장" title="기사 저장" class="save-btn pop-btn is-plain">
-            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>
+            aria-pressed="false" aria-label="기사 저장" title="기사 저장" class="save-btn pv-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>
             저장
           </button>
-          <button onclick="savePopupAsPdf('insight')" title="PDF 저장" class="pop-btn is-gold ml-auto">
-            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+          <button onclick="savePopupAsPdf('insight')" title="PDF 저장" class="pv-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
             PDF 저장
           </button>
         </div>
@@ -2006,88 +2134,89 @@
     </div>
   </div>
 
-  <!-- [추가] SCFI 지수 차트 팝업 (운임지수 섹션의 SCFI 패널을 누르면 열린다) -->
+  <!-- SCFI 지수 차트 팝업 (운임지수 섹션의 SCFI 패널을 누르면 열린다 · 시안 1d 모양) -->
   <div id="scfi-modal" class="hidden fixed inset-0 z-[75] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeScfiChartOnBackdrop(event)">
-    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-4xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
-      <div class="flex justify-between items-center gap-4 p-6 pb-3 shrink-0">
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="text-gold2 shrink-0">
-            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-          </span>
-          <h3 class="text-gold font-bold tracking-wider truncate">SCFI 종합지수 추이</h3>
-        </div>
-        <button onclick="closeScfiChart()" class="text-muted hover:text-paper transition shrink-0">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    <div class="modal-pop pv-shell max-w-[880px]" onclick="event.stopPropagation()">
+      <div class="pv-head">
+        <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        <h2 class="pv-h2">SCFI</h2>
+        <span class="pv-meta">종합지수 추이</span>
+        <button onclick="closeScfiChart()" title="닫기" aria-label="닫기" class="pv-close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
       <!-- 기간 버튼 (1주일 ~ 3년) -->
-      <div id="scfi-range-tabs" class="flex flex-wrap gap-1.5 px-6 pb-3 shrink-0"></div>
-      <div id="scfi-chart-body" class="px-6 overflow-y-auto grow pb-4"></div>
-      <div class="popup-foot flex items-center justify-between gap-3 flex-wrap p-6 pt-4 border-t border-line shrink-0">
-        <span class="text-muted font-mono text-[0.75rem]">SCFI는 매주 금요일 1회 발표됩니다.</span>
-        <a href="https://en.sse.net.cn/indices/scfinew.jsp" target="_blank" rel="noopener noreferrer"
-          class="flex items-center gap-1 text-wire hover:text-blue-300 px-2.5 py-1 rounded-md transition border border-wire/30 bg-wire/10 font-semibold text-[0.8rem]">
-          상하이해운거래소
-          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-        </a>
+      <div id="scfi-range-tabs" class="pv-rangebar"></div>
+      <div id="scfi-chart-body" class="pv-body is-chart"></div>
+      <div class="pv-foot popup-foot">
+        <span class="pv-note">SCFI는 매주 금요일 1회 발표됩니다.</span>
+        <div class="pv-actions popup-actions">
+          <a href="https://en.sse.net.cn/indices/scfinew.jsp" target="_blank" rel="noopener noreferrer" class="pv-btn">
+            상하이해운거래소
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+          </a>
+          <button onclick="closeScfiChart()" class="pv-btn">닫기</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- [추가] 증시 지수 차트 팝업 ('증시 > 지수 차트'의 지수 카드를 누르면 열린다) -->
+  <!-- 증시 지수 차트 팝업 (지수 줄의 지수를 누르면 열린다 · 시안 1d · 880px) -->
   <div id="index-modal" class="hidden fixed inset-0 z-[75] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeIndexChartOnBackdrop(event)">
-    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-4xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
-      <div class="flex justify-between items-center gap-4 p-6 pb-3 shrink-0">
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="text-gold2 shrink-0">
-            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-          </span>
-          <h3 id="index-modal-title" class="text-gold font-bold tracking-wider truncate">지수 추이</h3>
-        </div>
-        <button onclick="closeIndexChart()" class="text-muted hover:text-paper transition shrink-0">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    <div class="modal-pop pv-shell max-w-[880px]" onclick="event.stopPropagation()">
+      <div class="pv-head">
+        <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        <h2 id="index-modal-title" class="pv-h2">지수 추이</h2>
+        <span id="index-modal-sub" class="pv-meta"></span>
+        <button onclick="closeIndexChart()" title="닫기" aria-label="닫기" class="pv-close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
       <!-- 기간 버튼 (1일 ~ 3년) -->
-      <div id="index-range-tabs" class="flex flex-wrap gap-1.5 px-6 pb-3 shrink-0"></div>
-      <div id="index-chart-body" class="px-6 overflow-y-auto grow pb-4"></div>
-      <div class="popup-foot flex items-center justify-between gap-3 flex-wrap p-6 pt-4 border-t border-line shrink-0">
-        <span id="index-chart-note" class="text-muted font-mono text-[0.75rem]"></span>
-        <button onclick="closeIndexChart()"
-          class="text-muted hover:text-gold border border-line rounded-lg px-3 py-1.5 transition text-[0.8rem] font-semibold">닫기</button>
+      <div id="index-range-tabs" class="pv-rangebar"></div>
+      <div id="index-chart-body" class="pv-body is-chart"></div>
+      <div class="pv-foot popup-foot">
+        <span id="index-chart-note" class="pv-note"></span>
+        <div class="pv-actions popup-actions">
+          <button onclick="closeIndexChart()" class="pv-btn">닫기</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- 관련 기사 팝업 모달 ([수정] 나중에 연 팝업이 위로 오도록 z-index는 bringModalToFront()가 정한다) -->
+  <!-- 관련 기사 팝업 모달 (시안 1c · 960px). 나중에 연 팝업이 위로 오도록 z-index는 bringModalToFront()가 정한다 -->
   <div id="related-modal" class="hidden fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeRelatedOnBackdrop(event)">
-    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
-      <div class="sheet-grab flex justify-between items-start gap-4 p-6 pb-3 shrink-0">
-        <div class="min-w-0">
-          <span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30">관련 기사</span>
-          <p class="text-muted mt-2 text-[0.95rem] break-keep">기준 기사: <span id="related-source-title" class="text-paper/80"></span></p>
-        </div>
-        <button onclick="closeRelated()" class="text-muted hover:text-paper transition shrink-0">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    <div class="modal-pop pv-shell max-w-[960px]" onclick="event.stopPropagation()">
+      <div class="pv-head sheet-grab">
+        <span class="pv-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          관련 기사
+        </span>
+        <span class="pv-meta" style="flex:1">기준 기사 · <b id="related-source-title"></b></span>
+        <span id="related-count" class="pv-meta" style="flex:none"></span>
+        <button onclick="closeRelated()" title="닫기" aria-label="닫기" class="pv-close" style="margin-left:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
-      <div id="related-body" class="px-6 pb-6 overflow-y-auto grow space-y-3"></div>
+      <div id="related-body" class="pv-body is-rows pv-rows"></div>
     </div>
   </div>
 
-  <!-- [추가] 이어보기 팝업 : 저장한 기사 목록의 '이어보기' 버튼으로 연다. 관련 기사 팝업과 같은 구조다. -->
+  <!-- 이어보기 팝업 : 저장한 기사 목록의 '이어보기' 버튼으로 연다. 관련 기사 팝업과 같은 구조다. -->
   <div id="followup-modal" class="hidden fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closeFollowupOnBackdrop(event)">
-    <div class="modal-pop bg-ink2 border border-line rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col" onclick="event.stopPropagation()">
-      <div class="sheet-grab flex justify-between items-start gap-4 p-6 pb-3 shrink-0">
-        <div class="min-w-0">
-          <span class="font-bold uppercase tracking-widest px-2.5 py-1 bg-wire/15 text-wire rounded-md border border-wire/30">이어보기</span>
-          <p class="text-muted mt-2 text-[0.95rem] break-keep">기준 기사: <span id="followup-source-title" class="text-paper/80"></span></p>
-        </div>
-        <button onclick="closeFollowup()" class="text-muted hover:text-paper transition shrink-0">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    <div class="modal-pop pv-shell max-w-[960px]" onclick="event.stopPropagation()">
+      <div class="pv-head sheet-grab">
+        <span class="pv-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+          이어보기
+        </span>
+        <span class="pv-meta" style="flex:1">기준 기사 · <b id="followup-source-title"></b></span>
+        <span id="followup-count" class="pv-meta" style="flex:none"></span>
+        <button onclick="closeFollowup()" title="닫기" aria-label="닫기" class="pv-close" style="margin-left:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
-      <div id="followup-body" class="px-6 pb-6 overflow-y-auto grow space-y-3"></div>
+      <div id="followup-body" class="pv-body is-rows pv-rows"></div>
     </div>
   </div>
 
@@ -4478,14 +4607,8 @@
     function renderScfiRangeTabs() {
       const el = document.getElementById('scfi-range-tabs');
       if (!el) return;
-      el.innerHTML = SCFI_RANGES.map(r => {
-        const on = r.key === scfiRange;
-        const cls = on
-          ? 'bg-gold/20 text-gold border-gold/50'
-          : 'bg-ink3 text-muted border-line hover:text-paper hover:border-gold/30';
-        return `<button onclick="setScfiRange('${r.key}')"
-          class="px-3 py-1 rounded-md border font-semibold text-[0.8rem] transition ${cls}">${r.label}</button>`;
-      }).join('');
+      el.innerHTML = SCFI_RANGES.map(r =>
+        `<button onclick="setScfiRange('${r.key}')" class="pv-range${r.key === scfiRange ? ' is-on' : ''}">${r.label}</button>`).join('');
     }
 
     async function loadScfiHistory() {
@@ -4611,13 +4734,13 @@
         : '';
 
       body.innerHTML = `
-        <div class="flex items-baseline gap-x-3 gap-y-1 flex-wrap mb-3">
-          <span class="font-mono text-paper text-2xl tabular-nums">${numText(last.value)}</span>
-          <span class="font-mono ${sumClass} tabular-nums">${diff === 0 ? '보합' : `${arrow}${numText(Math.abs(diff))}p (${arrow}${Math.abs(diffPct).toFixed(2)}%)`}</span>
-          <span class="text-muted font-mono text-[0.8rem]">${range.label} 전 ${numText(first.value)} 대비</span>
-          <span class="text-muted font-mono text-[0.8rem] ml-auto">${first.date} ~ ${last.date} · ${pts.length}주</span>
+        <div class="pv-fig">
+          <span class="pv-big">${numText(last.value)}</span>
+          <span class="pv-diff ${sumClass}">${diff === 0 ? '보합' : `${arrow}${numText(Math.abs(diff))}p (${arrow}${Math.abs(diffPct).toFixed(2)}%)`}</span>
+          <span class="pv-sub">${range.label} 전 ${numText(first.value)} 대비</span>
+          <span class="pv-sub ml-auto">${first.date} ~ ${last.date} · ${pts.length}주</span>
         </div>
-        <div id="scfi-plot" class="relative select-none">
+        <div id="scfi-plot" class="pv-plot relative select-none">
           <svg id="scfi-svg" viewBox="0 0 ${W} ${H}" class="w-full h-auto block">
             <defs>
               <linearGradient id="scfi-fill" x1="0" y1="0" x2="0" y2="1">
@@ -4633,9 +4756,9 @@
             <circle id="scfi-hover-dot" r="4.5" fill="${lineColor}" opacity="0"/>
             ${xLabels}
           </svg>
-          <div id="scfi-tip" class="hidden absolute pointer-events-none z-10 px-2.5 py-1.5 rounded-md bg-ink border border-gold/40 font-mono text-[0.75rem] text-paper whitespace-nowrap shadow-lg"></div>
+          <div id="scfi-tip" class="hidden absolute pointer-events-none z-10 px-2.5 py-1.5 rounded-md bg-ink border border-paper text-[0.75rem] text-paper whitespace-nowrap shadow-lg"></div>
         </div>
-        <p class="text-muted text-[0.72rem] leading-snug mt-3 break-keep">
+        <p class="pv-fine break-keep">
           SCFI는 매주 1회(금요일) 발표되는 주간 지수라 점 사이 간격이 일주일입니다.
           중국 춘절·국경절처럼 발표를 쉬는 주에는 간격이 2주가 됩니다.
         </p>`;
@@ -4818,7 +4941,8 @@
       const modal = document.getElementById('index-modal');
       if (!modal) return;
       const card = INDEX_CARDS.find((c) => c.key === key);
-      document.getElementById('index-modal-title').textContent = card.fx ? `${card.label} 추이` : `${card.label} 지수 추이`;
+      document.getElementById('index-modal-title').textContent = card.label;
+      document.getElementById('index-modal-sub').textContent = card.fx ? '추이' : `${card.sub} · 지수 추이`;
       modal.classList.remove('hidden');
       bringModalToFront(modal);
       renderIndexRangeTabs();
@@ -4853,14 +4977,8 @@
     function renderIndexRangeTabs() {
       const el = document.getElementById('index-range-tabs');
       if (!el) return;
-      el.innerHTML = INDEX_RANGES.map((r) => {
-        const on = r.key === indexChartRange;
-        const cls = on
-          ? 'bg-gold/20 text-gold border-gold/50'
-          : 'bg-ink3 text-muted border-line hover:text-paper hover:border-gold/30';
-        return `<button onclick="setIndexRange('${r.key}')"
-          class="px-3 py-1 rounded-md border font-semibold text-[0.8rem] transition ${cls}">${r.label}</button>`;
-      }).join('');
+      el.innerHTML = INDEX_RANGES.map((r) =>
+        `<button onclick="setIndexRange('${r.key}')" class="pv-range${r.key === indexChartRange ? ' is-on' : ''}">${r.label}</button>`).join('');
     }
 
     async function loadIndexChart() {
@@ -4995,13 +5113,13 @@
         : '';
 
       body.innerHTML = `
-        <div class="flex items-baseline gap-x-3 gap-y-1 flex-wrap mb-3">
-          <span class="font-mono text-paper text-2xl tabular-nums">${numText(last.value)}</span>
-          <span class="font-mono ${sumClass} tabular-nums">${diff === 0 ? '보합' : `${arrow}${numText(Math.abs(diff))}${unit} (${arrow}${Math.abs(diffPct).toFixed(2)}%)`}</span>
-          <span class="text-muted font-mono text-[0.8rem]">${base !== null ? `전일 종가 ${numText(base)} 대비` : `${rangeLabel} 전 ${numText(first.value)} 대비`}</span>
-          <span class="text-muted font-mono text-[0.8rem] ml-auto">${indexTipLabel(first.t, off, indexChartRange)} ~ ${indexTipLabel(last.t, off, indexChartRange)}</span>
+        <div class="pv-fig">
+          <span class="pv-big">${numText(last.value)}</span>
+          <span class="pv-diff ${sumClass}">${diff === 0 ? '보합' : `${arrow}${numText(Math.abs(diff))}${unit} (${arrow}${Math.abs(diffPct).toFixed(2)}%)`}</span>
+          <span class="pv-sub">${base !== null ? `전일 종가 ${numText(base)} 대비` : `${rangeLabel} 전 ${numText(first.value)} 대비`}</span>
+          <span class="pv-sub ml-auto">${indexTipLabel(first.t, off, indexChartRange)} ~ ${indexTipLabel(last.t, off, indexChartRange)}</span>
         </div>
-        <div id="index-plot" class="relative select-none">
+        <div id="index-plot" class="pv-plot relative select-none">
           <svg id="index-svg" viewBox="0 0 ${W} ${H}" class="w-full h-auto block">
             <defs>
               <linearGradient id="index-fill" x1="0" y1="0" x2="0" y2="1">
@@ -5018,9 +5136,9 @@
             <circle id="index-hover-dot" r="4.5" fill="${lineColor}" opacity="0"/>
             ${xLabels}
           </svg>
-          <div id="index-tip" class="hidden absolute pointer-events-none z-10 px-2.5 py-1.5 rounded-md bg-ink border border-gold/40 font-mono text-[0.75rem] text-paper whitespace-nowrap shadow-lg"></div>
+          <div id="index-tip" class="hidden absolute pointer-events-none z-10 px-2.5 py-1.5 rounded-md bg-ink border border-paper text-[0.75rem] text-paper whitespace-nowrap shadow-lg"></div>
         </div>
-        <p class="text-muted text-[0.72rem] leading-snug mt-3 break-keep">
+        <p class="pv-fine break-keep">
           ${isIntraday
             ? `오늘 ${card.fx ? '' : '장중 '}5분 간격 ${noun}입니다. 점선은 전일 종가이며, 시각은 ${card.fx ? '한국' : '그 시장의 현지'} 시간 기준입니다.`
             : '종가 기준 추이입니다. 휴장일은 점이 없어 간격이 벌어질 수 있습니다.'}
@@ -5642,7 +5760,8 @@
     // 주요 내용 · Insight · 원문 보기 · 관련 기사 (기존과 같은 함수를 부른다)
     //   saved : 저장 화면의 이어보기 버튼. .followup-btn · data-followup-key · [data-followup-count] 는
     //           primeFollowupBadges/updateFollowupBadge 가 찾는 표시라 모양을 바꿔도 그대로 둔다.
-    function briefActionsHtml(item, wrapClass, saved = false) {
+    //   noRelated : 관련 기사·이어보기 팝업 안의 행은 '관련 기사' 버튼을 빼서 팝업이 끝없이 이어지지 않게 한다
+    function briefActionsHtml(item, wrapClass, saved = false, noRelated = false) {
       const key = savedKeyOf(item);
       const followup = saved ? `
           <button onclick="openFollowup(${item.id})" data-followup-key="${esc(key)}" title="이어보기" class="bc-act followup-btn">${icon('history')}이어보기 <span data-followup-count>${followupCache.has(key) ? followupCache.get(key).length : 0}</span></button>` : '';
@@ -5651,7 +5770,7 @@
           <button onclick="openInsight(${item.id})" title="Insight" class="bc-act is-primary">${icon('lightbulb')}Insight</button>
           <a href="${esc(articleLink(item))}" target="_blank" rel="noopener noreferrer" draggable="false" title="원문 보기"
             onclick="markRead(${item.id})" class="bc-act">${icon('external-link')}원문 보기</a>
-          <button onclick="openRelated(${item.id})" title="관련 기사" class="bc-act">${icon('link')}관련 기사</button>${followup}
+          ${noRelated ? '' : `<button onclick="openRelated(${item.id})" title="관련 기사" class="bc-act">${icon('link')}관련 기사</button>`}${followup}
         </div>`;
     }
 
@@ -6669,51 +6788,51 @@
       return String(s ?? '').replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
     }
 
-    function briefLoadingHtml() {
-      return `<div class="space-y-3">
-        ${[80, 100, 60].map(w => `<div class="skeleton bg-ink3/70 rounded h-4" style="width:${w}%"></div>`).join('')}
-        <p class="text-muted font-mono text-sm pt-2">원문을 읽고 주요 내용을 정리하는 중... (5~15초)</p>
+    // 팝업 안 '불러오는 중' 자리 표시 · 오류 상자 (v3 Phase 7 · 시안 모양)
+    function popupWaitHtml(widths, msg) {
+      return `<div class="pv-wait">
+        ${widths.map(w => `<div class="skeleton bg-ink3/70 h-4" style="width:${w}%"></div>`).join('')}
+        <p>${msg}</p>
       </div>`;
     }
+    function popupErrHtml(msg) { return `<div class="pv-err">${esc(msg)}</div>`; }
 
-    // [수정] 시안 05번 구조 : 요지 → 01·02·03 번호를 단 포인트 → 비교 표 → 주석
-    //   시안의 표는 '구분 / 현재 / 가동 후' 3열이지만 서버가 주는 값은 항목·내용 2열이다.
-    //   내용 구조를 바꾸려면 AI 프롬프트부터 손봐야 하므로 표의 모양만 시안에 맞췄다. (Phase 7)
+    function briefLoadingHtml() {
+      return popupWaitHtml([80, 100, 60], '원문을 읽고 주요 내용을 정리하는 중... (5~15초)');
+    }
+
+    // [수정] v3 Phase 7 · 시안 1a : (제목은 머리 아래 따로) 요지 → 핵심 정리 표 → 주요 포인트 → 주석
+    //   서버가 주는 값은 headline · lead · table(항목/내용) · bullets · keywords. 구조는 그대로 두고 모양만 시안에 맞췄다.
     function briefHtml(b) {
       const table = (b.table || []).length ? `
-        <div class="popup-table-wrap">
-          <table class="popup-table">
-            <thead><tr><th class="w-[7.5rem]">구분</th><th>내용</th></tr></thead>
+        <div>
+          <h4 class="pv-h4">핵심 정리</h4>
+          <table class="pv-table">
+            <thead><tr><th>항목</th><th>내용</th></tr></thead>
             <tbody>${b.table.map(r => `
-              <tr>
-                <td class="text-muted break-keep">${esc(r.key)}</td>
-                <td class="text-paper/90 break-keep leading-relaxed">${esc(r.value)}</td>
-              </tr>`).join('')}
+              <tr><td>${esc(r.key)}</td><td>${esc(r.value)}</td></tr>`).join('')}
             </tbody>
           </table>
         </div>` : '';
 
       const points = (b.bullets || []).length ? `
-        <div class="space-y-2.5">${b.bullets.map((x, i) => `
-          <div class="popup-point">
-            <span class="no">${String(i + 1).padStart(2, '0')}</span>
-            <p class="text-[0.93rem] leading-[1.75] text-paper/85 break-keep">${esc(x)}</p>
-          </div>`).join('')}</div>` : '';
+        <div>
+          <h4 class="pv-h4">주요 포인트</h4>
+          <ul class="pv-list">${b.bullets.map(x => `<li><span>${esc(x)}</span></li>`).join('')}</ul>
+        </div>` : '';
 
       const keywords = (b.keywords || []).length ? `
-        <div class="space-y-2 pt-3 border-t border-line">
-          <span class="popup-label block">주석</span>
-          <ul class="space-y-1.5">${b.keywords.map(k => `
-            <li class="text-muted text-[0.8rem] leading-relaxed break-keep">
-              <span class="text-gold font-semibold">${esc(k.term)}</span> · ${esc(k.explain)}
-            </li>`).join('')}</ul>
+        <div class="pv-notes">
+          <h4>주석</h4>
+          <ul>${b.keywords.map(k => `
+            <li><b>${esc(k.term)}</b> · ${esc(k.explain)}</li>`).join('')}</ul>
         </div>` : '';
 
       return `
-        ${b.headline ? `<p class="font-sans text-[1.02rem] font-bold text-paper leading-snug break-keep">${esc(b.headline)}</p>` : ''}
-        ${b.lead ? `<p class="text-[0.93rem] leading-[1.75] text-paper/85 break-keep">${esc(b.lead)}</p>` : ''}
-        ${points}
+        ${b.headline ? `<p class="pv-headline">${esc(b.headline)}</p>` : ''}
+        ${b.lead ? `<p class="pv-lead">${esc(b.lead)}</p>` : ''}
         ${table}
+        ${points}
         ${keywords}`;
     }
 
@@ -6727,8 +6846,9 @@
       document.getElementById('brief-link').href = link;
       // [추가] 시안 05번 : 머리말에 기사 제목과 출처·시각을 먼저 띄운다 (기다리는 동안에도 무엇을 보는지 알 수 있다)
       document.getElementById('brief-title').innerHTML = item.title;
+      const briefCat = categoryLabels[tagCatsOf(item)[0]];   // 시안 1a 머리말 : 분야 · 출처 · 시각
       document.getElementById('brief-meta').textContent =
-        `${item.source || ''}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}`;
+        `${briefCat ? briefCat + ' · ' : ''}${item.source || ''}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}`;
       document.getElementById('brief-note').textContent = '';
       setPopupSaveBtn('brief-save-btn', item);   // [추가] 아래 버튼 바의 저장 상태를 이 기사 기준으로 맞춘다
       document.getElementById('brief-body').innerHTML = briefLoadingHtml();
@@ -6745,8 +6865,7 @@
         const data = await res.json();
 
         if (data.error) {
-          document.getElementById('brief-body').innerHTML =
-            `<div class="text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3">${esc(data.error)}</div>`;
+          document.getElementById('brief-body').innerHTML = popupErrHtml(data.error);
           return;
         }
         document.getElementById('brief-body').innerHTML = briefHtml(data);
@@ -6755,8 +6874,7 @@
           : `AI(${data.model || 'Gemini'})가 원문을 읽고 정리했습니다 · 사실 확인은 원문을 참고하세요`;
       } catch (e) {
         console.error(e);
-        document.getElementById('brief-body').innerHTML =
-          `<div class="text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3">정리를 불러오지 못했습니다.</div>`;
+        document.getElementById('brief-body').innerHTML = popupErrHtml('정리를 불러오지 못했습니다.');
       }
     }
 
@@ -6781,113 +6899,81 @@
     //  - deep-brief와 똑같은 방식으로 /api/insight 를 호출한다.
     // ---------------------------------------------------------------
     function insightLoadingHtml() {
-      return `<div class="space-y-3">
-        ${[70, 95, 55].map(w => `<div class="skeleton bg-ink3/70 rounded h-4" style="width:${w}%"></div>`).join('')}
-        <p class="text-muted font-mono text-sm pt-2">원문을 읽고 두 관점의 인사이트를 뽑는 중... (5~15초)</p>
-      </div>`;
+      return `<div class="p-7">${popupWaitHtml([70, 95, 55], '원문을 읽고 두 관점의 인사이트를 뽑는 중... (5~15초)')}</div>`;
     }
 
-    // '기회 / 리스크' 2열 (시안 06번)
+    // '기회 / 리스크' (시안 1b 의 불릿 자리) : 한 줄씩 라벨 + 내용
     //  - 값은 문자열로 오지만, 모델이 배열로 뱉는 일이 있어 배열도 받아 준다.
-    //  - 색은 시안 그대로 기회=초록(--c-ok) · 리스크=빨강(--c-up).
-    //    같은 팝업의 '관련 주요 종목'에서는 빨강이 '수혜'라 뜻이 반대지만,
-    //    여기는 '기회'/'리스크' 라는 글자가 바로 옆에 있어 헷갈릴 자리가 아니다.
+    //  - 기회=초록(--c-ok) · 리스크=빨강(--c-up). 같은 팝업의 '관련 주요 종목'은 수혜=초록 · 부담=파랑이라 빨강의 뜻이 겹치지 않는다.
     function insightSplitHtml(sec) {
-      const cell = (label, color, value) => {
+      const row = (label, cls, value) => {
         const text = (Array.isArray(value) ? value.filter(Boolean).join(', ') : String(value || '')).trim();
-        if (!text) return '';
-        return `
-          <div class="rounded-none border border-line bg-ink2/60 px-3.5 py-3">
-            <span class="popup-label block mb-1.5 ${color}">${label}</span>
-            <span class="block text-[0.84rem] leading-[1.65] text-paper/85 break-keep">${esc(text)}</span>
-          </div>`;
+        return text ? `<li><b class="pv-sign ${cls}">${label}</b><span>${esc(text)}</span></li>` : '';
       };
-      const boxes = cell('기회', 'text-ok', sec.opportunity) + cell('리스크', 'text-up', sec.risk);
-      return boxes ? `<div class="grid gap-2.5 sm:grid-cols-2 mt-3.5">${boxes}</div>` : '';
+      const rows = row('기회', 'is-ok', sec.opportunity) + row('리스크', 'is-risk', sec.risk);
+      return rows ? `<ul class="pv-sign-list">${rows}</ul>` : '';
     }
 
-    // '주목할 지표' 칩 (시안 06번) : 앞으로 지켜볼 지표·이벤트 이름만 나열한다
+    // '주목할 지표' 칩 : 앞으로 지켜볼 지표·이벤트 이름만 나열한다
     function insightIndicatorsHtml(list) {
       const items = (Array.isArray(list) ? list : [])
         .map(v => String(v || '').trim()).filter(Boolean);
       if (!items.length) return '';
       return `
-        <div class="mt-3.5">
-          <span class="popup-label block mb-2">주목할 지표</span>
-          <div class="flex flex-wrap gap-2">${items.map(v => `
-            <span class="rounded-full border border-line px-2.5 py-1.5 font-mono text-[0.72rem] leading-none text-muted">${esc(v)}</span>`).join('')}</div>
+        <div>
+          <span class="pv-sublabel">주목할 지표</span>
+          <div class="flex flex-wrap gap-1.5">${items.map(v => `<span class="pv-chip">${esc(v)}</span>`).join('')}</div>
         </div>`;
     }
 
-    // 관점 하나(물류/주식시장)를 카드로 그린다
-    //  - extraHtml : 카드 맨 아래에 덧붙일 내용 (주식시장 카드의 '관련 주요 종목')
-    // [수정] Phase 7 B2 · 시안 06번 : 핵심 판단 → 기회/리스크 2열 → 주목할 지표 칩 순서.
-    //   시안은 관점이 하나뿐이라 '핵심 판단' 라벨이 따로 있는데, 여기는 관점이 둘이라
-    //   카드 머리의 STOCK MARKET / LOGISTICS 라벨이 그 자리를 대신한다.
-    //   points 가지는 옛 형식 폴백이다. 응답 캐시가 6시간이라 형식을 바꾼 직후 섞여 나올 수 있다.
-    function insightSectionHtml(iconName, label, accent, sec, extraHtml) {
+    // 관점 하나(물류/주식시장)를 한 칸(.pv-col)으로 그린다
+    //  - extraHtml : 칸 맨 아래에 덧붙일 내용 (주식시장 칸의 '관련 주요 종목')
+    // 핵심 판단 → 기회/리스크 → 주목할 지표 순서(B2 데이터 그대로). points 가지는 옛 형식 폴백이다.
+    //   응답 캐시가 6시간이라 형식을 바꾼 직후 섞여 나올 수 있다.
+    function insightSectionHtml(iconName, label, sec, extraHtml) {
       if (!sec) return '';
       const verdict = sec.verdict || sec.summary || '';
-      const points = (!sec.verdict && (sec.points || []).length) ? `
-        <ul class="space-y-2.5 mt-3">${sec.points.map(p => `
-          <li class="flex gap-2 text-[0.9rem] leading-[1.7] text-paper/85 break-keep">
-            <span class="${accent.dot} shrink-0">ㆍ</span><span>${esc(p)}</span>
-          </li>`).join('')}</ul>` : '';
+      const points = (!sec.verdict && (sec.points || []).length)
+        ? `<ul class="pv-list is-sm">${sec.points.map(p => `<li><span>${esc(p)}</span></li>`).join('')}</ul>` : '';
       return `
-        <div class="rounded-none border border-line bg-ink/50 px-4 py-3.5">
-          <span class="flex items-center gap-1.5 popup-label ${accent.text} mb-2.5">
-            ${icon(iconName, 'w-3.5 h-3.5')} ${label}
-          </span>
-          ${verdict ? `<p class="font-sans text-[0.95rem] text-paper/90 leading-[1.75] break-keep">${esc(verdict)}</p>` : ''}
+        <section class="pv-col">
+          <span class="pv-kind">${icon(iconName)} ${label}</span>
+          ${verdict ? `<p class="pv-verdict">${esc(verdict)}</p>` : ''}
           ${points}
           ${insightSplitHtml(sec)}
           ${insightIndicatorsHtml(sec.indicators)}
           ${extraHtml || ''}
-        </div>`;
+        </section>`;
     }
 
-    // 'Stock Market Insight' 카드 맨 아래 붙는 '관련 주요 종목' 목록
+    // 'Stock Market Insight' 칸 맨 아래 붙는 '관련 주요 종목' 목록
     //  - AI가 기사 맥락으로 골라낸 참고 목록이라, 아래에 안내 문구를 같이 둔다.
     function insightStocksHtml(stocks) {
       if (!Array.isArray(stocks) || !stocks.length) return '';
-      // 수혜는 같은 팝업의 '기회' 와 같은 초록(--c-ok)으로 맞춘다.
-      //  - 원래는 지수 위젯처럼 국내 증시 관례(오름=빨강)를 따랐는데,
-      //    B2 에서 '리스크' 라벨이 같은 빨강으로 들어오면서 한 팝업 안에서 빨강의 뜻이 갈렸다.
-      //  - 부담은 그대로 파랑(--c-down). 지수 위젯의 내림색과도 어긋나지 않는다.
-      const tagStyle = {
-        '수혜': 'text-ok border-ok/40 bg-ok/10',
-        '부담': 'text-down border-down/40 bg-down/10',
-      };
+      const tagCls = { '수혜': 'is-ok', '부담': 'is-down' };
       const rows = stocks.map(s => {
         const tag = String(s.tag || '중립');
-        const style = tagStyle[tag] || 'text-muted border-line bg-ink3/40';
         return `
-          <li class="flex flex-wrap items-baseline gap-x-2 gap-y-1 leading-snug break-keep">
-            <span class="font-bold text-paper">${esc(s.name || '')}</span>
-            ${s.sector ? `<span class="text-muted font-mono text-[0.7rem]">${esc(s.sector)}</span>` : ''}
-            <span class="shrink-0 rounded border px-1.5 py-px font-mono text-[0.7rem] ${style}">${esc(tag)}</span>
-            ${s.reason ? `<span class="basis-full text-paper/80 text-[0.9rem]">${esc(s.reason)}</span>` : ''}
+          <li class="pv-stock">
+            <b>${esc(s.name || '')}</b>
+            <span class="pv-tag ${tagCls[tag] || ''}">${esc(tag)}</span>
+            ${s.sector ? `<span class="sector">${esc(s.sector)}</span>` : ''}
+            ${s.reason ? `<span class="reason">${esc(s.reason)}</span>` : ''}
           </li>`;
       }).join('');
       return `
-        <div class="mt-4 pt-3.5 border-t border-line">
-          <span class="flex items-center gap-1.5 popup-label mb-2.5">
-            ${icon('line-chart', 'w-3.5 h-3.5')} 관련 주요 종목
-          </span>
-          <ul class="space-y-2.5">${rows}</ul>
-          <p class="text-muted2 text-[0.72rem] leading-snug mt-3 break-keep">
-            AI가 기사 맥락만 보고 고른 참고 목록입니다. 실시간 시세·실적을 반영하지 않으며 투자 권유가 아닙니다.
-          </p>
+        <div class="pv-stocks">
+          <span class="pv-sublabel" style="margin:0">관련 주요 종목</span>
+          <ul class="flex flex-col gap-3">${rows}</ul>
+          <p class="pv-disclaimer">AI가 기사 맥락만 보고 고른 참고 목록입니다. 실시간 시세·실적을 반영하지 않으며 투자 권유가 아닙니다.</p>
         </div>`;
     }
 
     function insightHtml(d) {
-      return `
-        ${insightSectionHtml('candlestick', 'STOCK MARKET',
-          { text: 'text-wire', dot: 'text-wire' }, d.stock,
-          insightStocksHtml(d.stock && d.stock.stocks))}
-        ${insightSectionHtml('package', 'LOGISTICS',
-          { text: 'text-gold', dot: 'text-gold' }, d.logistics)}`;
+      const stock = insightSectionHtml('candlestick', 'Stock Market Insight', d.stock,
+        insightStocksHtml(d.stock && d.stock.stocks));
+      const logi = insightSectionHtml('package', 'Logistics Insight', d.logistics);
+      return `<div class="pv-cols${stock && logi ? ' is-2' : ''}">${stock}${logi}</div>`;
     }
 
     async function openInsight(id) {
@@ -6898,7 +6984,7 @@
       const link = articleLink(item);   // 원문 보기와 똑같은 주소 사용
       currentInsightId = id;            // [추가] 'PDF 저장' 이 쓸 기준 기사
       document.getElementById('insight-link').href = link;
-      document.getElementById('insight-title').innerHTML = item.title;   // [추가] 시안 06번 머리말
+      document.getElementById('insight-title').textContent = plainText(item.title);   // [추가] 시안 06번 머리말
       document.getElementById('insight-note').textContent = '';
       setPopupSaveBtn('insight-save-btn', item);   // [추가]
       document.getElementById('insight-body').innerHTML = insightLoadingHtml();
@@ -6914,8 +7000,7 @@
         const data = await res.json();
 
         if (data.error) {
-          document.getElementById('insight-body').innerHTML =
-            `<div class="text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3">${esc(data.error)}</div>`;
+          document.getElementById('insight-body').innerHTML = `<div class="p-7">${popupErrHtml(data.error)}</div>`;
           return;
         }
         document.getElementById('insight-body').innerHTML = insightHtml(data);
@@ -6924,8 +7009,7 @@
           : `AI(${data.model || 'Gemini'})가 원문을 읽고 두 관점으로 분석했습니다 · 해석·전망은 참고용입니다`;
       } catch (e) {
         console.error(e);
-        document.getElementById('insight-body').innerHTML =
-          `<div class="text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3">인사이트를 불러오지 못했습니다.</div>`;
+        document.getElementById('insight-body').innerHTML = `<div class="p-7">${popupErrHtml('인사이트를 불러오지 못했습니다.')}</div>`;
       }
     }
 
@@ -6939,17 +7023,38 @@
     //  - 팝업 기사도 요약/주요내용 버튼이 동작하도록 relatedItems에 등록해 둔다
     // ---------------------------------------------------------------
     function relatedLoadingHtml() {
-      return `<div class="space-y-3">
-        ${[100, 100, 100].map(() => `<div class="skeleton bg-ink3/70 rounded-xl h-24"></div>`).join('')}
-        <p class="text-muted font-mono text-sm pt-1">관련 있는 기사를 찾는 중입니다...</p>
+      return `<div class="py-5 pv-wait">
+        ${[100, 100, 100].map(() => `<div class="skeleton bg-ink3/70 h-20"></div>`).join('')}
+        <p>관련 있는 기사를 찾는 중입니다...</p>
       </div>`;
+    }
+
+    // 관련 기사·이어보기 목록 : 데스크톱은 시안 1c(목록형과 같은 행 · 번호 · 주요 내용/Insight/원문 보기 · 저장), 좁은 화면은 v2 행
+    function popupRowsHtml(list) {
+      if (isMobileLayout()) return list.map((it) => relatedCardHtml(it)).join('');
+      return `<div class="bc-list is-in-box">${list.map((item, i) => {
+        const lead = (item.summary || []).join(' ').trim();
+        const readKey = savedKeyOf(item);
+        return `
+          <article class="bc-row${isReadKey(readKey) ? ' is-read' : ''}" data-read-key="${esc(readKey)}">
+            <span class="bc-rno bc-dim">${String(i + 1).padStart(2, '0')}</span>
+            <div class="bc-rmeta bc-dim"><span>${briefMetaText(item)}</span></div>
+            ${briefSaveBtnHtml(item, 'row')}
+            <h4 class="bc-rtitle bc-dim">${item.title}</h4>
+            <div class="bc-rbody">
+              ${lead ? `<p class="bc-rsum bc-dim">${lead}</p>` : ''}
+              ${briefActionsHtml(item, 'bc-racts', false, true)}
+            </div>
+          </article>`;
+      }).join('')}</div>`;
     }
 
     async function openRelated(id) {
       const item = findItem(id);
       if (!item) return;
 
-      document.getElementById('related-source-title').textContent = item.title;
+      document.getElementById('related-source-title').textContent = plainText(item.title);
+      document.getElementById('related-count').textContent = '';
       document.getElementById('related-body').innerHTML = relatedLoadingHtml();
       const relatedModal = document.getElementById('related-modal');
       relatedModal.classList.remove('hidden');
@@ -6961,8 +7066,8 @@
         const data = await res.json();
 
         if (data.error) {
-          document.getElementById('related-body').innerHTML =
-            `<div class="text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3">${esc(data.error)}</div>`;
+          document.getElementById('related-body').innerHTML = `<div class="py-5">${popupErrHtml(data.error)}</div>`;
+          document.getElementById('related-count').textContent = '';
           return;
         }
 
@@ -6974,15 +7079,16 @@
         // 요약/주요내용 버튼이 id로 찾을 수 있도록 등록 (누적)
         relatedItems = relatedItems.concat(list);
 
+        document.getElementById('related-count').textContent = list.length ? `${list.length}건` : '';
         if (!list.length) {
           document.getElementById('related-body').innerHTML = emptyBoxHtml('관련 기사를 찾지 못했습니다.');
           return;
         }
-        document.getElementById('related-body').innerHTML = list.map((it) => relatedCardHtml(it)).join('');
+        document.getElementById('related-body').innerHTML = popupRowsHtml(list);
       } catch (e) {
         console.error(e);
-        document.getElementById('related-body').innerHTML =
-          `<div class="text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3">관련 기사를 불러오지 못했습니다.</div>`;
+        document.getElementById('related-body').innerHTML = `<div class="py-5">${popupErrHtml('관련 기사를 불러오지 못했습니다.')}</div>`;
+        document.getElementById('related-count').textContent = '';
       }
     }
 
@@ -6998,7 +7104,8 @@
       if (!item) return;
       const key = savedKeyOf(item);
 
-      document.getElementById('followup-source-title').textContent = item.title;
+      document.getElementById('followup-source-title').textContent = plainText(item.title);
+      document.getElementById('followup-count').textContent = '';
       document.getElementById('followup-body').innerHTML = relatedLoadingHtml();
       const modal = document.getElementById('followup-modal');
       modal.classList.remove('hidden');
@@ -7012,15 +7119,15 @@
         const list = decorateItems(raw, baseCat);
         followupItems = followupItems.concat(list);
 
+        document.getElementById('followup-count').textContent = list.length ? `${list.length}건` : '';
         if (!list.length) {
           document.getElementById('followup-body').innerHTML = emptyBoxHtml('아직 이어지는 후속 보도가 없습니다.');
           return;
         }
-        document.getElementById('followup-body').innerHTML = list.map((it) => relatedCardHtml(it)).join('');
+        document.getElementById('followup-body').innerHTML = popupRowsHtml(list);
       } catch (e) {
         console.error(e);
-        document.getElementById('followup-body').innerHTML =
-          `<div class="text-amber-200 bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3">이어보기 기사를 불러오지 못했습니다.</div>`;
+        document.getElementById('followup-body').innerHTML = `<div class="py-5">${popupErrHtml('이어보기 기사를 불러오지 못했습니다.')}</div>`;
       }
     }
 
