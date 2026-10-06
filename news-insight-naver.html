@@ -181,7 +181,7 @@
     height: var(--logo-h);
   }
   .logo-word {
-    font-size: calc(var(--logo-h) * 1.1 - 2px);   /* 데스크톱 약 33px */
+    font-size: calc(var(--logo-h) * 1.1 - 1px);   /* 데스크톱 약 34px */
     font-weight: 800;
     letter-spacing: -0.03em;
     line-height: 1;
@@ -1442,8 +1442,8 @@
     .pv-shell > .pv-foot .pv-note { flex-basis: 100%; padding: 8px 16px; font-size: 11px; border-bottom: 1px solid rgb(var(--c-paper) / .4); }
     .pv-shell > .pv-foot .pv-actions { width: 100%; margin: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; }
     .pv-shell > .pv-foot .pv-btn {
-      flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px;
-      min-height: 56px; padding: 10px 8px 10px 10px; border: 0;
+      flex-direction: row; align-items: center; justify-content: center; gap: 6px;   /* 아이콘 오른쪽에 글자를 나란히 */
+      min-height: 52px; padding: 10px 8px; border: 0;
       font-size: 13px; font-weight: 600; line-height: 1.2; white-space: nowrap;
     }
     .pv-shell > .pv-foot .pv-btn + .pv-btn { border-left: 1px solid rgb(var(--c-paper) / .4); }
@@ -1539,9 +1539,11 @@
               <rect x="4" y="16" width="6" height="3.5" fill="rgb(var(--c-ink))"/>
             </svg>
             <span class="logo-word">Beyond News</span>
+            <!-- 부제(v3.0 포함)가 숨는 좁은 화면(sm 미만)에서만 버전을 로고 옆에 보인다 -->
+            <span class="sm:hidden ml-1.5 self-end text-[calc(0.65rem+1px)] font-semibold leading-none text-muted pb-[3px]">v3.0</span>
           </span>
         </h1>
-        <p id="app-subtitle" class="font-sans text-muted uppercase tracking-[0.08em] leading-none text-[0.75rem] lg:text-[0.87rem] pb-[2px] whitespace-nowrap hidden sm:block">Real-Time Wire Desk <span class="text-[0.7125rem] tracking-normal normal-case ml-1.5">v3.0</span></p>
+        <p id="app-subtitle" class="font-sans text-muted uppercase tracking-[0.08em] leading-none text-[0.75rem] lg:text-[0.87rem] pb-[2px] whitespace-nowrap hidden sm:block">Real-Time Wire Desk <span class="text-[calc(0.7125rem+1px)] tracking-normal normal-case ml-1.5">v3.0</span></p>
       </div>
     </div>
 
