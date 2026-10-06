@@ -509,6 +509,8 @@
      CDN 출력 순서에 달린다. 이 블록은 자체 클래스 하나로만 여닫는다. */
   .rail-kw { display: none; flex-direction: column; flex-shrink: 0; }
   .rail-kw.is-on { display: flex; }
+  /* 저장 기사 칸(margin-top 1.2rem)과 같은 높이에서 시작해야 머리 아래 선이 본문 구분선과 맞는다 */
+  .rail-kw { margin-top: 1.2rem; }
   /* [수정] v3 Phase 4 : 시안 2a 키워드 줄 = 번호 28px | 낱말 | 증감, 패딩 9px 20px, 아래 선 1px */
   .rail-kw-row {
     display: grid;
