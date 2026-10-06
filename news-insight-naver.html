@@ -158,13 +158,17 @@
        - 시안 헤더 실측 : 마크 36px · 글자 40px / 800 / 자간 -.03em  (1024px 이상. 좁은 화면은 비례 축소)
      --------------------------------------------------------------- */
   #app-logo {
-    --logo-h: 1.5rem;
+    --logo-h: 1.38rem;
   }
-  @media (min-width: 640px)  { #app-logo { --logo-h: 1.8rem; } }
-  @media (min-width: 1024px) { #app-logo { --logo-h: 2.27rem; } }  /* 15px 기준 34px (글자 2px 줄인 만큼 마크도 축소) */
-  /* 부제(Real-Time Wire Desk)는 기존 크기보다 1px 축소 */
-  #app-subtitle { font-size: calc(0.75rem - 1px); }
-  @media (min-width: 1024px) { #app-subtitle { font-size: calc(0.87rem - 1px); } }
+  /* 글자가 --logo-h * 1.1 이므로, 글자를 2px 줄이려면 --logo-h 를 약 1.8px 줄인다 (마크도 같은 비율로 축소) */
+  @media (min-width: 640px)  { #app-logo { --logo-h: 1.68rem; } }
+  @media (min-width: 1024px) { #app-logo { --logo-h: 2.14rem; } }  /* 15px 기준 약 32px */
+  /* 부제(Real-Time Wire Desk)는 원래 크기보다 2px 축소 */
+  #app-subtitle { font-size: calc(0.75rem - 2px); }
+  @media (min-width: 1024px) { #app-subtitle { font-size: calc(0.87rem - 2px); } }
+  /* 오른쪽 위 시계는 원래 크기보다 1px 축소 */
+  #current-time { font-size: calc(1.1rem - 1px); }
+  @media (min-width: 1024px) { #current-time { font-size: calc(1.47rem - 1px); } }
 
   .logo-mark {
     display: block;
@@ -173,7 +177,7 @@
     height: var(--logo-h);
   }
   .logo-word {
-    font-size: calc(var(--logo-h) * 1.1 - 2px);   /* 데스크톱 약 40px → 38px */
+    font-size: calc(var(--logo-h) * 1.1 - 2px);   /* 데스크톱 약 33px */
     font-weight: 800;
     letter-spacing: -0.03em;
     line-height: 1;
@@ -1555,7 +1559,7 @@
         <span class="flex items-center gap-1.5 text-[0.75rem] lg:text-[0.8rem] font-semibold tracking-[0.1em] text-ok">
           <span class="live-dot w-2 h-2 bg-ok animate-pulse shrink-0"></span>LIVE</span>
         <span id="current-date" class="text-[0.8rem] lg:text-[0.93rem] text-muted"></span>
-        <span id="current-time" class="text-[1.1rem] lg:text-[1.47rem] font-extrabold tracking-tight text-paper"></span>
+        <span id="current-time" class="font-extrabold tracking-tight text-paper"></span>
       </div>
       <!-- [추가] 화면 설정(테마·기본 노출 건수) : 관리자가 아니어도 누구나 쓸 수 있다 -->
       <!-- [수정] 모바일에서도 다시 보여준다. 하단 탭 바의 '설정' 자리를 '저장'에 내줬기 때문이다. (Phase 7 A1) -->
