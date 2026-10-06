@@ -3645,6 +3645,10 @@
     //   화면 설정(테마 · 본문 크기 · 기본 노출 건수 · 화면 옵션)은 이 기기에만 저장되는
     //   개인 취향이라 비밀번호 없이 누구나 바꿀 수 있다.
     // ---------------------------------------------------------------
+    // 창을 열 때의 키워드 사본. 저장하지 않고 닫으면 이 값으로 되돌린다.
+    //   (고친 값은 곧바로 userKeywords 에 들어가므로, 되돌리지 않으면 저장 안 한 키워드로 기사를 불러오게 된다)
+    let keywordsAtOpen = null;
+
     function openPrefsModal(tab = 'prefs') {
       closeNav();                        // 모바일 : 드로어가 열려 있으면 닫는다
       const el = document.getElementById('prefs-modal');
@@ -3653,6 +3657,7 @@
       renderFontSizeSetting();
       renderCountSetting();
       renderPrefToggles();
+      if (!isPrefsOpen()) keywordsAtOpen = cloneKeywords(userKeywords);
       renderKeywordSettings();           // 지금 들고 있는 userKeywords 로 다시 그린다 (서버를 다시 부르지는 않는다)
       const pwMsg = document.getElementById('password-change-msg');
       if (pwMsg) pwMsg.textContent = '';
@@ -3668,6 +3673,10 @@
       if (!el || el.classList.contains('hidden')) return;
       closePasswordModal();
       el.classList.add('hidden');
+      // 저장(저장 후 새로고침 · 기본값)하면 사본도 새 값이 되므로, 여기서 되돌려지는 건 저장 안 한 수정뿐이다.
+      if (keywordsAtOpen) { userKeywords = keywordsAtOpen; keywordsAtOpen = null; }
+      settingSubOpen = '';
+      renderKeywordSettings();
       renderSettingToggle();
       if (countDefaultsDirty) { rerun = true; countDefaultsDirty = false; }
       if (rerun) runSearch();
@@ -3865,6 +3874,7 @@
     async function saveKeywordSettings() {
       commitKwInputs();          // 적다 만 글자까지 담고 저장한다
       await persistKeywords();
+      keywordsAtOpen = cloneKeywords(userKeywords);
       closePrefsModal(true);
     }
 
@@ -3875,6 +3885,7 @@
       if (!ok) return;   // '취소'를 누르면 아무것도 하지 않음
       userKeywords = cloneKeywords(DEFAULT_KEYWORDS);
       await persistKeywords();
+      keywordsAtOpen = cloneKeywords(userKeywords);   // 기본값은 이미 저장됐다 → 닫아도 되돌리지 않는다
       renderKeywordSettings();   // 입력칸을 기본값으로 다시 그려줌
     }
 
