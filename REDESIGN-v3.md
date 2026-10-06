@@ -90,7 +90,8 @@ v2(어두운 금색 톤 · 좌측 사이드바 + 우측 마켓 레일 3단)를 �
 ## 진행 상황
 
 - [x] **Phase 0** 준비 (2026-10-06)
-- [ ] Phase 1 토큰·글꼴·로고 ← 다음
+- [x] **Phase 1** 토큰·글꼴·로고 (2026-10-06)
+- [ ] Phase 2 골격 교체 ← 다음
 
 ### Phase 0 에서 한 것 (2026-10-06)
 
@@ -99,3 +100,29 @@ v2(어두운 금색 톤 · 좌측 사이드바 + 우측 마켓 레일 3단)를 �
   `git -c core.autocrlf=false restore` 로 다시 꺼냈다. 파일을 git 에서 새로 꺼낼 때마다 같은 주의가 필요하다.
 - `main` 에 D6 메모 + 시안 폴더를 커밋(`32bfbac`, push 안 함) → `v2-final` 태그 → `v3` 브랜치.
 - `beyond news_icon.JPG` 는 `apple-touch-icon.jpg` 와 같은 파일이라 커밋하지 않았다.
+
+### Phase 1 에서 한 것 (2026-10-06) — `news-insight-naver.html` 한 파일
+
+- **색** : `:root` 의 `--c-*` 를 시안 값으로 교체. `ink`(배경)=#f3f2f2 · `ink2`(면)=#eae9e9 · `paper`(글자)=#201e1d ·
+  `gold`(강조)=#ec3013 · `muted`=#605d5d · `up`=#ae1800 · `down`=oklch(.52 .17 258)=rgb(28 101 200) · `ok`(초록)=oklch(.55 .15 150)=rgb(5 137 62).
+  토큰 이름과 쓰임은 그대로(gold 가 이제 레드). 차트 선 색(hex 3개)도 밝은 배경용으로 바꿨다.
+- **테마** : `applyTheme()` 이 항상 `'light'`. 저장값은 그대로 둔다(다크를 저장한 사용자도 밝게 나온다).
+  v2 다크 값은 `:root[data-theme="dark"]` 블록으로 옮겨 남겼다 → **Phase 11 에서 `applyTheme` 의 `const mode='light'` 한 줄만 원래 판정으로 되돌리면 된다**(주석에 원문 적어 둠).
+- **모서리** : tailwind `borderRadius` 를 전부 0 으로. 직접 쓴 CSS `border-radius` 22곳 → 0, `rounded-[9px]` 같은 임의값 4곳 → `rounded-none`.
+  `rounded-full`(LIVE 점 등)도 0 이 되어 네모다.
+- **글꼴** : Google Fonts Archivo 400/600/800 추가, JetBrains Mono 제거. `sans`·`serif`·`mono` 모두 `Archivo → Pretendard`.
+  `font-mono` 클래스(숫자·라벨)는 그대로 두고 글꼴만 Archivo 가 되게 했다(시안은 등폭 글꼴 없음). 차트 축 글자의 `ui-monospace` 도 Archivo 로.
+- **헤더** : 로고 = 3c 칼럼 인라인 SVG(색은 테마 변수). `rss-icon.png`·3D SVG 삭제. 헤더 밑줄 2px 검정, 로고 36px · 글자 40px/800/-.03em,
+  부제 "REAL-TIME WIRE DESK"(13px · 자간 .08em · 대문자), LIVE(초록 네모 점) · 날짜 14px · 시계 22px/800.
+
+실측(1440px, 트랜지션 끔) : 배경 rgb(243,242,242) · 글자 rgb(32,30,29) · 강조변수 236 48 19 · 헤더 밑줄 2px rgb(32,30,29) ·
+로고 36px · 워드마크 39.6px/800/-1.19px(시안 40/800/-1.2) · 부제 13.05px/자간 1.04px(시안 13/1.04) · 시계 22.05px/800 ·
+LIVE rgb(5,137,62) · 모서리가 0 이 아닌 요소 0개 · 본문 글꼴 `Archivo, "Pretendard Variable"…`.
+검증 : 1440·1024·375px 가로 스크롤 없음, 콘솔 에러 0, 검색·저장·지수 차트·주요 내용·Insight·PDF 저장(print 호출) 모두 동작.
+
+### Phase 1 에서 배운 것
+
+- 본문 `body { font-family }` 와 `.logo-word` 는 Tailwind 설정과 따로라서, 설정만 고치면 Pretendard 가 먼저 나온다. `body` 규칙도 같이 고쳐야 한다.
+- 시안 헤더는 위 24 · 좌우 32 · 아래 16px 인데 앱은 rem(루트 15px)이라 22.5/30/15px 로 나온다. 본문 크기 설정을 따라가게 일부러 rem 을 유지했다.
+- `git diff` 에 `logo-mark.png` 삭제가 보인다. 이 작업에서 지운 게 아니다(작업 폴더에서 사라진 상태). 커밋에는 넣지 않았다.
+- 시안의 LIVE 는 2a 헤더에서 레드, 다른 안에서는 초록이었다. 지시대로 초록(`--c-ok`)을 썼다.

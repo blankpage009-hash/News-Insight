@@ -8,15 +8,20 @@
 
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" />
 
 <script>
   tailwind.config = {
     theme: {
+      // [수정] v3 시안은 모서리가 전부 직각이다. 여기서 한 번에 0 으로 만든다.
+      //   (rounded-none 같은 임의값은 이 설정을 안 거치므로 따로 지웠다)
+      borderRadius: {
+        none: '0', sm: '0', DEFAULT: '0', md: '0', lg: '0', xl: '0', '2xl': '0', '3xl': '0', full: '0',
+      },
       extend: {
         // [수정] 테마(다크/화이트) 전환을 위해 색을 CSS 변수로 뺀다.
-        //   실제 값은 아래 <style>의 :root(다크) / :root[data-theme="light"](화이트)에 있다.
+        //   실제 값은 아래 <style>의 :root(v3 밝은 화면) / :root[data-theme="dark"](Phase 11 용)에 있다.
         //   rgb(var(--x) / <alpha-value>) 형태라 bg-ink/90 같은 투명도 표기도 그대로 동작한다.
         colors: {
           ink:   'rgb(var(--c-ink) / <alpha-value>)',
@@ -42,14 +47,13 @@
           // 달라서 PDF로 저장했을 때 한글 모양이 들쭉날쭉했다.
           // → OS별 한글 기본 폰트를 명시적으로 끼워 넣어 어디서 저장해도 같게 만든다.
           //    (Malgun Gothic = 윈도우 / Apple SD Gothic Neo = 맥·아이폰 / Noto Sans KR = 안드로이드·리눅스)
-          sans: ['"Pretendard Variable"', 'Pretendard', '"Malgun Gothic"', '"Apple SD Gothic Neo"', '"Noto Sans KR"', 'sans-serif'],
-          serif: ['"Pretendard Variable"', 'Pretendard', '"Malgun Gothic"', '"Apple SD Gothic Neo"', '"Noto Sans KR"', 'sans-serif'], // 폰트 통일
-          // JetBrains Mono 에는 한글 글리프가 없어서, 한글이 섞인 문구
-          // (예: '12건', '포함 3 · 제외 1')의 한글만 OS 기본 monospace(굴림 등)로
-          // 떨어져 한 줄 안에서 폰트가 갈렸다.
-          // 폰트 폴백은 글리프 단위로 동작하므로 중간에 Pretendard 를 끼우면
-          // 영문·숫자는 그대로 JetBrains Mono, 한글만 Pretendard 로 나온다.
-          mono: ['"JetBrains Mono"', '"Pretendard Variable"', 'Pretendard', '"Malgun Gothic"', '"Apple SD Gothic Neo"', '"Noto Sans KR"', 'monospace'],
+          // [수정] v3 : Archivo(영문·숫자) 다음 Pretendard(한글). 폰트 폴백은 글리프 단위라
+          //   한 줄 안에서 영문·숫자는 Archivo, 한글은 Pretendard 로 나온다.
+          sans: ['Archivo', '"Pretendard Variable"', 'Pretendard', '"Malgun Gothic"', '"Apple SD Gothic Neo"', '"Noto Sans KR"', 'sans-serif'],
+          serif: ['Archivo', '"Pretendard Variable"', 'Pretendard', '"Malgun Gothic"', '"Apple SD Gothic Neo"', '"Noto Sans KR"', 'sans-serif'], // 폰트 통일
+          // [수정] 시안은 등폭 글꼴을 쓰지 않고 Archivo 하나로 간다(숫자는 tabular-nums 로 폭을 맞춘다).
+          //   font-mono 클래스가 붙은 라벨·숫자가 많아서 클래스는 두고 글꼴만 Archivo 로 바꿨다.
+          mono: ['Archivo', '"Pretendard Variable"', 'Pretendard', '"Malgun Gothic"', '"Apple SD Gothic Neo"', '"Noto Sans KR"', 'sans-serif'],
         }
       }
     }
@@ -73,7 +77,10 @@
   }
   // 실제로 화면에 입힐 테마('light' | 'dark')를 정해 <html data-theme>에 적는다.
   function applyTheme(pref) {
-    const mode = (pref === 'light' || pref === 'dark') ? pref : (systemPrefersLight() ? 'light' : 'dark');
+    // [수정] v3 Phase 1 : 밝은 화면으로 고정한다. 예전에 다크·시스템을 저장해 둔 사용자도 밝게 보인다.
+    //   저장값은 건드리지 않는다 → Phase 11 에서 아래 한 줄만 원래 판정으로 돌리면 된다.
+    //   원래 판정 : (pref === 'light' || pref === 'dark') ? pref : (systemPrefersLight() ? 'light' : 'dark')
+    const mode = 'light';
     document.documentElement.setAttribute('data-theme', mode);
     document.documentElement.style.colorScheme = mode;
     return mode;
@@ -115,9 +122,21 @@
 </script>
 
 <style>
-  /* 테마 색상 (다크 = 기본값) · tailwind.config의 rgb(var(--c-*)) 가 이 값을 읽는다 */
+  /* v3 테마 색상 = 밝은 화면(시안 실측값) · tailwind.config의 rgb(var(--c-*)) 가 이 값을 읽는다.
+     이름은 v2 그대로(gold = 강조색)이고 값만 시안으로 바꿨다. */
   :root {
-    /* [수정] 시안 01번(다크) 값으로 교체. 구분선(--c-line)을 크게 낮춰 격자가 튀지 않게 한다. */
+    --c-ink: 243 242 242;   --c-ink2: 234 233 233; --c-ink3: 215 211 211;   /* 배경 #f3f2f2 · 면 #eae9e9 · 한 단계 진한 면 */
+    --c-line: 186 182 182;  --c-gold: 236 48 19;   --c-gold2: 221 43 15;    /* 선 · 강조 #ec3013 · 강조 hover */
+    --c-wire: 28 101 200;   --c-paper: 32 30 29;   --c-muted: 96 93 93;     /* 배지 파랑 · 글자 #201e1d · 보조글자 #605d5d */
+    --c-panel: 234 231 231;
+    --c-rail: 243 242 242;  --c-muted2: 125 121 121;
+    --c-up: 174 24 0;       --c-down: 28 101 200;                           /* 상승(진한 레드) · 하락 oklch(.52 .17 258) */
+    --c-ok: 5 137 62;                                                       /* LIVE · Insight 초록 oklch(.55 .15 150) */
+    --c-scrollbar: 215 211 211;
+    --c-scrollbar-hover: 186 182 182;
+  }
+  /* 다크 테마 (v2 값 그대로) — 지금은 화면 어디에서도 켜지지 않는다. Phase 11 에서 되살린다. */
+  :root[data-theme="dark"] {
     --c-ink: 10 13 20;      --c-ink2: 16 20 31;    --c-ink3: 21 26 39;
     --c-line: 26 31 44;     --c-gold: 217 174 106; --c-gold2: 239 201 141;
     --c-wire: 59 130 246;   --c-paper: 232 230 225;--c-muted: 139 147 167;
@@ -128,37 +147,21 @@
     --c-scrollbar: 26 31 44;
     --c-scrollbar-hover: 40 46 62;
   }
-  /* 화이트 테마 */
-  :root[data-theme="light"] {
-    /* [수정] 시안 09번 : 페이지는 크림(#F4F3EF), 카드·헤더는 흰색으로 한 단계 띄운다.
-       (기존에는 반대로 페이지가 흰색이고 카드가 회색이었다) */
-    --c-ink: 244 243 239;   --c-ink2: 255 255 255; --c-ink3: 234 232 226;
-    /* 화이트 테마에서는 금색 대신 채도를 낮춘 파랑을 쓴다 (강조 색은 --c-gold 하나로 모여 있음)
-       → 시안은 어두운 금색이지만, 파랑을 유지하기로 결정했다. */
-    --c-line: 218 217 212;  --c-gold: 47 101 175;  --c-gold2: 31 71 129;
-    --c-wire: 37 99 235;    --c-paper: 20 23 28;   --c-muted: 101 108 122;
-    --c-panel: 236 240 247;
-    --c-rail: 255 255 255;  --c-muted2: 138 144 156;
-    --c-up: 214 50 58;      --c-down: 29 78 216;
-    --c-ok: 46 139 87;
-    --c-scrollbar: 210 209 203;
-    --c-scrollbar-hover: 180 179 172;
-  }
   /* 화이트 테마에서 어두운 배경을 전제로 한 amber 계열 배너 색 보정 */
   :root[data-theme="light"] .text-amber-200 { color: #92400e; }
   /* [삭제] 'Insight' 버튼·배지의 연한 초록 보정 규칙은 Phase 4 에서 걷어냈다.
      이제 초록은 전부 --c-ok 토큰을 쓰므로 화이트 테마에서 알아서 어두워진다. */
 
   /* ---------------------------------------------------------------
-     [수정] 로고 : 노란 뉴스피드(RSS) 마크 + 'Beyond News' 워드마크(텍스트)
-       - 마크는 인라인 SVG라 어느 크기에서도 또렷하고, 테마와 무관하게 노란색 그대로다.
-       - 글자는 이미지가 아니라 텍스트라 화이트 테마에서 자동으로 어두워진다.
+     [수정] v3 로고 : 시안 3c '칼럼' (검정 사각형 + 레드 줄 1개 + 흰 줄 2개) + 'Beyond News' 워드마크
+       - 인라인 SVG 라 어느 크기에서도 또렷하다. 색은 테마 변수를 따라간다.
+       - 시안 헤더 실측 : 마크 36px · 글자 40px / 800 / 자간 -.03em  (1024px 이상. 좁은 화면은 비례 축소)
      --------------------------------------------------------------- */
   #app-logo {
-    --logo-h: 1.5rem;                    /* 마크 한 변의 길이(기존 h-6과 동일) */
+    --logo-h: 1.5rem;
   }
-  @media (min-width: 640px)  { #app-logo { --logo-h: 1.75rem; } }
-  @media (min-width: 1024px) { #app-logo { --logo-h: 2rem; } }
+  @media (min-width: 640px)  { #app-logo { --logo-h: 1.9rem; } }
+  @media (min-width: 1024px) { #app-logo { --logo-h: 2.4rem; } }   /* 15px 기준 36px */
 
   .logo-mark {
     display: block;
@@ -166,27 +169,20 @@
     width:  var(--logo-h);
     height: var(--logo-h);
   }
-  /* [추가] 원본 이미지(rss-3d.png)를 쓸 때는 세로만 맞추고 가로는 비율대로 둔다.
-     (억지로 정사각형에 맞추면 그림이 찌그러진다) */
-  img.logo-mark {
-    width: auto;
-    max-width: none;
-    object-fit: contain;
-  }
   .logo-word {
-    font-size: calc(var(--logo-h) * 0.95);
+    font-size: calc(var(--logo-h) * 1.1);   /* 2.4rem → 2.64rem ≈ 40px */
     font-weight: 800;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.03em;
     line-height: 1;
     color: rgb(var(--c-paper));
-    margin-left: calc(var(--logo-h) * 0.34);
+    margin-left: calc(var(--logo-h) * 0.44); /* 시안 간격 16px */
     white-space: nowrap;
   }
 
   /* [수정] 기준 글자 크기는 화면 설정의 '본문 크기'(Phase 7 A3)가 --root-fs 로 바꾼다.
      변수가 없으면(설정 전) 지금까지 쓰던 15px 그대로다. */
   html { font-size: var(--root-fs, 15px); }
-  body { font-family: 'Pretendard Variable', Pretendard, 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; }
+  body { font-family: Archivo, 'Pretendard Variable', Pretendard, 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; }
 
   /* [추가] 시안 타이포 : 한글 제목은 자간을 좁혀야 덩어리로 읽힌다.
      시안은 큰 제목 -.022em / 기사 제목 -.018em 을 쓴다.
@@ -237,7 +233,7 @@
   .cat-pill {
     flex: none;
     padding: .5rem .85rem;
-    border-radius: 99px;
+    border-radius: 0;
     border: 1px solid rgb(var(--c-line));
     font-size: .82rem;
     color: rgb(var(--c-muted));
@@ -324,7 +320,7 @@
   /* 지수 목록 상자 : 칸을 나누는 건 테두리 하나뿐 (시안 240행) */
   .rail-box {
     border: 1px solid rgb(var(--c-line));
-    border-radius: 9px;
+    border-radius: 0;
     overflow: hidden;
     background: rgb(var(--c-ink2));
     flex-shrink: 0;   /* [수정] overflow:hidden이 걸린 flex 자식은 기본적으로 내용보다 더 줄어들 수 있어,
@@ -352,7 +348,7 @@
   .rail-card {
     padding: 10px 12px;
     border: 1px solid rgb(var(--c-line));
-    border-radius: 9px;
+    border-radius: 0;
     background: rgb(var(--c-ink2));
     display: flex;
     flex-direction: column;
@@ -495,7 +491,7 @@
     border-bottom: 1px solid rgb(var(--c-line));
   }
   .popup-kind {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Archivo', 'Pretendard Variable', Pretendard, sans-serif;
     font-size: .63rem; font-weight: 600; letter-spacing: .16em;
     color: rgb(var(--c-gold));
   }
@@ -504,11 +500,11 @@
     letter-spacing: -.022em; color: rgb(var(--c-paper));
   }
   /* 라벨과 출처 사이의 작은 점 */
-  .dot-sep { flex: none; width: 3px; height: 3px; border-radius: 99px; background: rgb(var(--c-muted2) / .7); }
+  .dot-sep { flex: none; width: 3px; height: 3px; border-radius: 0; background: rgb(var(--c-muted2) / .7); }
   .popup-body { padding: 1.15rem 1.25rem; }
   /* 본문 안 소제목 (핵심 판단 · 주석 …) */
   .popup-label {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Archivo', 'Pretendard Variable', Pretendard, sans-serif;
     font-size: .63rem; font-weight: 600; letter-spacing: .16em;
     color: rgb(var(--c-muted2));
   }
@@ -516,17 +512,17 @@
   .popup-point { display: flex; gap: .7rem; }
   .popup-point > .no {
     flex: none; width: 1.2rem;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Archivo', 'Pretendard Variable', Pretendard, sans-serif;
     font-size: .72rem; font-weight: 600; line-height: 1.8;
     color: rgb(var(--c-gold));
   }
   /* 비교 표 : 머리줄만 한 단계 밝은 배경, 나머지는 가로줄로만 나눈다.
      둥근 모서리로 안쪽을 자르려면 테두리를 감싸는 상자가 따로 있어야 한다. */
-  .popup-table-wrap { border: 1px solid rgb(var(--c-line)); border-radius: 9px; overflow: hidden; }
+  .popup-table-wrap { border: 1px solid rgb(var(--c-line)); border-radius: 0; overflow: hidden; }
   .popup-table { width: 100%; border-collapse: collapse; }
   .popup-table th {
     text-align: left; padding: .6rem .8rem; background: rgb(var(--c-ink3));
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Archivo', 'Pretendard Variable', Pretendard, sans-serif;
     font-size: .66rem; font-weight: 600; letter-spacing: .1em;
     color: rgb(var(--c-muted2));
   }
@@ -543,7 +539,7 @@
   }
   .pop-btn {
     display: flex; align-items: center; gap: .375rem;
-    height: 2rem; padding: 0 .8rem; border-radius: 7px;
+    height: 2rem; padding: 0 .8rem; border-radius: 0;
     border: 1px solid transparent;
     font-size: .8rem; font-weight: 500; white-space: nowrap;
     transition: background-color .2s, color .2s, border-color .2s;
@@ -568,12 +564,12 @@
   /* 화면 설정(시안 07번) : 테마 3종 썸네일 + 설정 줄 */
   .theme-card {
     flex: 1; display: flex; flex-direction: column; gap: .5rem;
-    padding: .7rem; border: 1px solid rgb(var(--c-line)); border-radius: 8px;
+    padding: .7rem; border: 1px solid rgb(var(--c-line)); border-radius: 0;
     cursor: pointer; transition: background-color .2s, border-color .2s;
   }
   .theme-card:hover { border-color: rgb(var(--c-gold) / .45); }
   .theme-card.is-on { border-color: rgb(var(--c-gold) / .5); background: rgb(var(--c-gold) / .08); }
-  .theme-card .swatch { display: block; height: 26px; border-radius: 4px; border: 1px solid rgb(var(--c-line)); }
+  .theme-card .swatch { display: block; height: 26px; border-radius: 0; border: 1px solid rgb(var(--c-line)); }
   .theme-card .name { font-size: .8rem; color: rgb(var(--c-muted)); }
   .theme-card.is-on .name { color: rgb(var(--c-gold)); font-weight: 500; }
   .pref-row {
@@ -595,13 +591,13 @@
   /* [추가] Phase 7 A4 : 켜고 끄는 스위치 */
   .pref-switch {
     position: relative; flex: none; width: 38px; height: 22px;
-    border: 1px solid rgb(var(--c-line)); border-radius: 999px;
+    border: 1px solid rgb(var(--c-line)); border-radius: 0;
     background: rgb(var(--c-ink)); cursor: pointer;
     transition: background-color .2s, border-color .2s;
   }
   .pref-switch::after {
     content: ''; position: absolute; top: 50%; left: 3px;
-    width: 14px; height: 14px; margin-top: -7px; border-radius: 50%;
+    width: 14px; height: 14px; margin-top: -7px; border-radius: 0;
     background: rgb(var(--c-muted));
     transition: transform .2s, background-color .2s;
   }
@@ -640,14 +636,14 @@
     gap: 0.75rem;
     padding: 1.4rem;
     border: 1px solid rgb(var(--c-gold) / .22);
-    border-radius: 12px;
+    border-radius: 0;
     background: linear-gradient(180deg, rgb(var(--c-ink3)) 0%, rgb(var(--c-ink2)) 100%);
   }
   /* 라이트에서는 그러데이션이 '크림 → 흰색'이 되어 지저분하다.
      시안 09번대로 흰색 단색으로 둔다. */
   :root[data-theme="light"] .top-story { background: rgb(var(--c-ink2)); }
   .news-row-no {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Archivo', 'Pretendard Variable', Pretendard, sans-serif;
     font-size: 0.8rem;
     font-weight: 600;
     line-height: 1.9;
@@ -772,8 +768,8 @@
     #news-list > section { overflow: visible; }        /* 드롭다운이 섹션 박스에 잘리지 않게 */
     #news-list > section > header {
       position: relative;
-      border-top-left-radius: .9rem;                   /* overflow-hidden 대신 직접 둥글게 */
-      border-top-right-radius: .9rem;
+      border-top-left-radius: 0;                   /* overflow-hidden 대신 직접 둥글게 */
+      border-top-right-radius: 0;
     }
 
     body.hf-open #cat-header-filters,
@@ -793,7 +789,7 @@
       gap: .375rem;
       background: rgb(var(--c-ink2));
       border: 1px solid rgb(var(--c-gold) / .4);
-      border-radius: .75rem;
+      border-radius: 0;
       box-shadow: 0 14px 30px rgb(0 0 0 / .35);
     }
     /* 각 제목 바의 좌우 여백에 맞춰 '필터' 버튼 오른쪽 끝과 나란히 놓는다 */
@@ -873,7 +869,7 @@
       padding: .45rem;
       margin-right: .5rem;
       color: rgb(var(--c-muted));
-      border-radius: .5rem;
+      border-radius: 0;
       transition: color .15s ease, background-color .15s ease;
     }
     body.side-collapsed #sidebar-expand-btn:hover {
@@ -886,7 +882,7 @@
   /* 사이드바(하위 섹션을 펼치면 생기는 세로 막대)는 본문 옆에 바짝 붙어 있어 더 가늘게 */
   .side-scroll::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgb(var(--c-scrollbar)); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb { background: rgb(var(--c-scrollbar)); border-radius: 0; }
   ::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-scrollbar-hover)); }
 
   /* ---------------------------------------------------------------
@@ -920,7 +916,7 @@
     .kw-grid { grid-template-columns: 240px minmax(0, 1fr); gap: 1.125rem; }
   }
   .kw-list, .kw-card {
-    border: 1px solid rgb(var(--c-line)); border-radius: 10px;
+    border: 1px solid rgb(var(--c-line)); border-radius: 0;
     background: rgb(var(--c-ink2)); overflow: hidden;
   }
   .kw-card { padding: 1rem 1.1rem; }
@@ -938,10 +934,10 @@
   .kw-item.is-on .ic { color: rgb(var(--c-gold)); }
   .kw-item .nm { font-size: .88rem; color: rgb(var(--c-muted)); }
   .kw-item.is-on .nm { color: rgb(var(--c-gold)); font-weight: 500; }
-  .kw-item .cnt { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: .72rem; color: rgb(var(--c-muted2)); }
+  .kw-item .cnt { margin-left: auto; font-family: 'Archivo', 'Pretendard Variable', Pretendard, sans-serif; font-size: .72rem; color: rgb(var(--c-muted2)); }
   /* 한 줄 = [하위 섹션 이름] [포함 칩 상자] [제외 칩 상자] */
   .kw-row { display: flex; flex-direction: column; gap: .4rem; }
-  .kw-row-label { font-family: 'JetBrains Mono', monospace; font-size: .78rem; color: rgb(var(--c-muted)); }
+  .kw-row-label { font-family: 'Archivo', 'Pretendard Variable', Pretendard, sans-serif; font-size: .78rem; color: rgb(var(--c-muted)); }
   @media (min-width: 640px) {
     .kw-row { flex-direction: row; align-items: flex-start; gap: .625rem; }
     .kw-row-label { width: 7.5rem; flex: none; padding-top: .6rem; }
@@ -949,14 +945,14 @@
   .kw-box {
     flex: 1; min-width: 0; display: flex; align-items: center; gap: .375rem; flex-wrap: wrap;
     padding: .45rem .55rem; min-height: 2.4rem;
-    border: 1px solid rgb(var(--c-line)); border-radius: 7px;
+    border: 1px solid rgb(var(--c-line)); border-radius: 0;
     background: rgb(var(--c-ink)); cursor: text;
   }
   .kw-box:focus-within { border-color: rgb(var(--c-gold) / .6); }
-  .kw-kind { flex: none; font-family: 'JetBrains Mono', monospace; font-size: .68rem; color: rgb(var(--c-muted2)); }
+  .kw-kind { flex: none; font-family: 'Archivo', 'Pretendard Variable', Pretendard, sans-serif; font-size: .68rem; color: rgb(var(--c-muted2)); }
   .kw-chip {
     display: inline-flex; align-items: center; gap: .3rem;
-    padding: .26rem .3rem .26rem .5rem; border-radius: 5px; font-size: .8rem;
+    padding: .26rem .3rem .26rem .5rem; border-radius: 0; font-size: .8rem;
   }
   .kw-chip.is-inc { color: rgb(var(--c-gold)); background: rgb(var(--c-gold) / .12); }
   .kw-chip.is-exc { color: rgb(var(--c-muted)); background: rgb(var(--c-ink3)); }
@@ -970,7 +966,7 @@
   .kw-rules { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .625rem; }
   .kw-rule { display: flex; flex-direction: column; gap: .35rem; }
   .kw-rule .v {
-    padding: .5rem .7rem; border: 1px solid rgb(var(--c-line)); border-radius: 7px;
+    padding: .5rem .7rem; border: 1px solid rgb(var(--c-line)); border-radius: 0;
     background: rgb(var(--c-ink)); color: rgb(var(--c-paper)); font-size: .85rem;
   }
 
@@ -1030,7 +1026,7 @@
       max-width: 100% !important;
       max-height: 88vh !important;
       /* 바닥에서 띄웠으니 아래 모서리도 같이 둥글린다 */
-      border-radius: 18px !important;
+      border-radius: 0 !important;
       animation: sheet-in .22s ease-out;
     }
 
@@ -1047,7 +1043,7 @@
       width: 38px;
       height: 4px;
       margin: 8px auto 0;
-      border-radius: 99px;
+      border-radius: 0;
       background: rgb(var(--c-panel));
     }
 
@@ -1115,7 +1111,7 @@
     }
     #print-area .font-mono,
     #print-area .font-mono * {
-      font-family: 'JetBrains Mono', 'Pretendard Variable', Pretendard, 'Malgun Gothic', '맑은 고딕',
+      font-family: 'Archivo', 'Pretendard Variable', Pretendard, 'Malgun Gothic', '맑은 고딕',
                    'Apple SD Gothic Neo', 'Noto Sans KR', monospace;
     }
 
@@ -1140,57 +1136,23 @@
 
   <!-- 헤더 + 지수 티커 (스크롤해도 상단 고정) -->
   <div class="sticky top-0 z-40" id="top-bar">
-  <header id="app-header" class="border-b border-line bg-rail/90 backdrop-blur px-4 py-3 lg:px-6 lg:py-4 flex justify-between items-center">
+  <header id="app-header" class="border-b-2 border-paper bg-rail/90 backdrop-blur px-4 py-3 lg:px-8 lg:pt-6 lg:pb-4 flex justify-between items-center">
     <div class="flex items-center gap-2 lg:gap-3 min-w-0">
       <!-- 로고(오렌지 뉴스피드 마크 + Beyond News 워드마크) + 오른쪽에 밑선 맞춰 붙는 문구 -->
       <div class="flex items-end gap-2 lg:gap-3 min-w-0">
         <h1 class="min-w-0 shrink">
-          <!-- [수정] 업로드된 오렌지 3D RSS 아이콘을 벡터로 재현.
-               PNG가 아니라 SVG라 어떤 배율(레티나·확대)에서도 계단현상 없이 선명하다.
-                 · 뒷판(두께) → 앞판(그라디언트) → 유리 반사 → 전파 무늬 순으로 겹친다.
-                 · 전체를 skewY 로 살짝 기울여 원본의 입체 각도를 맞춘다. -->
+          <!-- [수정] v3 : 시안 3c '칼럼' 로고. 검정 사각형 위에 레드 줄 1개 + 흰(배경색) 줄 2개. -->
           <span id="app-logo" class="flex items-center">
-            <!-- [수정] 업로드한 3D 아이콘 원본(rss-3d.png)에서 흰 배경과 바닥 반사만 지운 rss-icon.png.
-                 그림 자체는 원본 픽셀 그대로이고, 파일이 없으면 아래 SVG 재현본으로 자동 대체된다. -->
-            <img id="logo-mark-img" class="logo-mark" src="rss-icon.png" alt="" aria-hidden="true"
-              onerror="this.style.display='none'; document.getElementById('logo-mark-svg').style.display='block';">
-            <svg id="logo-mark-svg" class="logo-mark" style="display:none" viewBox="0 0 64 64" aria-hidden="true">
-              <defs>
-                <!-- 앞면 : 왼쪽 위가 밝고 오른쪽 아래로 갈수록 진한 오렌지 -->
-                <linearGradient id="logo-mark-face" x1="0.05" y1="0" x2="0.85" y2="1">
-                  <stop offset="0" stop-color="#FBA24A"/>
-                  <stop offset="0.45" stop-color="#E9762B"/>
-                  <stop offset="1" stop-color="#C2510A"/>
-                </linearGradient>
-                <!-- 옆면(두께) : 앞면보다 어둡게 -->
-                <linearGradient id="logo-mark-side" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="#B84A08"/>
-                  <stop offset="1" stop-color="#8E3403"/>
-                </linearGradient>
-                <!-- 위쪽 유리 반사 -->
-                <linearGradient id="logo-mark-gloss" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#ffffff" stop-opacity="0.42"/>
-                  <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-                </linearGradient>
-                <clipPath id="logo-mark-clip">
-                  <rect x="12" y="7" width="44" height="42" rx="9"/>
-                </clipPath>
-              </defs>
-              <g transform="translate(0,2) skewY(4)">
-                <rect x="4" y="3" width="44" height="42" rx="9" fill="url(#logo-mark-side)"/>
-                <rect x="12" y="7" width="44" height="42" rx="9" fill="url(#logo-mark-face)"/>
-                <g fill="none" stroke="#DFE1E4" stroke-width="5.6">
-                  <path d="M22.5 27.5A11.5 11.5 0 0 1 34 39"/>
-                  <path d="M22.5 16.5A22.5 22.5 0 0 1 45 39"/>
-                </g>
-                <circle cx="25.3" cy="36.2" r="4.1" fill="#DFE1E4"/>
-                <path d="M12 7H56V22C43 29 25 29 12 21Z" fill="url(#logo-mark-gloss)" clip-path="url(#logo-mark-clip)"/>
-              </g>
+            <svg id="logo-mark-svg" class="logo-mark" viewBox="0 0 24 24" aria-hidden="true">
+              <rect width="24" height="24" fill="rgb(var(--c-paper))"/>
+              <rect x="4" y="4.5" width="16" height="3.5" fill="rgb(var(--c-gold))"/>
+              <rect x="4" y="10.25" width="11" height="3.5" fill="rgb(var(--c-ink))"/>
+              <rect x="4" y="16" width="6" height="3.5" fill="rgb(var(--c-ink))"/>
             </svg>
             <span class="logo-word">Beyond News</span>
           </span>
         </h1>
-        <p id="app-subtitle" class="font-sans font-medium text-muted tracking-wide leading-none text-xs sm:text-sm whitespace-nowrap hidden sm:block">Real-Time Wire Desk</p>
+        <p id="app-subtitle" class="font-sans text-muted uppercase tracking-[0.08em] leading-none text-[0.75rem] lg:text-[0.87rem] pb-[2px] whitespace-nowrap hidden sm:block">Real-Time Wire Desk</p>
       </div>
     </div>
 
@@ -1259,11 +1221,11 @@
            LIVE 배지는 좁은 화면에서 숨긴다.
            [수정] 박스(배경·테두리)를 없애고 글자만 한 줄로 늘어놓았다.
              LIVE만 초록, 날짜·요일·시간은 같은 색으로 통일했다(금색 아님). -->
-      <div id="live-badge" class="font-mono hidden sm:flex items-center gap-2 shrink-0 text-[0.83rem]">
-        <span class="live-dot w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-        <span class="text-emerald-400 font-semibold tracking-wide">LIVE</span>
-        <span id="current-date" class="text-muted"></span>
-        <span id="current-time" class="text-muted tabular-nums font-semibold"></span>
+      <div id="live-badge" class="hidden sm:flex items-center gap-3 lg:gap-5 shrink-0 tabular-nums">
+        <span class="flex items-center gap-1.5 text-[0.75rem] lg:text-[0.8rem] font-semibold tracking-[0.1em] text-ok">
+          <span class="live-dot w-2 h-2 bg-ok animate-pulse shrink-0"></span>LIVE</span>
+        <span id="current-date" class="text-[0.8rem] lg:text-[0.93rem] text-muted"></span>
+        <span id="current-time" class="text-[1.1rem] lg:text-[1.47rem] font-extrabold tracking-tight text-paper"></span>
       </div>
       <!-- [추가] 화면 설정(테마·기본 노출 건수) : 관리자가 아니어도 누구나 쓸 수 있다 -->
       <!-- [수정] 모바일에서도 다시 보여준다. 하단 탭 바의 '설정' 자리를 '저장'에 내줬기 때문이다. (Phase 7 A1) -->
@@ -4314,7 +4276,7 @@
       const diff = last.value - first.value;
       const diffPct = first.value ? (diff / first.value) * 100 : 0;
       const up = diff > 0, down = diff < 0;
-      const lineColor = up ? '#fb7185' : down ? '#60a5fa' : '#c8a45c';   // 상승 붉은색 / 하락 파란색 (국내 관행)
+      const lineColor = up ? '#ae1800' : down ? '#1c65c8' : '#7d7979';   // 상승 붉은색 / 하락 파란색 (국내 관행)
       const sumClass = up ? 'text-up' : down ? 'text-down' : 'text-muted';
       const arrow = up ? '▲' : down ? '▼' : '－';
 
@@ -4324,7 +4286,7 @@
         const v = lo + ((hi - lo) * i) / gridCount;
         const y = yOf(v);
         return `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W - PR}" y2="${y.toFixed(1)}" stroke="currentColor" stroke-width="1" class="text-line" opacity="0.5"/>
-          <text x="${PL - 8}" y="${(y + fs / 3).toFixed(1)}" text-anchor="end" font-size="${fs}" fill="currentColor" class="text-muted" font-family="ui-monospace,monospace">${numText(v, 0)}</text>`;
+          <text x="${PL - 8}" y="${(y + fs / 3).toFixed(1)}" text-anchor="end" font-size="${fs}" fill="currentColor" class="text-muted" font-family="Archivo,Pretendard Variable,sans-serif">${numText(v, 0)}</text>`;
       }).join('');
 
       // 아래 날짜 라벨 (겹치지 않게 균등 간격. 좁은 화면은 개수를 줄인다)
@@ -4332,7 +4294,7 @@
       const xLabels = Array.from({ length: labelCount }, (_, i) => {
         const idx = labelCount === 1 ? 0 : Math.round((i * (pts.length - 1)) / (labelCount - 1));
         const anchor = i === 0 ? 'start' : i === labelCount - 1 ? 'end' : 'middle';
-        return `<text x="${xOf(idx).toFixed(1)}" y="${H - 8}" text-anchor="${anchor}" font-size="${fs}" fill="currentColor" class="text-muted" font-family="ui-monospace,monospace">${scfiAxisDate(pts[idx].date, shortRange)}</text>`;
+        return `<text x="${xOf(idx).toFixed(1)}" y="${H - 8}" text-anchor="${anchor}" font-size="${fs}" fill="currentColor" class="text-muted" font-family="Archivo,Pretendard Variable,sans-serif">${scfiAxisDate(pts[idx].date, shortRange)}</text>`;
       }).join('');
 
       const curve = curvePath(xy);
@@ -4693,7 +4655,7 @@
       const diff = last.value - from;
       const diffPct = from ? (diff / from) * 100 : 0;
       const up = diff > 0, down = diff < 0;
-      const lineColor = up ? '#fb7185' : down ? '#60a5fa' : '#c8a45c';   // 상승 붉은색 / 하락 파란색 (국내 관행)
+      const lineColor = up ? '#ae1800' : down ? '#1c65c8' : '#7d7979';   // 상승 붉은색 / 하락 파란색 (국내 관행)
       const sumClass = up ? 'text-up' : down ? 'text-down' : 'text-muted';
       const arrow = up ? '▲' : down ? '▼' : '－';
 
@@ -4703,20 +4665,20 @@
         const v = lo + ((hi - lo) * i) / gridCount;
         const y = yOf(v);
         return `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W - PR}" y2="${y.toFixed(1)}" stroke="currentColor" stroke-width="1" class="text-line" opacity="0.5"/>
-          <text x="${PL - 8}" y="${(y + fs / 3).toFixed(1)}" text-anchor="end" font-size="${fs}" fill="currentColor" class="text-muted" font-family="ui-monospace,monospace">${numText(v, hi - lo < 20 ? 1 : 0)}</text>`;
+          <text x="${PL - 8}" y="${(y + fs / 3).toFixed(1)}" text-anchor="end" font-size="${fs}" fill="currentColor" class="text-muted" font-family="Archivo,Pretendard Variable,sans-serif">${numText(v, hi - lo < 20 ? 1 : 0)}</text>`;
       }).join('');
 
       const baseLine = base === null ? '' : `
         <line x1="${PL}" y1="${yOf(base).toFixed(1)}" x2="${W - PR}" y2="${yOf(base).toFixed(1)}"
           stroke="currentColor" class="text-muted" stroke-width="1" stroke-dasharray="4 4" opacity="0.9"/>
-        <text x="${W - PR}" y="${(yOf(base) - 5).toFixed(1)}" text-anchor="end" font-size="${fs}" fill="currentColor" class="text-muted" font-family="ui-monospace,monospace">전일 ${numText(base)}</text>`;
+        <text x="${W - PR}" y="${(yOf(base) - 5).toFixed(1)}" text-anchor="end" font-size="${fs}" fill="currentColor" class="text-muted" font-family="Archivo,Pretendard Variable,sans-serif">전일 ${numText(base)}</text>`;
 
       // 아래 시각/날짜 라벨 (겹치지 않게 균등 간격. 좁은 화면은 개수를 줄인다)
       const labelCount = Math.min(narrow ? 3 : 5, pts.length);
       const xLabels = Array.from({ length: labelCount }, (_, i) => {
         const idx = labelCount === 1 ? 0 : Math.round((i * (pts.length - 1)) / (labelCount - 1));
         const anchor = i === 0 ? 'start' : i === labelCount - 1 ? 'end' : 'middle';
-        return `<text x="${xOf(idx).toFixed(1)}" y="${H - 8}" text-anchor="${anchor}" font-size="${fs}" fill="currentColor" class="text-muted" font-family="ui-monospace,monospace">${indexAxisLabel(pts[idx].t, off, indexChartRange)}</text>`;
+        return `<text x="${xOf(idx).toFixed(1)}" y="${H - 8}" text-anchor="${anchor}" font-size="${fs}" fill="currentColor" class="text-muted" font-family="Archivo,Pretendard Variable,sans-serif">${indexAxisLabel(pts[idx].t, off, indexChartRange)}</text>`;
       }).join('');
 
       const curve = curvePath(xy);
@@ -5292,7 +5254,7 @@
       return `
         <article class="top-story${isReadKey(readKey) ? ' is-read' : ''}" data-read-key="${esc(readKey)}">
           <div class="flex items-center gap-2 flex-wrap">
-            <span class="font-mono text-[0.62rem] font-semibold label-wide bg-gold text-ink px-1.5 py-1 rounded-[3px]">TOP</span>
+            <span class="font-mono text-[0.62rem] font-semibold label-wide bg-gold text-ink px-1.5 py-1 rounded-none">TOP</span>
             ${badgesHtml(item)}
             <span class="text-muted2 font-mono text-[0.76rem]">${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}</span>
           </div>
@@ -6122,7 +6084,7 @@
         const text = (Array.isArray(value) ? value.filter(Boolean).join(', ') : String(value || '')).trim();
         if (!text) return '';
         return `
-          <div class="rounded-[9px] border border-line bg-ink2/60 px-3.5 py-3">
+          <div class="rounded-none border border-line bg-ink2/60 px-3.5 py-3">
             <span class="popup-label block mb-1.5 ${color}">${label}</span>
             <span class="block text-[0.84rem] leading-[1.65] text-paper/85 break-keep">${esc(text)}</span>
           </div>`;
@@ -6159,7 +6121,7 @@
             <span class="${accent.dot} shrink-0">ㆍ</span><span>${esc(p)}</span>
           </li>`).join('')}</ul>` : '';
       return `
-        <div class="rounded-[9px] border border-line bg-ink/50 px-4 py-3.5">
+        <div class="rounded-none border border-line bg-ink/50 px-4 py-3.5">
           <span class="flex items-center gap-1.5 popup-label ${accent.text} mb-2.5">
             ${icon(iconName, 'w-3.5 h-3.5')} ${label}
           </span>
