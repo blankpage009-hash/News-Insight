@@ -420,21 +420,53 @@
      CDN 출력 순서에 달린다. 이 블록은 자체 클래스 하나로만 여닫는다. */
   .rail-kw { display: none; flex-direction: column; flex-shrink: 0; }
   .rail-kw.is-on { display: flex; }
+  /* [수정] v3 Phase 4 : 시안 2a 키워드 줄 = 번호 28px | 낱말 | 증감, 패딩 9px 20px, 아래 선 1px */
   .rail-kw-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: baseline;
     width: 100%;
-    padding: .6rem 1.333rem;   /* [수정] v3 : 오른쪽 패널 안쪽 여백(시안 9px 20px). 글자 모양은 Phase 4 에서 맞춘다 */
+    padding: .6rem 1.333rem;
     text-align: left;
-    border-bottom: 1px solid rgb(var(--c-line) / .7);
+    border-bottom: 1px solid rgb(var(--c-line));
     cursor: pointer;
     transition: background-color .15s;
   }
-  .rail-kw-row:last-child { border-bottom: 0; }
+  .rail-kw-row .kw-no { font-size: 1rem; font-weight: 800; }
+  .rail-kw-row .kw-no.is-top { color: rgb(var(--c-gold)); }
+  .rail-kw-row .rail-kw-word { font-size: 1rem; font-weight: 600; }
+  .rail-kw-row .kw-move { font-size: .733rem; font-weight: 600; color: rgb(var(--c-muted)); }
+  .rail-kw-row .kw-move.is-up { color: rgb(var(--c-up)); }
+  .rail-kw-row.is-cur { background: #fff2ef; }   /* 지금 검색 중인 낱말 (시안 accent-100) */
   @media (hover: hover) {
-    .rail-kw-row:hover { background: rgb(var(--c-gold) / .08); }
+    .rail-kw-row:hover { background: rgb(var(--c-ink2)); }
   }
+
+  /* [추가] v3 Phase 4 : 저장 기사 목록 (시안 2a) */
+  .panel-saved-empty { padding: 1.067rem 1.333rem; font-size: .867rem; line-height: 1.6; color: rgb(var(--c-muted)); }
+  .panel-saved-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .267rem .533rem;
+    padding: .8rem 1.333rem;
+    border-bottom: 1px solid rgb(var(--c-line));
+  }
+  .panel-saved-title {
+    font-size: .933rem; font-weight: 600; line-height: 1.4; text-align: left;
+    overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  @media (hover: hover) { .panel-saved-title:hover { color: rgb(var(--c-gold)); } }
+  .panel-saved-x { display: flex; padding-top: 2px; color: rgb(var(--c-muted)); transition: color .15s; }
+  .panel-saved-x:hover { color: rgb(var(--c-gold)); }
+  .panel-saved-meta { grid-column: span 2; display: flex; align-items: center; justify-content: space-between; gap: .533rem; }
+  .panel-saved-src { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8rem; color: rgb(var(--c-muted)); }
+  .panel-resume {
+    display: flex; align-items: center; gap: .267rem; flex: none;
+    padding: 3px 7px; font-size: .8rem; font-weight: 600;
+    border: 1px solid rgb(var(--c-paper));
+    transition: background-color .15s, color .15s;
+  }
+  .panel-resume:hover { background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); }
   /* 긴 낱말이 들어와도 레일 폭(300px)을 밀지 않게 한 줄로 자른다 */
   .rail-kw-word { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1736,12 +1768,13 @@
         </div>
         <div id="rail-keyword-list"></div>
       </section>
-      <!-- 저장 기사 : 사이드바가 데스크톱에서 사라져, 저장 화면으로 가는 길을 여기 둔다 (Phase 4 에서 목록 + 이어보기) -->
-      <section class="panel-sec">
+      <!-- 저장 기사 : 최근 5건 + 이어보기. 사이드바가 데스크톱에서 사라져 저장 화면으로 가는 길도 여기 둔다 -->
+      <section class="panel-sec" style="margin-top:1.867rem">
         <div class="panel-head">
           <h2>저장 기사</h2>
           <span id="panel-saved-count" class="text-[0.73rem] text-muted"></span>
         </div>
+        <div id="panel-saved-list"></div>
         <button id="panel-saved-btn" onclick="selectCategory('saved')" class="panel-more">
           <span>저장한 기사 전체 보기</span>
           <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
@@ -2264,6 +2297,7 @@
       const pCount = document.getElementById('panel-saved-count');
       if (pCount) pCount.textContent = savedArticles.length + '건';
       document.getElementById('panel-saved-btn')?.classList.toggle('is-on', on && !isKeywordMode());
+      renderPanelSaved();
 
       const btn = document.getElementById('saved-nav-btn');
       if (!btn) return;
@@ -2279,6 +2313,55 @@
     function updateSavedCount() {
       const el = document.getElementById('cat-header-count');
       if (el) el.textContent = savedArticles.length + '건';
+    }
+
+    // [추가] v3 Phase 4 : 오른쪽 패널의 저장 기사 목록 (최근 5건). 상태는 늘 savedArticles 하나에서 그린다.
+    const PANEL_SAVED_MAX = 5;
+    function renderPanelSaved() {
+      const box = document.getElementById('panel-saved-list');
+      if (!box) return;
+      if (!savedArticles.length) {
+        box.innerHTML = '<p class="panel-saved-empty">카드의 저장 버튼을 누르면 여기에 모입니다.</p>';
+        return;
+      }
+      box.innerHTML = savedArticles.slice(0, PANEL_SAVED_MAX).map((a) => {
+        const key = esc(a.key);
+        const title = esc(plainText(a.title));
+        return `<div class="panel-saved-row">
+          <a class="panel-saved-title" href="${esc(articleLink(a))}" target="_blank" rel="noopener noreferrer" title="${title}">${title}</a>
+          <button class="panel-saved-x" data-panel-unsave="${key}" title="저장 취소" aria-label="저장 취소"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          <span class="panel-saved-meta">
+            <span class="panel-saved-src">${esc(a.source || '출처 미상')} · ${esc(formatDate(a.datetime))}</span>
+            <button class="panel-resume" data-panel-resume="${key}" title="이어보기">${icon('history', 'w-3 h-3')}이어보기</button>
+          </span>
+        </div>`;
+      }).join('');
+    }
+
+    // 낱말·주소에 따옴표가 섞여도 안전하도록 key 는 data 속성으로 받고, 클릭은 한 곳에서 처리한다
+    document.addEventListener('click', (e) => {
+      const unsave = e.target.closest('[data-panel-unsave]');
+      if (unsave) { removeSavedByKey(unsave.dataset.panelUnsave); return; }
+      const resume = e.target.closest('[data-panel-resume]');
+      if (resume) openFollowupFromPanel(resume.dataset.panelResume);
+    });
+
+    function removeSavedByKey(key) {
+      if (!isSavedKey(key)) return;
+      savedArticles = savedArticles.filter((x) => x.key !== key);
+      persistSavedArticles();
+      syncSaveButtons(key);
+      renderSavedNav();
+      if (!settingMode && currentCategory === 'saved') updateSavedCount();
+    }
+
+    // 패널의 저장 기사는 화면용 id 가 없다 → 팝업이 찾을 수 있게 followupItems 에 넣고 같은 팝업을 연다
+    function openFollowupFromPanel(key) {
+      const a = savedArticles.find((x) => x.key === key);
+      if (!a) return;
+      const [item] = decorateItems([a], (a.cats && a.cats[0]) || 'society');
+      followupItems.push(item);
+      openFollowup(item.id);
     }
 
     // 저장 화면 그리기. 보관함을 화면용 기사(id 부여)로 바꿔 목록과 똑같은 행으로 그린다.
@@ -5092,6 +5175,7 @@
         ? `"${keyword}" 관련 뉴스를 검색하는 중입니다...`
         : '뉴스를 검색하는 중입니다...';
 
+      syncRailKeywordHighlight();
       nextId = 0;
       currentResults = [];
       relatedItems = [];   // [추가] 새 검색 시 관련기사 임시목록도 비워 id 충돌 방지
@@ -6028,17 +6112,25 @@
     let lastKeywordItems = [];                  // [추가] 레일과 모바일 화면이 같은 응답을 나눠 쓴다
 
     function railKeywordRowHtml(it, i) {
-      const strong = i < 2;   // 시안 : 1·2위만 금색 번호 + 밝은 글자
-      const move = it.isNew ? { text: 'NEW', cls: 'text-up' }
-        : it.diff > 0        ? { text: `▲${it.diff}`, cls: 'text-up' }
-        : it.diff < 0        ? { text: `▼${-it.diff}`, cls: 'text-down' }
-        :                      { text: '—', cls: 'text-muted2' };
+      // 시안 2a : 1~3위 번호만 레드, 올랐거나 NEW 인 증감만 진한 레드, 나머지는 보조 글자색
+      const move = it.isNew ? { text: 'NEW', up: true }
+        : it.diff > 0        ? { text: `▲${it.diff}`, up: true }
+        : it.diff < 0        ? { text: `▼${-it.diff}`, up: false }
+        :                      { text: '—', up: false };
       const word = esc(it.word);
       return `<button class="rail-kw-row" data-kw="${word}" title="'${word}' 이(가) 들어간 기사 ${it.count}건 · 눌러서 검색">
-        <span class="font-mono text-[0.69rem] font-semibold w-[14px] shrink-0 ${strong ? 'text-gold' : 'text-muted2'}">${i + 1}</span>
-        <span class="rail-kw-word text-[0.82rem] font-medium ${strong ? 'text-paper' : 'text-muted'}">${word}</span>
-        <span class="ml-auto font-mono text-[0.66rem] font-medium shrink-0 ${move.cls}">${move.text}</span>
+        <span class="kw-no ${i < 3 ? 'is-top' : ''}">${i + 1}</span>
+        <span class="rail-kw-word">${word}</span>
+        <span class="kw-move ${move.up ? 'is-up' : ''}">${move.text}</span>
       </button>`;
+    }
+
+    // 지금 검색창에 들어 있는 낱말과 같은 줄을 연한 레드로 표시한다
+    function syncRailKeywordHighlight() {
+      const q = (document.getElementById('search-input')?.value || '').trim();
+      document.querySelectorAll('#rail-keyword-list .rail-kw-row').forEach((b) => {
+        b.classList.toggle('is-cur', !!q && b.dataset.kw === q);
+      });
     }
 
     // 레일의 키워드를 누르면 그 낱말로 검색한다 (무엇을 검색했는지 보이게 패널도 연다)
@@ -6068,6 +6160,7 @@
         list.querySelectorAll('.rail-kw-row').forEach((b) => {
           b.onclick = () => searchRailKeyword(b.dataset.kw);
         });
+        syncRailKeywordHighlight();
         // [추가] v3 : 시안 2a 패널 머리의 '14:27 기준' = 랭킹을 받아 온 시각
         const time = document.getElementById('rail-time');
         if (time) {
