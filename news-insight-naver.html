@@ -165,8 +165,8 @@
     --logo-h: 1.38rem;
   }
   /* 글자가 --logo-h * 1.1 이므로, 글자를 2px 줄이려면 --logo-h 를 약 1.8px 줄인다 (마크도 같은 비율로 축소) */
-  @media (min-width: 640px)  { #app-logo { --logo-h: 1.68rem; } }
-  @media (min-width: 1024px) { #app-logo { --logo-h: 2.14rem; } }  /* 15px 기준 약 32px */
+  @media (min-width: 640px)  { #app-logo { --logo-h: 1.5rem; } }   /* 글자 약 3px 축소 */
+  @media (min-width: 1024px) { #app-logo { --logo-h: 1.96rem; } }  /* 15px 기준 약 29px (글자 약 32px) — 이전보다 글자 3px 축소 */
   /* 부제(Real-Time Wire Desk)는 원래 크기보다 2px 축소 */
   #app-subtitle { font-size: calc(0.75rem - 2px); }
   @media (min-width: 1024px) { #app-subtitle { font-size: calc(0.87rem - 2px); } }
@@ -181,7 +181,7 @@
     height: var(--logo-h);
   }
   .logo-word {
-    font-size: calc(var(--logo-h) * 1.1);   /* 데스크톱 약 35px */
+    font-size: calc(var(--logo-h) * 1.1 - 1px);   /* 아이콘 크기는 그대로 두고 글자만 1px 축소 (데스크톱 약 31px) */
     font-weight: 800;
     letter-spacing: -0.03em;
     line-height: 1;
@@ -320,7 +320,7 @@
       display: flex;
       align-items: center;
       gap: .75rem;
-      padding: .667rem 2rem;                /* 시안 10px 32px */
+      padding: .4rem 2rem;                  /* 시안 10px → 6px 로 줄임 */
       border-bottom: 1px solid rgb(var(--c-line));
       background: rgb(var(--c-ink));
     }
@@ -541,7 +541,7 @@
   .rail-kw { display: none; flex-direction: column; flex-shrink: 0; }
   .rail-kw.is-on { display: flex; }
   /* 저장 기사 칸(margin-top 1.2rem)과 같은 높이에서 시작해야 머리 아래 선이 본문 구분선과 맞는다 */
-  .rail-kw { margin-top: 1.2rem; }
+  .rail-kw { margin-top: .8rem; }
   /* [수정] v3 Phase 4 : 시안 2a 키워드 줄 = 번호 28px | 낱말 | 증감, 패딩 9px 20px, 아래 선 1px */
   .rail-kw-row {
     display: grid;
@@ -1342,7 +1342,7 @@
     #cat-header > div { position: relative; }
     /* 제목 아래 붉은(금색) 선은 없애고, 아래 본문의 검은 2px 선 하나로만 나눈다.
        선이 없어진 만큼 제목 줄·본문 사이 여백도 줄여 본문을 위로 올린다. */
-    #cat-header > div { border-bottom: 0; padding-bottom: 1.1rem; }   /* 제목과 검은 선 사이 여백 : 검은 선이 오른쪽 '저장 기사' 선 높이에 오도록 맞춘 값 */
+    #cat-header > div { border-bottom: 0; padding-bottom: .7rem; }   /* 제목과 검은 선 사이 여백 : 검은 선이 오른쪽 '저장 기사' 선 높이에 오도록 맞춘 값 */
     #status-bar { padding-top: 0; }
     /* 상단 탭 아래 ~ 제목 위 여백을 10px 줄인다 (space-y-6 의 22.5px → 12.5px).
        오른쪽 '저장 기사' 선과 높이를 맞추려고 패널 쪽 margin-top 도 같은 만큼 줄여 두었다. */
@@ -1582,7 +1582,7 @@
 
   <!-- 헤더 + 지수 티커 (스크롤해도 상단 고정) -->
   <div class="sticky top-0 z-40" id="top-bar">
-  <header id="app-header" class="border-b-2 border-paper bg-rail/90 backdrop-blur px-4 py-3 lg:px-8 lg:pt-6 lg:pb-4 flex justify-between items-center">
+  <header id="app-header" class="border-b-2 border-paper bg-rail/90 backdrop-blur px-4 py-3 lg:px-8 lg:pt-4 lg:pb-3 flex justify-between items-center">
     <div class="flex flex-col items-start sm:flex-row sm:items-center gap-0 sm:gap-2 lg:gap-3 min-w-0">
       <!-- 로고(오렌지 뉴스피드 마크 + Beyond News 워드마크) + 오른쪽에 밑선 맞춰 붙는 문구 -->
       <div class="flex items-end gap-2 lg:gap-3 min-w-0">
@@ -1983,7 +1983,7 @@
         <div id="rail-keyword-list"></div>
       </section>
       <!-- 저장 기사 : 최근 5건 + 이어보기. 사이드바가 데스크톱에서 사라져 저장 화면으로 가는 길도 여기 둔다 -->
-      <section class="panel-sec" style="margin-top:1.2rem">
+      <section class="panel-sec" style="margin-top:.8rem">
         <div class="panel-head">
           <h2>저장 기사</h2>
           <span id="panel-saved-count" class="text-[0.73rem] text-muted"></span>
