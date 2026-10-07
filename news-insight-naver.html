@@ -226,6 +226,8 @@
     html, body { overflow-x: clip; }
   }
   html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  /* 아이폰 두 번 탭 확대만 끈다. 두 손가락 확대(접근성)는 그대로 남는다. */
+  html { touch-action: manipulation; }
   /* 가로로 넘칠 수 있는 요소(티커·긴 표)가 페이지 폭을 밀지 않도록 */
   #top-bar, main { max-width: 100%; }
   ::selection { background: rgb(var(--c-gold) / .33); }
@@ -753,6 +755,9 @@
   .pv-body.is-rows { padding: 0 28px 12px; gap: 0; }
   .pv-body.is-chart { padding: 20px 28px 20px; gap: 12px; }
   .pv-stack { display: flex; flex-direction: column; gap: 24px; }
+  /* is-flush 팝업(인사이트)의 '불러오는 중' · 오류 여백. Tailwind CDN의 p-7 은 화면에 처음 나타난 뒤에 생성돼
+     첫 순간 여백이 0 이 되어 글자가 왼쪽에 붙어 잘려 보였다 → 미리 정의된 클래스로 둔다. */
+  .pv-pad { padding: 28px; }
   .pv-foot { flex: none; display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 16px 28px; border-top: 2px solid rgb(var(--c-paper)); }
   .pv-note { flex: 1 1 220px; min-width: 0; font-size: 12px; line-height: 1.5; color: rgb(var(--c-muted)); }
   .pv-actions { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -863,6 +868,7 @@
     .pv-body { padding: 20px 16px 16px; gap: 20px; }
     .pv-body.is-rows { padding: 0 16px 8px; }
     .pv-body.is-chart { padding: 16px 16px 12px; }
+    .pv-pad { padding: 20px 16px 16px; }
     .pv-col { padding: 20px 16px 22px; }
     .pv-foot { padding: 12px; }
     .pv-note { flex-basis: 100%; }
@@ -6739,7 +6745,7 @@
     //  - deep-brief와 똑같은 방식으로 /api/insight 를 호출한다.
     // ---------------------------------------------------------------
     function insightLoadingHtml() {
-      return `<div class="p-7">${popupWaitHtml([70, 95, 55], '원문을 읽고 두 관점의 인사이트를 뽑는 중... (5~15초)')}</div>`;
+      return `<div class="pv-pad">${popupWaitHtml([70, 95, 55], '원문을 읽고 두 관점의 인사이트를 뽑는 중... (5~15초)')}</div>`;
     }
 
     // '기회 / 리스크' (시안 1b 의 불릿 자리) : 한 줄씩 라벨 + 내용
@@ -6858,7 +6864,7 @@
         const data = await res.json();
 
         if (data.error) {
-          document.getElementById('insight-body').innerHTML = `<div class="p-7">${popupErrHtml(data.error)}</div>`;
+          document.getElementById('insight-body').innerHTML = `<div class="pv-pad">${popupErrHtml(data.error)}</div>`;
           return;
         }
         document.getElementById('insight-body').innerHTML = insightHtml(data);
@@ -6869,7 +6875,7 @@
           : `AI(${esc(data.model || 'Gemini')})가 원문을 읽고 두 관점으로 분석했습니다${noteBreak}해석·전망은 참고용입니다`;
       } catch (e) {
         console.error(e);
-        document.getElementById('insight-body').innerHTML = `<div class="p-7">${popupErrHtml('인사이트를 불러오지 못했습니다.')}</div>`;
+        document.getElementById('insight-body').innerHTML = `<div class="pv-pad">${popupErrHtml('인사이트를 불러오지 못했습니다.')}</div>`;
       }
     }
 
