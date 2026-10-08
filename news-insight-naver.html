@@ -1220,18 +1220,18 @@
     .bc-title { font-size: 1.4rem; line-height: 1.3; }   /* 21px */
     .bc-sum { padding-top: 12px; font-size: .933rem; line-height: 1.6; }   /* 14px */
 
-    /* 버튼 줄 : 아이콘 위 · 글자 아래, 칸 높이 52px 이상 (손가락 44px 기준을 넉넉히 넘긴다) */
+    /* 버튼 줄 : 아이콘 옆에 글자를 나란히, 칸 높이 40px (좁은 폭에서도 네 칸이 한 줄에 들어가도록 안쪽 여백을 줄였다) */
     .bc-actions .bc-act {
-      flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px;
-      min-height: 52px; padding: 9px 10px; font-size: 12px; font-weight: 600;
+      flex-direction: row; align-items: center; justify-content: center; gap: 4px;
+      min-height: 40px; padding: 6px 4px; font-size: 12px; font-weight: 600;
     }
-    .bc-actions .bc-act svg { width: 17px; height: 17px; }
+    .bc-actions .bc-act svg { width: 15px; height: 15px; }
 
     /* 아래 : [01 / 10] [진행 막대] — 이전/다음 화살표는 손가락으로 밀면 되므로 감춘다 */
-    .bc-top { grid-row: 2; grid-column: 1; top: 0; padding: 0; }
+    .bc-top { grid-row: 2; grid-column: 1; top: 11px; padding: 0; }   /* top 11px : 카드 아래~하단 탭 바 사이 빈 칸의 가운데로 내린다 */
     .bc-cur { font-size: 18px; line-height: 1; letter-spacing: -.03em; }
     .bc-tot { font-size: 12px; }
-    .bc-nav { grid-row: 2; grid-column: 2; gap: 0; padding: 12px 0; }
+    .bc-nav { grid-row: 2; grid-column: 2; gap: 0; padding: 12px 0; position: relative; top: 11px; }
     .bc-arrow { display: none; }
     .bc-segs { gap: 3px; }
     .bc-seg { height: 20px; }
@@ -2744,10 +2744,21 @@
     const STOCK_EXCLUDE = ['부고','인사이동','채용공고'];
     const SPORTS_EXCLUDE = [];   // [추가] 스포츠 공통 제외어 (필요 시 추가)
 
+    // [추가] The Daily Brief 에서 고를 수 있는 섹션 (server.js BRIEFING_PICKABLE 과 같은 목록)
+    //   하나도 안 고르면 기본 6개 (server.js BRIEFING_SOURCES)
+    const BRIEF_PICKABLE = ['breaking', 'economy', 'stock', 'logistics', 'society', 'global', 'ai', 'sports'];
+    const BRIEF_DEFAULT_SECTIONS = ['breaking', 'economy', 'stock', 'logistics', 'society', 'global'];
+    // server.js BRIEFING_KW_PER_SECTION · BRIEFING_KW_TOTAL · BRIEFING_KW_MIN — 넘는 키워드는 서버가 버린다
+    const BRIEF_KW_PER_SECTION = 3;
+    const BRIEF_KW_TOTAL = 15;
+    const BRIEF_KW_MIN = 3;
+
     const DEFAULT_KEYWORDS = {
-      // [추가] The Daily Brief : 고른 섹션(sections) + 우선 키워드(include) + 제외어(exclude).
-      //   모두 비어 있으면 서버가 예전 기본 섹션으로 고른다. sections 는 이 키에만 있다.
+      // [추가] The Daily Brief : 고른 섹션(sections). 비어 있으면 서버가 기본 6개 섹션으로 고른다.
+      //   include/exclude 는 예전 공통 칸의 흔적이라 서버가 읽지 않는다. sections 는 이 키에만 있다.
       briefing:             { include: [], exclude: [], sections: [] },
+      // Brief 전용 섹션별 우선·제외 키워드 (섹션 화면 키워드와 따로 논다)
+      ...Object.fromEntries(BRIEF_PICKABLE.map((k) => [`brief_${k}`, { include: [], exclude: [] }])),
       // 상위 섹션 (전체 화면에서 사용)
       breaking:             { include: ['속보'], exclude: [] },
       logistics:            { include: ['물류', '롯데글로벌로지스'], exclude: [...LOGI_EXCLUDE] },
@@ -3957,13 +3968,12 @@
     // 섹션 줄에 붙는 숫자 (시안 1e : '포함 4 · 제외 2 · 하위 7')
     function kwCountText(key, children = []) {
       const v = kwOf(key);
-      const secs = key === 'briefing' ? `섹션 ${briefSections().length || '기본'} · ` : '';
-      return `${secs}포함 ${v.include.length} · 제외 ${v.exclude.length}` + (children.length ? ` · 하위 ${children.length}` : '');
+      if (key === 'briefing') {
+        const n = briefActiveSections().reduce((sum, k) => sum + kwOf(`brief_${k}`).include.length, 0);
+        return `섹션 ${briefSections().length || '기본'} · 우선 키워드 ${n}`;
+      }
+      return `포함 ${v.include.length} · 제외 ${v.exclude.length}` + (children.length ? ` · 하위 ${children.length}` : '');
     }
-
-    // [추가] The Daily Brief 에서 고를 수 있는 섹션 (server.js BRIEFING_PICKABLE 과 같은 목록)
-    const BRIEF_PICKABLE = ['breaking', 'economy', 'stock', 'logistics', 'society', 'global', 'ai', 'sports'];
-    const BRIEF_MAX_KEYWORDS = 5;   // server.js BRIEFING_MAX_KEYWORDS — 넘는 키워드는 서버가 버린다
 
     function briefSections() {
       const v = kwOf('briefing');
@@ -3971,28 +3981,56 @@
       return v.sections;
     }
 
+    // 키워드를 받는 섹션 = 고른 섹션 (없으면 기본 6개). 고르기 목록 순서를 따른다(서버가 그 순서로 개수를 센다).
+    function briefActiveSections() {
+      const on = briefSections();
+      return on.length ? BRIEF_PICKABLE.filter((k) => on.includes(k)) : BRIEF_DEFAULT_SECTIONS;
+    }
+
     function toggleBriefSection(key) {
       commitKwInputs();          // 적다 만 키워드를 먼저 담아 둔다
       const list = briefSections();
       const i = list.indexOf(key);
       if (i >= 0) list.splice(i, 1); else list.push(key);
+      list.sort((a, b) => BRIEF_PICKABLE.indexOf(a) - BRIEF_PICKABLE.indexOf(b));
       renderKeywordSettings();
     }
 
-    // Brief 줄을 펼친 내용 : 섹션 고르기 + [우선 키워드 | 제외 키워드]
+    // 섹션 하나의 Brief 전용 [우선 | 제외] 줄 (하위 섹션 줄과 같은 모양)
+    function briefSubHtml(sec) {
+      const key = `brief_${sec}`;
+      const open = key === settingSubOpen;
+      const v = kwOf(key);
+      const over = v.include.length > BRIEF_KW_PER_SECTION ? ` <b class="kw-warn">앞의 ${BRIEF_KW_PER_SECTION}개만 쓰입니다</b>` : '';
+      return `
+        <div class="kw-sub">
+          <button type="button" class="kw-sub-btn" aria-expanded="${open}" onclick="toggleSettingSub('${key}')">
+            <span class="nm">${esc(categoryLabels[sec] || sec)}</span>
+            <span class="cnt">우선 ${v.include.length} · 제외 ${v.exclude.length}</span>
+            ${KW_CHEV}
+          </button>
+          ${open ? `<div class="kw-sub-body">${kwPairHtml(key, `우선 키워드 (최대 ${BRIEF_KW_PER_SECTION}개 · 제목에 들어간 기사)${over}`, '제외 키워드 (이 섹션 Brief 기사에만)')}</div>` : ''}
+        </div>`;
+    }
+
+    // Brief 줄을 펼친 내용 : 섹션 고르기 + 섹션별 [우선 | 제외] 줄
     function briefSettingHtml() {
       const on = briefSections();
       const picks = BRIEF_PICKABLE.map((k) => `
         <button type="button" class="kw-pick${on.includes(k) ? ' is-on' : ''}" aria-pressed="${on.includes(k)}"
           onclick="toggleBriefSection('${k}')">${esc(categoryLabels[k] || k)}</button>`).join('');
-      const over = kwOf('briefing').include.length > BRIEF_MAX_KEYWORDS
-        ? ` <b class="kw-warn">앞의 ${BRIEF_MAX_KEYWORDS}개만 쓰입니다</b>` : '';
+      const active = briefActiveSections();
+      const total = active.reduce((sum, k) => sum + Math.min(BRIEF_KW_PER_SECTION, kwOf(`brief_${k}`).include.length), 0);
+      const overTotal = total > BRIEF_KW_TOTAL
+        ? ` <b class="kw-warn">우선 키워드는 모두 합쳐 ${BRIEF_KW_TOTAL}개까지라, 아래쪽 섹션 키워드 일부는 쓰이지 않습니다.</b>` : '';
       return `
         <div class="kw-field"><span>보여줄 섹션 — 하나도 고르지 않으면 기본(속보·경제·증시·물류·정치/사회·글로벌)</span>
           <div class="kw-picks">${picks}</div>
         </div>
-        ${kwPairHtml('briefing', `우선 키워드 (최대 ${BRIEF_MAX_KEYWORDS}개 · 제목에 들어간 기사를 먼저)${over}`, '제외 키워드 (Brief 전체에 적용)')}
-        <p class="kw-note">키워드 기사가 모자라면 고른 섹션 → 나머지 기본 섹션 기사로 채웁니다. 비슷한 내용은 1건만, 속보는 2건까지만 보여줍니다.</p>`;
+        <p class="kw-note">고른 섹션 기사를 먼저 보여주고, 섹션별 우선 키워드 기사는 최소 ${BRIEF_KW_MIN}건 자리를 지켜 줍니다.
+          모자라면 나머지 기본 섹션 기사로 채웁니다. 비슷한 내용은 1건만, 속보는 2건까지만 보여줍니다.
+          (섹션 기사는 이 줄 아래 속보·물류… 섹션 설정의 포함 키워드로 찾고, 여기 키워드는 Brief 에만 쓰입니다)${overTotal}</p>
+        <div>${active.map(briefSubHtml).join('')}</div>`;
     }
 
     const KW_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';

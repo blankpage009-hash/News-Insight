@@ -1709,7 +1709,11 @@ function collapseEvents(items, sort) {
 //   비어 있으면 위 BRIEFING_SOURCES 그대로 = 예전과 같은 브리핑.
 //   기본 6개 밖의 섹션(AI·스포츠)은 기존 섹션 정의의 검색어를 빌린다.
 const BRIEFING_PICKABLE = ['breaking', 'economy', 'stock', 'logistics', 'society', 'global', 'ai', 'sports'];
-const BRIEFING_MAX_KEYWORDS = 5;   // 키워드마다 네이버를 한 번씩 부르므로 동시 호출 슬롯을 지키려고 묶어 둔다
+// Brief 전용 섹션별 키워드는 kw['brief_<섹션키>'] = { include, exclude } 로 온다.
+//   키워드마다 네이버를 한 번씩 부르므로(동시 호출 슬롯 6칸) 개수를 묶어 둔다.
+const BRIEFING_KW_PER_SECTION = 3;
+const BRIEFING_KW_TOTAL = 15;
+const BRIEFING_KW_MIN = 3;         // 섹션 기사가 넉넉해도 키워드 기사는 이만큼 자리를 지켜 준다
 const BRIEFING_MAX_BREAKING = 2;   // 속보는 제목만 바뀐 비슷한 기사가 쏟아져 브리핑을 덮기 쉽다
 
 function briefingSourceOf(key) {
@@ -1719,17 +1723,26 @@ function briefingSourceOf(key) {
   return sec ? { cat: key, terms: sec.terms, domain: sec.domain } : null;
 }
 
+// briefing.include/exclude(섹션 구분 없는 예전 칸)는 화면에서 없앴으므로 읽지 않는다.
+//   남아 있어도 보이지 않는 값이 결과를 바꾸면 안 된다.
 function briefingConfig(kwMap) {
   const o = (kwMap && kwMap.briefing) || {};
-  return {
-    sections: [...new Set(cleanList(o.sections))].filter((k) => BRIEFING_PICKABLE.includes(k)),
-    keywords: [...new Set(cleanList(o.include))].slice(0, BRIEFING_MAX_KEYWORDS),
-    exclude: cleanList(o.exclude),
-  };
+  const sections = [...new Set(cleanList(o.sections))].filter((k) => BRIEFING_PICKABLE.includes(k));
+  const active = sections.length ? sections : BRIEFING_SOURCES.map((s) => s.cat);
+  let budget = BRIEFING_KW_TOTAL;
+  const per = {};
+  active.forEach((sec) => {
+    const b = (kwMap && kwMap[`brief_${sec}`]) || {};
+    const include = [...new Set(cleanList(b.include))].slice(0, Math.min(BRIEFING_KW_PER_SECTION, budget));
+    const exclude = cleanList(b.exclude);
+    budget -= include.length;
+    if (include.length || exclude.length) per[sec] = { include, exclude };
+  });
+  return { sections, per };
 }
 
 function briefingIsDefault(cfg) {
-  return !cfg.sections.length && !cfg.keywords.length && !cfg.exclude.length;
+  return !cfg.sections.length && !Object.keys(cfg.per).length;
 }
 
 // 고른 섹션(없으면 기본 6개) + 모자랄 때 채울 기본 섹션
@@ -1751,21 +1764,22 @@ function buildBriefingKey({ limit, dateFrom, dateTo, hours }, kwMap) {
   return `briefing2|${limit}|${dateFrom || ''}|${dateTo || ''}|${hours || ''}|${sig}${cfgSig}`;
 }
 
-// 섹션 하나에서 후보 수집. 각 섹션은 세팅의 '포함/제외 키워드'를 그대로 반영한다.
-async function fetchBriefingSource(src, kwMap, { dateFrom, dateTo, hours }) {
+// 섹션 하나에서 후보 수집. 섹션 화면의 '포함/제외 키워드'로 찾고, Brief 전용 제외어를 한 번 더 건다.
+async function fetchBriefingSource(src, kwMap, { dateFrom, dateTo, hours }, briefExclude = []) {
   const { terms, exclude } = resolveSectionKw(kwMap, { key: src.cat, terms: src.terms });
   const items = src.cat === 'breaking'
     ? await fetchBreaking(10, terms, exclude)
     : (await searchByTerms(terms, { display: 10, dateFrom, dateTo, hours, domain: src.domain, exclude })).slice(0, 10);
-  return items.map((it) => ({ ...it, cat: src.cat }));
+  return applyExcludeList(items, briefExclude).map((it) => ({ ...it, cat: src.cat }));
 }
 
 // 키워드 하나에서 후보 수집. 원문 검증(verify)은 기사마다 언론사 페이지를 긁어 느리므로 끄고,
 //   대신 제목에 키워드가 들어간 기사만 쓴다(본문에 스치기만 한 기사는 대개 다른 이야기다).
-async function fetchBriefingKeyword(word, { dateFrom, dateTo, hours }) {
+//   태그는 키워드(mykw) + 그 키워드를 둔 섹션.
+async function fetchBriefingKeyword(word, sec, { dateFrom, dateTo, hours }, briefExclude = []) {
   const items = await searchByTerms([word], { display: 10, dateFrom, dateTo, hours, verify: false });
-  return items.filter((it) => textContainsTerm(it.title, word)).slice(0, 10)
-    .map((it) => ({ ...it, cat: 'mykw', kw: word }));
+  return applyExcludeList(items.filter((it) => textContainsTerm(it.title, word)), briefExclude).slice(0, 10)
+    .map((it) => ({ ...it, cat: 'mykw', cats: ['mykw', sec], kw: word }));
 }
 
 // 브리핑은 열 건 남짓이라 비슷한 기사 둘이 나란히 뜨면 바로 눈에 띈다. 그래서 다른 화면보다 엄하게 본다.
@@ -1785,21 +1799,22 @@ function briefingSimilar(a, b) {
   return shared.length >= BRIEFING_SHARED_WORDS && shared.filter((t) => !isNum(t)).length >= 2;
 }
 
-// 후보 묶음들(앞 묶음일수록 우선) → 브리핑 목록
-//   groups = [{ id, tier, items }]  tier 0 = 키워드, 1 = 고른 섹션, 2 = 채움용 기본 섹션
-function selectBriefing(groups, limit, exclude) {
-  // 같은 URL은 하나로 합치되, 걸린 카테고리는 모두 cats 배열에 모은다 (먼저 나온 = 우선순위 높은 묶음이 주인)
+// 후보 묶음들 → 브리핑 목록
+//   groups = [{ id, tier, items }]  tier 1 = 고른 섹션, 2 = 키워드, 3 = 채움용 기본 섹션
+function selectBriefing(groups, limit) {
+  // 같은 URL은 하나로 합치되, 걸린 카테고리는 모두 cats 배열에 모은다 (먼저 나온 묶음이 주인)
   const byUrl = new Map();
   groups.forEach((g) => g.items.forEach((it) => {
     if (!it.url) return;
     const prev = byUrl.get(it.url);
     if (prev) {
-      if (!prev.cats.includes(it.cat)) prev.cats.push(it.cat);
+      (it.cats || [it.cat]).forEach((c) => { if (!prev.cats.includes(c)) prev.cats.push(c); });
+      if (it.kw && !prev.kw) prev.kw = it.kw;   // 섹션 기사가 키워드에도 걸리면 키워드 태그 이름을 넘겨받는다
     } else {
-      byUrl.set(it.url, { ...it, cats: [it.cat], _group: g.id, _tier: g.tier });
+      byUrl.set(it.url, { ...it, cats: [...(it.cats || [it.cat])], _group: g.id, _tier: g.tier });
     }
   }));
-  const all = applyExcludeList([...byUrl.values()], exclude);
+  const all = [...byUrl.values()];
   if (!all.length) return [];
 
   // 같은 사건은 묶음을 가리지 않고 하나만 : 섹션이 달라도(정치·속보 등) 같은 사건이면 한 군집.
@@ -1829,17 +1844,17 @@ function selectBriefing(groups, limit, exclude) {
   pool.forEach((it) => buckets.get(it._group).push(it));
   buckets.forEach((arr) => arr.sort((a, b) => b._score - a._score));
 
-  // 우선순위(tier) 차례로, 같은 tier 안에서는 라운드로빈(골고루) 선발
   const picked = [];
   let breaking = 0;
   const isBreaking = (it) => /속보/.test(it.title || '');
-  [...new Set(groups.map((g) => g.tier))].sort((a, b) => a - b).forEach((tier) => {
+  // 한 tier 의 묶음들을 라운드로빈(골고루)으로 돌며 upto 건이 될 때까지 뽑는다
+  const take = (tier, upto) => {
     const ids = groups.filter((g) => g.tier === tier).map((g) => g.id);
     let progress = true;
-    while (picked.length < limit && progress) {
+    while (picked.length < upto && progress) {
       progress = false;
       for (const id of ids) {
-        if (picked.length >= limit) break;
+        if (picked.length >= upto) break;
         const arr = buckets.get(id);
         while (arr.length) {
           const cand = arr.shift();
@@ -1853,33 +1868,48 @@ function selectBriefing(groups, limit, exclude) {
         }
       }
     }
-  });
+  };
 
-  return picked.map(({ _tokens, _score, _group, _tier, ...it }) => it);
+  // 키워드 기사 몫을 먼저 떼어 둔 뒤(최소 BRIEFING_KW_MIN 건) 섹션으로 채운다.
+  //   섹션을 먼저 뽑으면 열 자리가 금방 차서 키워드 기사가 끼어들 틈이 없다.
+  take(2, Math.min(BRIEFING_KW_MIN, limit));
+  take(1, limit);
+  take(2, limit);   // 섹션 기사가 모자라면 키워드 기사로 더 채운다
+  take(3, limit);
+
+  // 보여주는 순서는 섹션 → 키워드 → 채움 (같은 tier 안에서는 뽑힌 순서)
+  return picked
+    .map((it, i) => ({ it, i }))
+    .sort((a, b) => a.it._tier - b.it._tier || a.i - b.i)
+    .map(({ it: { _tokens, _score, _group, _tier, ...it } }) => it);
 }
 
 async function buildBriefing({ limit, dateFrom, dateTo, hours }, kwMap) {
   const range = { dateFrom, dateTo, hours };
   const cfg = briefingConfig(kwMap);
   const { main, fill } = briefingSourcePlan(cfg);
+  const exOf = (sec) => (cfg.per[sec] && cfg.per[sec].exclude) || [];
+  // 같은 키워드를 여러 섹션에 넣었으면 한 번만 찾는다 (앞 섹션 태그)
+  const words = Object.entries(cfg.per).flatMap(([sec, v]) => v.include.map((w) => ({ sec, w })))
+    .filter((x, i, a) => a.findIndex((y) => y.w === x.w) === i);
 
-  // 1) 키워드 + 고른 섹션을 한꺼번에 수집 (카테고리별로 따로 받아 속보 쏠림 방지)
-  const [kwLists, mainLists] = await Promise.all([
-    Promise.all(cfg.keywords.map((w) => fetchBriefingKeyword(w, range))),
-    Promise.all(main.map((src) => fetchBriefingSource(src, kwMap, range))),
+  // 1) 고른 섹션 + 섹션별 키워드를 한꺼번에 수집 (카테고리별로 따로 받아 속보 쏠림 방지)
+  const [mainLists, kwLists] = await Promise.all([
+    Promise.all(main.map((src) => fetchBriefingSource(src, kwMap, range, exOf(src.cat)))),
+    Promise.all(words.map(({ sec, w }) => fetchBriefingKeyword(w, sec, range, exOf(sec)))),
   ]);
   const groups = [
-    ...cfg.keywords.map((w, i) => ({ id: `kw:${w}`, tier: 0, items: kwLists[i] })),
     ...main.map((src, i) => ({ id: src.cat, tier: 1, items: mainLists[i] })),
+    ...words.map(({ sec, w }, i) => ({ id: `kw:${sec}:${w}`, tier: 2, items: kwLists[i] })),
   ];
 
-  let items = selectBriefing(groups, limit, cfg.exclude);
+  let items = selectBriefing(groups, limit);
 
   // 2) 그래도 모자라면 고르지 않은 기본 섹션으로 채운다 (모자랄 때만 불러 네이버 호출을 아낀다)
   if (items.length < limit && fill.length) {
     const fillLists = await Promise.all(fill.map((src) => fetchBriefingSource(src, kwMap, range)));
-    fill.forEach((src, i) => groups.push({ id: src.cat, tier: 2, items: fillLists[i] }));
-    items = selectBriefing(groups, limit, cfg.exclude);
+    fill.forEach((src, i) => groups.push({ id: src.cat, tier: 3, items: fillLists[i] }));
+    items = selectBriefing(groups, limit);
   }
 
   return { items };
