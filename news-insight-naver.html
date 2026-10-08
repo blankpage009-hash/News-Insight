@@ -1439,6 +1439,16 @@
     flex: 1; min-width: 6rem; padding: 2px 0; background: transparent; border: 0; outline: none;
     font-size: 13px; line-height: 20px; color: rgb(var(--c-paper));
   }
+  /* [추가] The Daily Brief 섹션 고르기 : 켜진 칸은 포함 칩과 같은 색 */
+  .kw-picks { display: flex; flex-wrap: wrap; gap: 6px; }
+  .kw-pick {
+    padding: 4px 12px; font-size: 13px; line-height: 20px; color: rgb(var(--c-paper));
+    box-shadow: inset 0 0 0 1px rgb(var(--c-paper) / .4); transition: background-color .15s;
+  }
+  .kw-pick:hover { background: rgb(var(--c-ink2)); }
+  .kw-pick.is-on, .kw-pick.is-on:hover { background: #fff2ef; color: #7c1405; box-shadow: inset 0 0 0 1px #7c1405; font-weight: 600; }
+  .kw-warn { color: #7c1405; font-weight: 600; }
+  .kw-note { font-size: 12px; line-height: 18px; color: rgb(var(--c-muted)); }
 
   @media (prefers-reduced-motion: reduce) {
     .skeleton, .modal-pop { animation: none; }
@@ -2706,6 +2716,9 @@
     const SPORTS_EXCLUDE = [];   // [추가] 스포츠 공통 제외어 (필요 시 추가)
 
     const DEFAULT_KEYWORDS = {
+      // [추가] The Daily Brief : 고른 섹션(sections) + 우선 키워드(include) + 제외어(exclude).
+      //   모두 비어 있으면 서버가 예전 기본 섹션으로 고른다. sections 는 이 키에만 있다.
+      briefing:             { include: [], exclude: [], sections: [] },
       // 상위 섹션 (전체 화면에서 사용)
       breaking:             { include: ['속보'], exclude: [] },
       logistics:            { include: ['물류', '롯데글로벌로지스'], exclude: [...LOGI_EXCLUDE] },
@@ -2740,6 +2753,7 @@
 
     // 설정 화면에 보여줄 순서와 들여쓰기 (depth 1 = 하위 섹션)
     const KEYWORD_SETTING_ORDER = [
+      { key: 'briefing', depth: 0 },   // [추가] 섹션 고르기 칸이 따로 붙는다 (renderKeywordSettings)
       { key: 'breaking', depth: 0 },
       { key: 'logistics', depth: 0 },
       { key: 'logistics_lotte', depth: 1 },
@@ -2774,6 +2788,7 @@
       const out = {};
       Object.keys(src).forEach((k) => {
         out[k] = { include: [...(src[k].include || [])], exclude: [...(src[k].exclude || [])] };
+        if (Array.isArray(src[k].sections)) out[k].sections = [...src[k].sections];
       });
       return out;
     }
@@ -2785,6 +2800,7 @@
         if (saved && saved[k]) {
           if (Array.isArray(saved[k].include)) merged[k].include = saved[k].include;
           if (Array.isArray(saved[k].exclude)) merged[k].exclude = saved[k].exclude;
+          if (Array.isArray(saved[k].sections)) merged[k].sections = saved[k].sections;
         }
       });
       return merged;
@@ -3912,7 +3928,42 @@
     // 섹션 줄에 붙는 숫자 (시안 1e : '포함 4 · 제외 2 · 하위 7')
     function kwCountText(key, children = []) {
       const v = kwOf(key);
-      return `포함 ${v.include.length} · 제외 ${v.exclude.length}` + (children.length ? ` · 하위 ${children.length}` : '');
+      const secs = key === 'briefing' ? `섹션 ${briefSections().length || '기본'} · ` : '';
+      return `${secs}포함 ${v.include.length} · 제외 ${v.exclude.length}` + (children.length ? ` · 하위 ${children.length}` : '');
+    }
+
+    // [추가] The Daily Brief 에서 고를 수 있는 섹션 (server.js BRIEFING_PICKABLE 과 같은 목록)
+    const BRIEF_PICKABLE = ['breaking', 'economy', 'stock', 'logistics', 'society', 'global', 'ai', 'sports'];
+    const BRIEF_MAX_KEYWORDS = 5;   // server.js BRIEFING_MAX_KEYWORDS — 넘는 키워드는 서버가 버린다
+
+    function briefSections() {
+      const v = kwOf('briefing');
+      if (!Array.isArray(v.sections)) v.sections = [];
+      return v.sections;
+    }
+
+    function toggleBriefSection(key) {
+      commitKwInputs();          // 적다 만 키워드를 먼저 담아 둔다
+      const list = briefSections();
+      const i = list.indexOf(key);
+      if (i >= 0) list.splice(i, 1); else list.push(key);
+      renderKeywordSettings();
+    }
+
+    // Brief 줄을 펼친 내용 : 섹션 고르기 + [우선 키워드 | 제외 키워드]
+    function briefSettingHtml() {
+      const on = briefSections();
+      const picks = BRIEF_PICKABLE.map((k) => `
+        <button type="button" class="kw-pick${on.includes(k) ? ' is-on' : ''}" aria-pressed="${on.includes(k)}"
+          onclick="toggleBriefSection('${k}')">${esc(categoryLabels[k] || k)}</button>`).join('');
+      const over = kwOf('briefing').include.length > BRIEF_MAX_KEYWORDS
+        ? ` <b class="kw-warn">앞의 ${BRIEF_MAX_KEYWORDS}개만 쓰입니다</b>` : '';
+      return `
+        <div class="kw-field"><span>보여줄 섹션 — 하나도 고르지 않으면 기본(속보·경제·증시·물류·정치/사회·글로벌)</span>
+          <div class="kw-picks">${picks}</div>
+        </div>
+        ${kwPairHtml('briefing', `우선 키워드 (최대 ${BRIEF_MAX_KEYWORDS}개 · 제목에 들어간 기사를 먼저)${over}`, '제외 키워드 (Brief 전체에 적용)')}
+        <p class="kw-note">키워드 기사가 모자라면 고른 섹션 → 나머지 기본 섹션 기사로 채웁니다. 비슷한 내용은 1건만, 속보는 2건까지만 보여줍니다.</p>`;
     }
 
     const KW_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
@@ -3937,11 +3988,11 @@
     }
 
     // [포함 | 제외] 두 칸
-    function kwPairHtml(key) {
+    function kwPairHtml(key, incLabel = '포함 키워드', excLabel = '제외 키워드') {
       return `
         <div class="kw-pair">
-          <div class="kw-field"><span>포함 키워드</span>${kwBoxHtml(key, 'include')}</div>
-          <div class="kw-field"><span>제외 키워드</span>${kwBoxHtml(key, 'exclude')}</div>
+          <div class="kw-field"><span>${incLabel}</span>${kwBoxHtml(key, 'include')}</div>
+          <div class="kw-field"><span>${excLabel}</span>${kwBoxHtml(key, 'exclude')}</div>
         </div>`;
     }
 
@@ -4059,11 +4110,11 @@
         return `
           <div class="kw-sec">
             <button type="button" class="kw-sec-btn" aria-expanded="${open}" onclick="selectSettingSection('${g.key}')">
-              <span class="nm">${esc(categoryLabels[g.key] || g.key)}</span>
+              <span class="nm">${esc(TAB_LABELS[g.key] || categoryLabels[g.key] || g.key)}</span>
               <span class="cnt">${kwCountText(g.key, g.children)}</span>
               ${KW_CHEV}
             </button>
-            ${open ? `<div class="kw-sec-body">${kwPairHtml(g.key)}${g.children.map(kwSubHtml).join('')}</div>` : ''}
+            ${open ? `<div class="kw-sec-body">${g.key === 'briefing' ? briefSettingHtml() : kwPairHtml(g.key)}${g.children.map(kwSubHtml).join('')}</div>` : ''}
           </div>`;
       }).join('');
     }
@@ -4504,6 +4555,7 @@
         naverUrl: item.naverUrl || '',   // [수정] 서버가 준 네이버 뉴스 링크를 버리지 않고 보관
         datetime: item.datetime || '',
         cat: item.cat || null,
+        kw: item.kw || '',   // [추가] Brief 우선 키워드로 찾은 기사면 그 키워드 (태그 이름)
         // 이 기사가 걸린 카테고리 목록 (서버가 cats를 주면 그대로, 없으면 단일값)
         cats: (Array.isArray(item.cats) && item.cats.length)
           ? [...item.cats]
@@ -5550,6 +5602,12 @@
     //  예) stock_domestic → stock(증시),  logistics_lotte → logistics(물류)
     //  최상위가 없는 일반 섹션(경제/사회/글로벌 등)은 그대로 둔다.
     //  → 이 목록이 기사 제목 위에 표시할 '태그'가 된다. (요청 3·5)
+    // 태그 이름. 'mykw' 는 The Daily Brief 의 우선 키워드로 찾은 기사 → 그 키워드를 태그로 보여준다.
+    function catLabelOf(item, c) {
+      if (c === 'mykw') return item.kw || '내 키워드';
+      return categoryLabels[c] || '기타';
+    }
+
     function tagCatsOf(item) {
       const mapped = catsOf(item).map((c) => parentCategoryOf(c) || c);
       // 'saved'(저장한 기사)는 수집 섹션이 아니라 보관함이므로 태그로 내보내지 않는다.
@@ -5662,7 +5720,7 @@
     });
 
     function briefTagsHtml(item) {
-      return tagCatsOf(item).map((c) => `<span class="bc-tag">${categoryLabels[c] || '기타'}</span>`).join('');
+      return tagCatsOf(item).map((c) => `<span class="bc-tag">${esc(catLabelOf(item, c))}</span>`).join('');
     }
 
     // 저장 버튼. data-save-key + .save-btn 이라 toggleSave/syncSaveButtons 가 그대로 이 버튼도 맞춘다.
@@ -6695,7 +6753,8 @@
       document.getElementById('brief-link').href = link;
       // [추가] 시안 05번 : 머리말에 기사 제목과 출처·시각을 먼저 띄운다 (기다리는 동안에도 무엇을 보는지 알 수 있다)
       document.getElementById('brief-title').innerHTML = item.title;
-      const briefCat = categoryLabels[tagCatsOf(item)[0]];   // 시안 1a 머리말 : 분야 · 출처 · 시각
+      const firstCat = tagCatsOf(item)[0];
+      const briefCat = firstCat && catLabelOf(item, firstCat);   // 시안 1a 머리말 : 분야 · 출처 · 시각
       document.getElementById('brief-meta').textContent =
         `${briefCat ? briefCat + ' · ' : ''}${item.source || ''}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}`;
       document.getElementById('brief-note').textContent = '';
