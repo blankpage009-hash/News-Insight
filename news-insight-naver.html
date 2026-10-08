@@ -992,6 +992,12 @@
   .st-lock-lead { font-size: 13px; line-height: 1.6; color: #444141; word-break: keep-all; }
   .st-lock-err { padding: 8px 10px; background: #fff2ef; color: rgb(var(--c-up)); font-size: 12px; line-height: 1.55; }
   .st-lock-btns { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+
+  /* 모바일 Safari 는 글자 크기 16px 미만인 입력칸에 포커스를 주면 화면을 확대하고, 입력 후에도 확대가 남는다.
+     viewport 의 확대 기능은 그대로 두고, 설정 창·잠금 창의 입력칸만 16px 로 올려 확대가 일어나지 않게 한다. */
+  @media (max-width: 1023px) {
+    #password-modal input, #st-pane-admin input, #keyword-settings .kw-input { font-size: 16px; }
+  }
   .st-lock-btns .pv-btn { justify-content: center; padding: 9px 14px; }
 
   /* 1024px 미만 : 값 칸이 좁아져 이름 아래로 내린다 */
@@ -1208,10 +1214,13 @@
     .bc-card.is-near { --s: 1; --o: .45; }
     .bc-card.is-far  { --s: 1; }
 
-    .bc-head { gap: 10px; padding: 14px 14px 0 16px; }
-    .bc-head-l { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; flex: none; }
-    .bc-no { font-size: 40px; padding-top: 4px; }
-    .bc-thumb.is-m { width: 186px; height: 124px; cursor: pointer; }
+    /* 윗줄 = [번호 · 출처/시간], 아랫줄 = 사진. 사진이 윗줄 폭을 차지하지 않아 출처/시간이 줄바꿈되지 않는다 */
+    .bc-head { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 0 10px; padding: 14px 14px 0 16px; }
+    .bc-head-l { display: contents; }
+    .bc-no { grid-area: 1 / 1; font-size: 40px; padding-top: 4px; }
+    .bc-head-r { grid-area: 1 / 2; justify-self: end; }
+    .bc-thumb.is-m { grid-area: 2 / 1 / 3 / 3; margin-top: 12px; width: 204px; height: 136px; cursor: pointer; }
+    .bc-meta > span:last-child { white-space: nowrap; }
     .bc-thumb.is-d { display: none !important; }
     .bc-meta { gap: 6px; padding-top: 2px; font-size: 12px; }
     .bc-tags { gap: 4px; }
@@ -1237,7 +1246,7 @@
     .bc-seg { height: 20px; }
     .bc-seg.is-on span { height: 5px; }
 
-    /* 목록 : [번호 30] [메타 · 제목 17px · 요약 2줄] [저장 44] / 그 아래 버튼 줄(칸 높이 44px) — 시안 1b. 사진 칸은 없다 */
+    /* 목록 : [번호 30] [메타 · 제목 18px · 요약 2줄] [저장 44] / 그 아래 버튼 줄(칸 높이 44px) — 시안 1b. 사진 칸은 없다 */
     #news-list > .bc-list { margin: 0 -1rem 1rem; }
     :is(#news-list, .pv-rows) .bc-row {
       grid-template-columns: 30px minmax(0, 1fr) 44px; gap: 5px 8px;
@@ -1248,7 +1257,7 @@
     :is(#news-list, .pv-rows) .bc-rno    { grid-area: 1 / 1 / 4 / 2; font-size: 20px; line-height: 1.1; }
     :is(#news-list, .pv-rows) .bc-rmeta  { grid-area: 1 / 2; gap: 4px; font-size: 12px; }
     :is(#news-list, .pv-rows) .bc-rmeta .bc-tag { padding: 1px 6px; font-size: 11px; }
-    :is(#news-list, .pv-rows) .bc-rtitle { grid-area: 2 / 2; font-size: 1.133rem; line-height: 1.35; }   /* 17px */
+    :is(#news-list, .pv-rows) .bc-rtitle { grid-area: 2 / 2; font-size: 1.2rem; line-height: 1.35; }   /* 18px */
     :is(#news-list, .pv-rows) .bc-rbody  { display: contents; }
     :is(#news-list, .pv-rows) .bc-rmid   { grid-area: 3 / 2; }
     :is(#news-list, .pv-rows) .bc-rsum   { font-size: .867rem; line-height: 1.55; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }   /* 13px */
@@ -3638,7 +3647,8 @@
       document.getElementById('password-error').classList.add('hidden');
       el.classList.remove('hidden');
       bringModalToFront(el);
-      setTimeout(() => input.focus(), 50);
+      // 모바일은 '누른 순간' 안에서 focus 해야 키패드가 바로 뜬다. 타이머로 미루면 iOS 가 키패드를 띄우지 않는다.
+      input.focus();
     }
 
     function closePasswordModal() {
