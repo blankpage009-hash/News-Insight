@@ -664,6 +664,26 @@
   }
   #load-overlay.is-on { display: flex; }
 
+  /* 로딩 화면 시안 1a : 로고의 세 줄이 차례로 채워지는 조용한 중앙 정렬형 (Beyond News Loading.html) */
+  @keyframes bnBar { 0% { transform: scaleX(0); } 35%, 72% { transform: scaleX(1); } 100% { transform: scaleX(0); } }
+  @keyframes bnSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+  #load-overlay { gap: 28px; }
+  #load-overlay .ld-logo { width: 64px; height: 64px; }
+  #load-overlay .ld-bar { transform-box: fill-box; transform-origin: left; animation: bnBar 1.8s cubic-bezier(.6,0,.2,1) infinite; }
+  #load-overlay .ld-text { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  #load-overlay .ld-title { font-weight: 700; font-size: 20px; letter-spacing: -.01em; color: rgb(var(--c-paper)); }
+  #load-overlay .ld-track { width: 240px; height: 2px; background: rgb(var(--c-ink3)); overflow: hidden; }
+  #load-overlay .ld-slide { width: 40%; height: 2px; background: rgb(var(--c-gold)); animation: bnSlide 1.4s cubic-bezier(.5,0,.3,1) infinite; }
+  #load-overlay .ld-caption { position: absolute; bottom: 40px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: rgb(var(--c-muted)); }
+  @media (max-width: 639px) {
+    #load-overlay { gap: 24px; }
+    #load-overlay .ld-logo { width: 56px; height: 56px; }
+    #load-overlay .ld-text { gap: 12px; }
+    #load-overlay .ld-title { font-size: 18px; }
+    #load-overlay .ld-track { width: 180px; }
+    #load-overlay .ld-caption { font-size: 10px; }
+  }
+
   /* ---------------------------------------------------------------
      [추가] 모바일 '끌어서 새로고침'
        [수정] 고리만 내려오던 방식 → 화면(상단바 + 본문) 전체를 끄는 만큼
@@ -1455,6 +1475,7 @@
     /* 로딩 고리는 '아직 도는 중'을 알려야 해서 끄지 않고 아주 느리게만 돌린다 */
     .loading-ring,
     #pull-refresh.is-refreshing .pr-ring { animation-duration: 3.2s; }
+    #load-overlay .ld-bar, #load-overlay .ld-slide { animation-duration: 4s; }
     /* 티커 자동 흐름은 JS에서 멈춘다(드래그는 그대로 동작) */
   }
 
@@ -1750,8 +1771,17 @@
 
   <!-- [추가] 기사 로딩 표시 (화면 정중앙에 고정) -->
   <div id="load-overlay" role="status" aria-live="polite" aria-hidden="true">
-    <div class="loading-ring"></div>
-    <p class="text-sm text-muted">뉴스를 불러오는 중입니다...</p>
+    <svg class="ld-logo" viewBox="0 0 24 24" aria-hidden="true">
+      <rect width="24" height="24" fill="rgb(var(--c-paper))"/>
+      <rect class="ld-bar" x="4" y="4.5" width="16" height="3.5" fill="rgb(var(--c-gold))"/>
+      <rect class="ld-bar" x="4" y="10.25" width="11" height="3.5" fill="rgb(var(--c-ink))" style="animation-delay:.18s"/>
+      <rect class="ld-bar" x="4" y="16" width="6" height="3.5" fill="rgb(var(--c-ink))" style="animation-delay:.36s"/>
+    </svg>
+    <div class="ld-text">
+      <span class="ld-title">뉴스를 불러오는 중입니다</span>
+      <div class="ld-track"><div class="ld-slide"></div></div>
+    </div>
+    <span class="ld-caption">Beyond News · Real-Time Wire Desk</span>
   </div>
 
   <!-- 메인 -->
