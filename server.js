@@ -1759,9 +1759,9 @@ function buildBriefingKey({ limit, dateFrom, dateTo, hours }, kwMap) {
   const sig = kwSig([...main, ...fill].map((s) => ({ key: s.cat, terms: s.terms })), kwMap);
   // 설정이 비어 있으면 예전 키와 똑같이 둔다 → 저장된 설정에 briefing 이 없는 프리워밍과도 키가 맞는다
   const cfgSig = briefingIsDefault(cfg) ? '' : `|${shortHash(JSON.stringify(cfg))}`;
-  // 'briefing2' : 선발 규칙(같은 내용 1건 · 속보 2건)이 바뀌었다. 이름을 바꿔야 재배포 너머로 되살린
-  //   옛 규칙의 캐시를 첫 화면에 내보내지 않는다.
-  return `briefing2|${limit}|${dateFrom || ''}|${dateTo || ''}|${hours || ''}|${sig}${cfgSig}`;
+  // 'briefing3' : 선발 규칙이 바뀌면(같은 내용 판정 · 속보 2건 등) 숫자를 올린다. 이름을 바꿔야 재배포 너머로
+  //   되살린 옛 규칙의 캐시를 첫 화면에 내보내지 않는다. (3 = 요약문 비교 추가)
+  return `briefing3|${limit}|${dateFrom || ''}|${dateTo || ''}|${hours || ''}|${sig}${cfgSig}`;
 }
 
 // 섹션 하나에서 후보 수집. 섹션 화면의 '포함/제외 키워드'로 찾고, Brief 전용 제외어를 한 번 더 건다.
@@ -1799,6 +1799,27 @@ function briefingSimilar(a, b) {
   return shared.length >= BRIEFING_SHARED_WORDS && shared.filter((t) => !isNum(t)).length >= 2;
 }
 
+// 기자마다 제목을 다르게 뽑으면 제목만으로는 못 잡는다.
+//   예) "해킹범은 中 광둥성 거주 26세?" ↔ "은행 해킹한 해커 누군지 살펴봤더니" ↔ "'26세 중국인' 한국 은행 털었나"
+//       제목은 2개씩만 겹치지만 요약문은 '공격자·클로드 코드·이력서·보안 연구자·신원'을 함께 쓴다.
+//   그래서 제목+요약문 낱말이 BRIEFING_STORY_WORDS 개 이상 · 짧은 쪽의 BRIEFING_STORY_RATIO 이상 겹치면 같은 내용으로 본다.
+//   단, 제목에도 같은 낱말이 하나는 있어야 한다. 이 조건이 없으면 국감 자료 기사처럼
+//   요약문에 '의원·자료·따르면'이 흔한 기사끼리 엉뚱하게 합쳐진다(실측 : 해경 비위 ↔ 이마트 할인지원).
+//   한글 낱말은 앞 두 글자(어근)로 비교한다. '작성/작성해/작성해달라고', '요청하/요청했다', '공격/공격자',
+//   '연구자/연구원'처럼 끝만 바뀐 같은 말이 그대로 비교하면 서로 다른 말로 세어진다(그 쌍 실측 23% → 어근 36%).
+//   2026-10-09 기사 208건 실측 : 25% 로는 '현대차 파업·환율 ↔ 삼성전기 환율'(28%) 같은 다른 기사가 섞였고,
+//   32% 이상에서 걸린 61쌍은 모두 같은 사건(금융권 해킹 · 삼성전자 실적)이었다.
+const BRIEFING_STORY_WORDS = 8;
+const BRIEFING_STORY_RATIO = 0.32;
+const briefingStem = (t) => (/^[가-힣]/.test(t) ? t.slice(0, 2) : t.toLowerCase());
+function briefingSameStory(a, b) {
+  if (briefingSimilar(a._tokens, b._tokens)) return true;
+  if (!a._titleWords.some((t) => b._titleWords.includes(t))) return false;
+  const B = new Set(b._words);
+  const shared = a._words.filter((t) => B.has(t)).length;
+  return shared >= BRIEFING_STORY_WORDS && shared / Math.min(a._words.length, b._words.length) >= BRIEFING_STORY_RATIO;
+}
+
 // 후보 묶음들 → 브리핑 목록
 //   groups = [{ id, tier, items }]  tier 1 = 고른 섹션, 2 = 키워드, 3 = 채움용 기본 섹션
 function selectBriefing(groups, limit) {
@@ -1817,9 +1838,33 @@ function selectBriefing(groups, limit) {
   const all = [...byUrl.values()];
   if (!all.length) return [];
 
+  // 비교에 쓸 낱말을 먼저 만들어 둔다
+  const words = (text) => [...new Set(titleTokens(text).filter((t) => !/^d/.test(t)).map(briefingStem))];
+  all.forEach((it) => {
+    const summary = Array.isArray(it.summary) ? it.summary.join(' ') : String(it.summary || '');
+    it._tokens = [...new Set(titleTokens(it.title))];
+    it._titleWords = words(it.title);
+    it._words = words(`${it.title || ''} ${summary}`);
+  });
+
   // 같은 사건은 묶음을 가리지 않고 하나만 : 섹션이 달라도(정치·속보 등) 같은 사건이면 한 군집.
-  //   군집 안에서는 우선순위 높은 묶음의 기사를 대표로 삼는다.
-  const pool = clusterByEvent(all).map((cluster) => {
+  //   후보 전체를 '연결'로 묶는다(A~B, B~C 면 A·B·C 한 군집). 같은 사건이라도 두 기사끼리는 표현이 달라
+  //   직접 비교로는 못 잡는 경우가 있는데(실측 : 광둥성 26세 ↔ '26세 중국인' 겹침 21%),
+  //   둘 다 많이 겹치는 기사를 거쳐 한 군집이 된다. 군집 안에서는 우선순위 높은 묶음의 기사를 대표로 삼는다.
+  const parent = all.map((_, i) => i);
+  const find = (x) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  for (let i = 0; i < all.length; i++) {
+    for (let j = i + 1; j < all.length; j++) {
+      if (find(i) !== find(j) && briefingSameStory(all[i], all[j])) parent[find(i)] = find(j);
+    }
+  }
+  const clusters = new Map();
+  all.forEach((it, i) => {
+    const r = find(i);
+    if (!clusters.has(r)) clusters.set(r, []);
+    clusters.get(r).push(it);
+  });
+  const pool = [...clusters.values()].map((cluster) => {
     const top = Math.min(...cluster.map((it) => it._tier));
     return pickRepresentative(cluster.filter((it) => it._tier === top));
   });
@@ -1831,10 +1876,8 @@ function selectBriefing(groups, limit) {
   });
   const now = Date.now();
   pool.forEach((it) => {
-    const tokens = [...new Set(titleTokens(it.title))];
-    const buzz = tokens.reduce((s, t) => s + Math.max(0, (freq.get(t) || 1) - 1), 0);
+    const buzz = it._tokens.reduce((s, t) => s + Math.max(0, (freq.get(t) || 1) - 1), 0);
     const ageHr = it.datetime ? (now - new Date(it.datetime).getTime()) / 3600000 : 48;
-    it._tokens = tokens;
     it._score = buzz + (Math.max(0, 24 - ageHr) / 24) * 6;
   });
 
@@ -1860,7 +1903,7 @@ function selectBriefing(groups, limit) {
           const cand = arr.shift();
           if (isBreaking(cand) && breaking >= BRIEFING_MAX_BREAKING) continue;
           // 군집으로 못 잡은 '조금 다른 표현'의 같은 사건도 한 번 더 거른다
-          if (picked.some((p) => briefingSimilar(p._tokens, cand._tokens))) continue;
+          if (picked.some((p) => briefingSameStory(p, cand))) continue;
           if (isBreaking(cand)) breaking++;
           picked.push(cand);
           progress = true;
@@ -1881,7 +1924,7 @@ function selectBriefing(groups, limit) {
   return picked
     .map((it, i) => ({ it, i }))
     .sort((a, b) => a.it._tier - b.it._tier || a.i - b.i)
-    .map(({ it: { _tokens, _score, _group, _tier, ...it } }) => it);
+    .map(({ it: { _tokens, _titleWords, _words, _score, _group, _tier, ...it } }) => it);
 }
 
 async function buildBriefing({ limit, dateFrom, dateTo, hours }, kwMap) {
