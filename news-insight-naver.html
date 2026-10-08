@@ -668,18 +668,18 @@
   @keyframes bnBar { 0% { transform: scaleX(0); } 35%, 72% { transform: scaleX(1); } 100% { transform: scaleX(0); } }
   @keyframes bnSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
   #load-overlay { gap: 28px; }
-  #load-overlay .ld-logo { width: 64px; height: 64px; }
+  #load-overlay .ld-logo { width: 50px; height: 50px; }
   #load-overlay .ld-bar { transform-box: fill-box; transform-origin: left; animation: bnBar 1.8s cubic-bezier(.6,0,.2,1) infinite; }
   #load-overlay .ld-text { display: flex; flex-direction: column; align-items: center; gap: 14px; }
-  #load-overlay .ld-title { font-weight: 700; font-size: 20px; letter-spacing: -.01em; color: rgb(var(--c-paper)); }
+  #load-overlay .ld-title { font-weight: 700; font-size: 16px; letter-spacing: -.01em; color: rgb(var(--c-paper)); }
   #load-overlay .ld-track { width: 240px; height: 2px; background: rgb(var(--c-ink3)); overflow: hidden; }
   #load-overlay .ld-slide { width: 40%; height: 2px; background: rgb(var(--c-gold)); animation: bnSlide 1.4s cubic-bezier(.5,0,.3,1) infinite; }
   #load-overlay .ld-caption { position: absolute; bottom: 40px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: rgb(var(--c-muted)); }
   @media (max-width: 639px) {
     #load-overlay { gap: 24px; }
-    #load-overlay .ld-logo { width: 56px; height: 56px; }
+    #load-overlay .ld-logo { width: 50px; height: 50px; }
     #load-overlay .ld-text { gap: 12px; }
-    #load-overlay .ld-title { font-size: 18px; }
+    #load-overlay .ld-title { font-size: 16px; }
     #load-overlay .ld-track { width: 180px; }
     #load-overlay .ld-caption { font-size: 10px; }
   }
