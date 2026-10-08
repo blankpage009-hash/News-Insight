@@ -25,6 +25,7 @@ const dns = require('dns');
 const net = require('net');
 const http = require('http');
 const https = require('https');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -43,6 +44,13 @@ if (!ECOS_API_KEY) {
   console.warn('[경고] .env 에 ECOS_API_KEY 가 없어 한국 기준금리는 고정값으로 표시됩니다.');
 }
 
+// [P0 보안] 임시 관리자 토큰. 구글 로그인(P2)이 생기기 전까지 관리자 API 를 막는 데만 쓴다.
+//   값이 없으면 관리자 API 는 '닫힘'(503)이다. 설정을 깜빡해도 누구나 쓸 수 있게 열리면 안 되기 때문이다.
+const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN || '').trim();
+if (!ADMIN_TOKEN) {
+  console.warn('[경고] .env 에 ADMIN_TOKEN 이 없어 관리자 API(키워드 저장 · 모델 진단)가 닫혀 있습니다.');
+}
+
 // node-fetch v2는 기본 타임아웃이 없어, 배포 환경에서 외부망이 막히면 요청이 무한 대기한다.
 // 그 사이 함께 묶인 다른 요청까지 응답이 안 나가는 걸 막기 위해 모든 외부 fetch에 타임아웃을 강제한다.
 async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
@@ -58,6 +66,23 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname)));
+
+// 토큰은 헤더로만 받는다. 주소(?token=)로 받으면 Render 접속 기록에 그대로 남는다.
+//   두 값을 sha256 으로 같은 길이로 맞춘 뒤 비교한다. 그냥 비교하면 길이가 다를 때
+//   바로 끝나거나(timingSafeEqual 은 예외) 그 차이로 토큰 길이가 새어 나간다.
+function requireAdmin(req, res, next) {
+  if (!ADMIN_TOKEN) return res.status(503).json({ error: '서버에 관리자 토큰이 설정되지 않았습니다.' });
+  const given = String(req.get('x-admin-token') || '');
+  const a = crypto.createHash('sha256').update(given).digest();
+  const b = crypto.createHash('sha256').update(ADMIN_TOKEN).digest();
+  if (!given || !crypto.timingSafeEqual(a, b)) {
+    return res.status(401).json({ error: '관리자 토큰이 올바르지 않습니다.' });
+  }
+  next();
+}
+
+// 관리자 탭 잠금 창이 '토큰이 맞는지'만 미리 확인한다. (저장을 눌러 보고서야 틀린 걸 알지 않도록)
+app.get('/api/admin/check', requireAdmin, (req, res) => res.status(204).end());
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'news-insight-naver.html'));
@@ -172,7 +197,8 @@ app.get('/api/settings/keywords', async (req, res) => {
   }
 });
 
-app.post('/api/settings/keywords', async (req, res) => {
+// 공용 설정이라 누구나 덮어쓰면 안 된다. 읽기(GET)는 모두에게 그대로 열어 둔다.
+app.post('/api/settings/keywords', requireAdmin, async (req, res) => {
   const kw = req.body && req.body.keywords;
   if (!kw || typeof kw !== 'object' || Array.isArray(kw)) {
     return res.status(400).json({ error: 'keywords 객체가 필요합니다.' });
@@ -3178,6 +3204,8 @@ async function callGemini(prompt) {
 //   후보 모델들에게 짧은 요청을 하나씩 보내고 status·소요시간을 표로 돌려준다.
 //   사용법 : https://news-insight.onrender.com/api/gemini-models?test=1
 //           특정 모델만 : ...?test=1&models=gemini-3.5-flash-lite,gemini-3.1-flash-lite
+//   [P0] 관리자 전용. 헤더 x-admin-token 에 ADMIN_TOKEN 값을 실어야 한다(주소창만으로는 열리지 않음).
+//     PowerShell : Invoke-RestMethod 'https://news-insight.onrender.com/api/gemini-models?test=1' -Headers @{'x-admin-token'='토큰'}
 // -----------------------------------------------------------------
 // 후보 목록에는 없지만 '대안이 될 수 있나' 확인해 볼 만한 모델들
 const GEMINI_PROBE_EXTRA = [
@@ -3247,8 +3275,8 @@ async function probeGeminiModel(model, long = false, ver = 'v1beta') {
 }
 
 // [추가] 내 API 키로 실제 쓸 수 있는 모델 목록 확인
-//   브라우저에서 http://localhost:3000/api/gemini-models 접속
-app.get('/api/gemini-models', async (req, res) => {
+//   관리자 전용 : 헤더 x-admin-token 이 필요하다. 누구나 부르면 서버 AI 키의 한도를 소진시킬 수 있다.
+app.get('/api/gemini-models', requireAdmin, async (req, res) => {
   if (!GEMINI_API_KEY) return res.json({ error: '.env 에 GEMINI_API_KEY 가 없습니다.' });
   try {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`);

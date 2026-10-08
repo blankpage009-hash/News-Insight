@@ -2063,7 +2063,7 @@
 
   <!-- [수정] v3 Phase 8 : 설정 한 창 (시안 1e · 880px). 왼쪽 탭 = 화면 설정 / 관리자 Setting.
        화면 설정(테마 · 본문 크기 · 노출 건수 · 화면 옵션)은 이 기기에만 저장되는 개인 취향이라 잠그지 않는다.
-       관리자 Setting(비밀번호 · 키워드)은 탭을 열 때 비밀번호를 묻는다. 헤더 ⋮ 는 화면 설정, 탭 줄 아이콘·드로어 버튼은 관리자 탭으로 연다. -->
+       관리자 Setting(키워드)은 탭을 열 때 관리자 토큰을 묻는다. 헤더 ⋮ 는 화면 설정, 탭 줄 아이콘·드로어 버튼은 관리자 탭으로 연다. -->
   <div id="prefs-modal" class="hidden fixed inset-0 z-[85] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closePrefsOnBackdrop(event)">
     <div class="modal-pop pv-shell st-shell max-w-[880px]" role="dialog" aria-modal="true" aria-labelledby="st-title" onclick="event.stopPropagation()">
       <div class="pv-head">
@@ -2116,19 +2116,8 @@
           </div>
         </div>
 
-        <!-- 관리자 Setting : 비밀번호를 통과해야 보인다 -->
+        <!-- 관리자 Setting : 서버가 확인한 관리자 토큰을 넣어야 보인다 -->
         <div id="st-pane-admin" class="st-pane" role="tabpanel" aria-labelledby="st-tab-admin" hidden>
-          <div class="st-row">
-            <div class="st-name"><b>설정 비밀번호</b><span class="st-hint">관리자 Setting 진입 시 요구 (기본 7780)</span></div>
-            <div class="flex flex-col gap-2 min-w-0">
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <input type="password" id="new-password-input" placeholder="새 비밀번호" autocomplete="new-password" class="st-input">
-                <input type="password" id="new-password-confirm" placeholder="새 비밀번호 확인" autocomplete="new-password" class="st-input">
-                <button type="button" onclick="changeSettingPassword()" class="pv-btn">변경</button>
-              </div>
-              <span id="password-change-msg" class="st-msg"></span>
-            </div>
-          </div>
           <div class="st-row is-wide">
             <div class="st-name">
               <b>키워드 설정</b>
@@ -2168,9 +2157,9 @@
         </button>
       </div>
       <div class="st-lock-body">
-        <p class="st-lock-lead">관리자 Setting 을 열려면 비밀번호를 입력하세요.</p>
-        <input type="password" id="password-input" inputmode="numeric" autocomplete="current-password" placeholder="비밀번호" class="st-input">
-        <p id="password-error" class="st-lock-err hidden" role="alert">비밀번호가 올바르지 않습니다.</p>
+        <p class="st-lock-lead">관리자 Setting 을 열려면 관리자 토큰을 입력하세요.</p>
+        <input type="password" id="password-input" autocomplete="current-password" autocapitalize="off" spellcheck="false" placeholder="관리자 토큰" class="st-input">
+        <p id="password-error" class="st-lock-err hidden" role="alert">관리자 토큰이 올바르지 않습니다.</p>
         <div class="st-lock-btns">
           <button type="button" class="pv-btn is-primary" onclick="submitPassword()">확인</button>
           <button type="button" class="pv-btn" onclick="closePasswordModal()">취소</button>
@@ -2882,21 +2871,31 @@
       return userKeywords;
     }
 
+    // 결과 : 'ok' · 'auth'(관리자 토큰 거절) · 'fail'(그 밖의 실패)
     async function persistKeywords() {
-      // 캐시를 먼저 갱신해 두면 저장이 실패해도 이 기기에서는 설정이 유지된다.
-      try { localStorage.setItem(KEYWORDS_STORAGE_KEY, JSON.stringify(userKeywords)); } catch {}
+      let status = 0;
       try {
         const res = await fetch(`${NAVER_PROXY_BASE}/api/settings/keywords`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...adminHeaders() },
           body: JSON.stringify({ keywords: userKeywords }),
         });
-        if (!res.ok) throw new Error('저장 실패');
-        return true;
+        status = res.status;
       } catch {
-        alert('설정을 서버에 저장하지 못했습니다.\n이 기기에서만 적용되며, 다른 기기와 동기화되지 않습니다.');
-        return false;
+        // 연결 실패 → status 0 그대로
       }
+      // 토큰이 거절되면 이 기기 캐시에도 남기지 않는다. 남기면 다음 접속 때 저장된 것처럼 보인다.
+      if (status === 401 || status === 503) {
+        alert(status === 503
+          ? '서버에 관리자 토큰이 설정되지 않아 저장하지 못했습니다.'
+          : '관리자 토큰이 올바르지 않아 저장하지 못했습니다.\n설정 창을 닫고 관리자 토큰을 다시 입력해 주세요.');
+        return 'auth';
+      }
+      // 그 밖의 실패라도 캐시는 갱신해 두면 이 기기에서는 설정이 유지된다.
+      try { localStorage.setItem(KEYWORDS_STORAGE_KEY, JSON.stringify(userKeywords)); } catch {}
+      if (status >= 200 && status < 300) return 'ok';
+      alert('설정을 서버에 저장하지 못했습니다.\n이 기기에서만 적용되며, 다른 기기와 동기화되지 않습니다.');
+      return 'fail';
     }
 
     // [속도] 접속 직후엔 localStorage 캐시로 즉시 시작한다.
@@ -3100,7 +3099,7 @@
       document.getElementById('search-input').addEventListener('input', syncHeaderSearch);
       document.getElementById('search-input').addEventListener('input', renderSearchClear);
 
-      // [추가] 비밀번호 입력창에서 Enter → 바로 확인
+      // [추가] 관리자 토큰 입력창에서 Enter → 바로 확인
       document.getElementById('password-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') submitPassword();
       });
@@ -3596,10 +3595,10 @@
       }
     }
 
-    // 탭 줄 아이콘 · 드로어 'Admin Setting' : 설정 창을 관리자 탭으로 연다 (잠겨 있으면 비밀번호부터)
+    // 탭 줄 아이콘 · 드로어 'Admin Setting' : 설정 창을 관리자 탭으로 연다 (잠겨 있으면 관리자 토큰부터)
     function openAdminSettings() { openPrefsModal('admin'); }
 
-    // 탭을 누름. 관리자 탭은 이번 세션에 비밀번호를 통과해야 넘어간다.
+    // 탭을 누름. 관리자 탭은 이번 세션에 관리자 토큰을 통과해야 넘어간다.
     //   잠겨 있으면 지금 탭은 그대로 두고 잠금 창만 띄운다 → 취소하면 화면 설정에 머문다.
     function selectSettingsTab(tab) {
       if (tab === 'admin' && !isSettingUnlocked()) { openPasswordModal(); return; }
@@ -3621,22 +3620,18 @@
     }
 
     // ---------------------------------------------------------------
-    // [추가] 설정 접근 잠금 (비밀번호)
-    //   - 기본 비밀번호는 7780. 설정 화면에서 바꿀 수 있고 이 기기에 저장된다.
-    //   - 설정 창을 열어 둔 동안만 통과 상태가 유지되고, 닫으면 다시 잠긴다.
+    // [P0 보안] 관리자 탭 잠금 (임시 관리자 토큰)
+    //   - 예전에는 비밀번호를 이 파일 안에 두고 브라우저에서만 비교해서, 페이지 소스를 보면 누구나 알 수 있었다.
+    //   - 이제 맞는지는 서버가 판정한다. 통과한 토큰은 관리자 요청마다 헤더(x-admin-token)로 붙인다.
+    //   - 구글 로그인(P2)이 생기면 이 잠금은 없어진다.
     // ---------------------------------------------------------------
-    const DEFAULT_SETTING_PASSWORD = '7780';
-    const PASSWORD_STORAGE_KEY = 'newsInsightSettingPw_v1';
-
-    function getSettingPassword() {
-      try { return localStorage.getItem(PASSWORD_STORAGE_KEY) || DEFAULT_SETTING_PASSWORD; }
-      catch { return DEFAULT_SETTING_PASSWORD; }
-    }
-    // 통과 기록은 메모리에만 둔다. 설정 창을 닫으면 다시 잠겨서, 관리자 아이콘을 누를 때마다 비밀번호를 묻는다.
-    //   (예전에는 sessionStorage 에 남겨서 한 번 통과하면 탭을 닫기 전까지 잠금 창이 사라졌다)
-    let settingUnlocked = false;
-    function isSettingUnlocked() { return settingUnlocked; }
-    function markSettingUnlocked() { settingUnlocked = true; }
+    // 토큰은 메모리에만 둔다. 설정 창을 닫으면 지워져서, 관리자 아이콘을 누를 때마다 다시 묻는다.
+    //   localStorage 에 두면 공용 기기에서 다음 사람이 관리자 권한을 그대로 갖게 된다.
+    let adminToken = '';
+    let checkingAdminToken = false;   // 확인을 기다리는 동안 Enter 를 연타해도 한 번만 묻는다
+    function isSettingUnlocked() { return !!adminToken; }
+    function lockSettings() { adminToken = ''; }
+    function adminHeaders() { return adminToken ? { 'x-admin-token': adminToken } : {}; }
 
     // 잠금 창은 설정 창 위에 떠야 한다. 두 창의 z-index 가 고정값이면 설정 창(85)이 잠금 창(80)을 덮고,
     //   Sub Page 팝업을 열수록 modalZ 가 올라가므로 열 때마다 맨 위로 올린다.
@@ -3656,40 +3651,34 @@
     }
     function closePasswordOnBackdrop(e) { if (e.target.id === 'password-modal') closePasswordModal(); }
 
-    function submitPassword() {
+    async function submitPassword() {
       const input = document.getElementById('password-input');
-      if (input.value === getSettingPassword()) {
-        markSettingUnlocked();
+      const err = document.getElementById('password-error');
+      const token = input.value.trim();
+      if (!token || checkingAdminToken) return;
+      checkingAdminToken = true;
+      let status = 0;
+      try {
+        const res = await fetch(`${NAVER_PROXY_BASE}/api/admin/check`, { headers: { 'x-admin-token': token } });
+        status = res.status;
+      } catch {
+        // 연결 실패 → status 0 그대로
+      } finally {
+        checkingAdminToken = false;
+      }
+      if (status === 204) {
+        adminToken = token;
         closePasswordModal();
         if (isPrefsOpen()) showSettingsTab('admin');
         else openPrefsModal(pendingSettingsTab);
-      } else {
-        document.getElementById('password-error').classList.remove('hidden');
-        input.value = '';
-        input.focus();
+        return;
       }
-    }
-
-    // 설정 화면에서 비밀번호 변경
-    function changeSettingPassword() {
-      const a = document.getElementById('new-password-input');
-      const b = document.getElementById('new-password-confirm');
-      const msg = document.getElementById('password-change-msg');
-      const show = (text, ok) => {
-        msg.textContent = text;
-        msg.classList.toggle('is-ok', !!ok);
-        msg.classList.toggle('is-err', !ok);
-      };
-      const next = a.value.trim();
-      if (!next) { show('새 비밀번호를 입력하세요.', false); return; }
-      if (next !== b.value.trim()) { show('두 입력값이 다릅니다.', false); return; }
-      try {
-        localStorage.setItem(PASSWORD_STORAGE_KEY, next);
-        a.value = ''; b.value = '';
-        show('비밀번호를 변경했습니다. (이 기기에만 적용)', true);
-      } catch {
-        show('비밀번호를 저장하지 못했습니다.', false);
-      }
+      err.textContent = status === 401 ? '관리자 토큰이 올바르지 않습니다.'
+        : status === 503 ? '서버에 관리자 토큰이 설정되지 않았습니다.'
+        : '서버에 연결하지 못했습니다. 잠시 뒤 다시 시도하세요.';
+      err.classList.remove('hidden');
+      input.value = '';
+      input.focus();
     }
 
     // ---------------------------------------------------------------
@@ -3920,8 +3909,6 @@
       renderPrefToggles();
       if (!isPrefsOpen()) keywordsAtOpen = cloneKeywords(userKeywords);
       renderKeywordSettings();           // 지금 들고 있는 userKeywords 로 다시 그린다 (서버를 다시 부르지는 않는다)
-      const pwMsg = document.getElementById('password-change-msg');
-      if (pwMsg) pwMsg.textContent = '';
       showSettingsTab('prefs');          // 관리자 탭이 잠겨 있으면 화면 설정 위에 잠금 창이 뜬다
       el.classList.remove('hidden');
       bringModalToFront(el);
@@ -3934,7 +3921,7 @@
       const el = document.getElementById('prefs-modal');
       if (!el || el.classList.contains('hidden')) return;
       closePasswordModal();
-      settingUnlocked = false;
+      lockSettings();
       el.classList.add('hidden');
       // 저장(저장 후 새로고침 · 기본값)하면 사본도 새 값이 되므로, 여기서 되돌려지는 건 저장 안 한 수정뿐이다.
       if (keywordsAtOpen) { userKeywords = keywordsAtOpen; keywordsAtOpen = null; }
@@ -4199,7 +4186,8 @@
     // 입력한 키워드를 저장하고, 설정 창을 닫은 뒤 새 기준으로 기사를 다시 불러온다.
     async function saveKeywordSettings() {
       commitKwInputs();          // 적다 만 글자까지 담고 저장한다
-      await persistKeywords();
+      // 토큰이 거절되면 창을 닫지 않는다. 닫으면서 다시 불러오면 저장되지 않은 키워드로 기사를 그리게 된다.
+      if (await persistKeywords() === 'auth') return;
       keywordsAtOpen = cloneKeywords(userKeywords);
       closePrefsModal(true);
     }
@@ -4209,8 +4197,9 @@
     async function resetKeywordSettings() {
       const ok = window.confirm('모든 섹션의 포함/제외 키워드를 기본값으로 되돌립니다.\n지금 입력한 내용은 사라집니다.\n(모든 기기에 함께 적용됩니다.) 계속할까요?');
       if (!ok) return;   // '취소'를 누르면 아무것도 하지 않음
+      const before = userKeywords;
       userKeywords = cloneKeywords(DEFAULT_KEYWORDS);
-      await persistKeywords();
+      if (await persistKeywords() === 'auth') { userKeywords = before; return; }   // 저장 못 했으면 화면도 그대로
       keywordsAtOpen = cloneKeywords(userKeywords);   // 기본값은 이미 저장됐다 → 닫아도 되돌리지 않는다
       renderKeywordSettings();   // 입력칸을 기본값으로 다시 그려줌
     }
@@ -5435,7 +5424,7 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // 설정 탭 : 화면 설정으로 열고, 관리자 탭도 보이게 둔다(누르면 비밀번호 창).
+    // 설정 탭 : 화면 설정으로 열고, 관리자 탭도 보이게 둔다(누르면 관리자 토큰 창).
     //   모바일은 드로어·탭 줄 아이콘이 없어서 관리자 Setting 으로 가는 길이 여기뿐이다.
     function openSettingsTab() { openPrefsModal('prefs', true); }
 
