@@ -44,13 +44,6 @@ if (!ECOS_API_KEY) {
   console.warn('[경고] .env 에 ECOS_API_KEY 가 없어 한국 기준금리는 고정값으로 표시됩니다.');
 }
 
-// [P0 보안] 임시 관리자 토큰. 구글 로그인(P2)이 생기기 전까지 관리자 API 를 막는 데만 쓴다.
-//   값이 없으면 관리자 API 는 '닫힘'(503)이다. 설정을 깜빡해도 누구나 쓸 수 있게 열리면 안 되기 때문이다.
-const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN || '').trim();
-if (!ADMIN_TOKEN) {
-  console.warn('[경고] .env 에 ADMIN_TOKEN 이 없어 관리자 API(키워드 저장 · 모델 진단)가 닫혀 있습니다.');
-}
-
 // node-fetch v2는 기본 타임아웃이 없어, 배포 환경에서 외부망이 막히면 요청이 무한 대기한다.
 // 그 사이 함께 묶인 다른 요청까지 응답이 안 나가는 걸 막기 위해 모든 외부 fetch에 타임아웃을 강제한다.
 async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
@@ -65,28 +58,34 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
 
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
-app.use(express.static(path.join(__dirname)));
 
-// 토큰은 헤더로만 받는다. 주소(?token=)로 받으면 Render 접속 기록에 그대로 남는다.
-//   두 값을 sha256 으로 같은 길이로 맞춘 뒤 비교한다. 그냥 비교하면 길이가 다를 때
-//   바로 끝나거나(timingSafeEqual 은 예외) 그 차이로 토큰 길이가 새어 나간다.
-function requireAdmin(req, res, next) {
-  if (!ADMIN_TOKEN) return res.status(503).json({ error: '서버에 관리자 토큰이 설정되지 않았습니다.' });
-  const given = String(req.get('x-admin-token') || '');
-  const a = crypto.createHash('sha256').update(given).digest();
-  const b = crypto.createHash('sha256').update(ADMIN_TOKEN).digest();
-  if (!given || !crypto.timingSafeEqual(a, b)) {
-    return res.status(401).json({ error: '관리자 토큰이 올바르지 않습니다.' });
-  }
-  next();
-}
-
-// 관리자 탭 잠금 창이 '토큰이 맞는지'만 미리 확인한다. (저장을 눌러 보고서야 틀린 걸 알지 않도록)
-app.get('/api/admin/check', requireAdmin, (req, res) => res.status(204).end());
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'news-insight-naver.html'));
+// [P2] 공개 파일은 이 목록만. 예전엔 폴더 전체(express.static)를 내보내서
+//   로그인 없이도 server.js · keywords.json · .md · node_modules 까지 열렸다.
+//   화면이 새 파일(그림 등)을 쓰게 되면 여기에 이름을 더해야 한다.
+const PUBLIC_FILES = new Set([
+  'privacy.html', 'icon.svg', 'favicon-32.png', 'apple-touch-icon.png',
+  'icon-192.png', 'icon-512.png', 'manifest.webmanifest',
+]);
+app.get('/:file', (req, res, next) => {
+  if (!PUBLIC_FILES.has(req.params.file)) return next();
+  res.sendFile(path.join(__dirname, req.params.file));
 });
+
+// 화면 HTML 에 브라우저용 로그인 설정(Supabase 주소 · anon 키)을 끼워 보낸다.
+//   anon 키는 원래 공개용이지만 소스에 적어 두지 않으려고 환경변수에서 넣는다.
+//   별도 API 로 받으면 로그인 확인 전에 왕복이 하나 더 생긴다. service 키는 절대 넣지 않는다.
+const APP_HTML_FILE = path.join(__dirname, 'news-insight-naver.html');
+function sendAppHtml(req, res) {
+  fs.readFile(APP_HTML_FILE, 'utf8', (err, html) => {
+    if (err) return res.status(500).send('화면 파일을 읽지 못했습니다.');
+    const cfg = JSON.stringify({ supabaseUrl: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY })
+      .replace(/</g, '\\u003c');
+    res.set('Cache-Control', 'no-cache');
+    res.type('html').send(html.replace('/*__AUTH_CONFIG__*/null', cfg));
+  });
+}
+app.get('/', sendAppHtml);
+app.get('/news-insight-naver.html', sendAppHtml);
 
 // -----------------------------------------------------------------
 // [깨우기용] /healthz  ―  되돌릴 땐 이 블록만 통째로 지우면 된다.
@@ -129,6 +128,13 @@ if (!SUPABASE_ENABLED) {
   console.warn('[경고] SUPABASE_URL / SUPABASE_SERVICE_KEY 가 없어 키워드 설정을 로컬 파일에만 저장합니다.');
   console.warn('       배포 환경에서는 재배포 시 설정이 사라집니다.');
 }
+// 로컬에서 로그인을 시험하려면 운영 Supabase 주소·키가 필요하다. 그대로 두면 로컬 서버가
+//   운영의 캐시 사본(resp_cache · article_cache)까지 덮어쓰므로, 로컬 .env 에서만 off 로 끈다.
+const SUPABASE_CACHE_ENABLED = SUPABASE_ENABLED
+  && String(process.env.SUPABASE_CACHE_SYNC || '').trim().toLowerCase() !== 'off';
+if (SUPABASE_ENABLED && !SUPABASE_CACHE_ENABLED) {
+  console.warn('[안내] SUPABASE_CACHE_SYNC=off : 캐시 사본을 Supabase 에 저장·복원하지 않습니다.');
+}
 
 function supabaseHeaders() {
   return {
@@ -137,6 +143,250 @@ function supabaseHeaders() {
     'Content-Type': 'application/json',
   };
 }
+
+// -----------------------------------------------------------------
+// [P2] 구글 로그인 + 허용 관문
+//   - 브라우저가 Supabase 로그인 토큰을 Authorization 헤더로 보내면, Supabase /auth/v1/user 로 확인한다.
+//   - 허용 여부는 반드시 서버가 판정한다. 화면에서만 가리면 API 를 직접 불러 뚫을 수 있다.
+//   - 프리워밍은 API 를 거치지 않으므로 영향이 없다. 캐시 키에 사용자 정보를 넣지 않는다(PERSONALIZATION.md 2-8).
+// -----------------------------------------------------------------
+const SUPABASE_ANON_KEY = String(process.env.SUPABASE_ANON_KEY || '').trim();
+const ADMIN_EMAILS = new Set(String(process.env.ADMIN_EMAILS || '')
+  .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
+const AUTH_ENABLED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+if (!AUTH_ENABLED) {
+  console.warn('[경고] SUPABASE_URL / SUPABASE_ANON_KEY 가 없어 로그인을 확인할 수 없습니다. 모든 /api 가 닫힙니다.');
+}
+if (!ADMIN_EMAILS.size) console.warn('[경고] ADMIN_EMAILS 가 비어 있어 관리자가 없습니다.');
+
+// 첫 화면에서 /api 요청이 10개쯤 동시에 나간다. 매번 Supabase 에 물으면 그만큼 느려지므로 잠시 담아 둔다.
+const TOKEN_TTL = 5 * 60 * 1000;
+const TOKEN_CACHE_MAX = 500;
+const tokenCache = new Map();      // sha256(토큰) -> { exp, user }   user=null 은 '무효 토큰'
+const tokenInflight = new Map();   // 같은 토큰을 동시에 물으면 한 번만 확인한다
+
+// 서명 검증은 Supabase 가 한다. 여기서는 캐시를 토큰 만료보다 오래 들고 있지 않으려고 exp 만 읽는다.
+function jwtExpMs(token) {
+  try {
+    const payload = JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString('utf8'));
+    return Number(payload.exp) * 1000 || 0;
+  } catch {
+    return 0;
+  }
+}
+
+// 이메일 문자열만 믿으면, 이메일/비밀번호 가입이 켜져 있을 때 관리자 이메일로 가짜 가입해
+//   관리자가 될 수 있다. 구글로 로그인했고 이메일이 확인된 계정만 인정한다.
+function isGoogleUser(u) {
+  const meta = (u && u.app_metadata) || {};
+  const providers = Array.isArray(meta.providers) ? meta.providers : [meta.provider];
+  return Boolean(u && u.email && u.email_confirmed_at && providers.includes('google'));
+}
+
+async function fetchAuthUser(token) {
+  const res = await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+  }, 5000);
+  // 4xx = 토큰이 틀렸거나 만료됐거나 계정이 지워짐. 429 와 5xx 는 Supabase 쪽 문제라 '확인 실패'로 올린다.
+  if (res.status >= 400 && res.status < 500 && res.status !== 429) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const u = await res.json();
+  if (!isGoogleUser(u)) return null;
+  const meta = u.user_metadata || {};
+  return {
+    id: u.id,
+    email: String(u.email).toLowerCase(),
+    name: String(meta.full_name || meta.name || '').slice(0, 100),
+  };
+}
+
+async function verifyToken(token) {
+  const now = Date.now();
+  const jwtExp = jwtExpMs(token);
+  if (!jwtExp || jwtExp <= now) return null;   // 만료된 토큰은 묻지 않고 거절 → 브라우저가 갱신해서 다시 온다
+  const key = crypto.createHash('sha256').update(token).digest('hex');
+  const hit = tokenCache.get(key);
+  if (hit && hit.exp > now) return hit.user;
+  if (tokenInflight.has(key)) return tokenInflight.get(key);
+  const p = fetchAuthUser(token).then((user) => {
+    tokenCache.delete(key);
+    tokenCache.set(key, { exp: Math.min(Date.now() + TOKEN_TTL, jwtExp), user });
+    while (tokenCache.size > TOKEN_CACHE_MAX) tokenCache.delete(tokenCache.keys().next().value);
+    return user;
+  }).finally(() => tokenInflight.delete(key));
+  tokenInflight.set(key, p);
+  return p;
+}
+
+// 허용 상태 : 'admin' | 'approved' | 'pending' | 'rejected' | 'none'
+//   권한을 해제하면 늦어도 ACCESS_TTL 안에 막힌다. 관리 API 는 바꾼 이메일의 캐시를 바로 지운다.
+const ACCESS_TTL = 2 * 60 * 1000;
+const accessCache = new Map();     // email -> { ts, state }
+const ALLOWED_TABLE = 'allowed_users';
+
+async function readAllowedState(email) {
+  const url = `${SUPABASE_URL}/rest/v1/${ALLOWED_TABLE}?email=eq.${encodeURIComponent(email)}&select=status`;
+  const res = await fetchWithTimeout(url, { headers: supabaseHeaders() }, 5000);
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
+  const rows = await res.json();
+  return Array.isArray(rows) && rows.length ? rows[0].status : 'none';
+}
+
+async function accessOf(email) {
+  if (ADMIN_EMAILS.has(email)) return 'admin';
+  if (!SUPABASE_ENABLED) throw new Error('SUPABASE_SERVICE_KEY 가 없어 허용 목록을 읽을 수 없습니다.');
+  const hit = accessCache.get(email);
+  if (hit && Date.now() - hit.ts < ACCESS_TTL) return hit.state;
+  try {
+    const state = await readAllowedState(email);
+    accessCache.set(email, { ts: Date.now(), state });
+    return state;
+  } catch (e) {
+    // Supabase 가 잠깐 흔들릴 때 허용된 사람 전원이 막히지 않도록, 직전에 확인한 값이 있으면 그걸 쓴다.
+    if (hit) {
+      console.error('[허용 목록 조회 실패 → 직전 값 사용]', e.message);
+      return hit.state;
+    }
+    throw e;
+  }
+}
+
+function bearerOf(req) {
+  const m = /^Bearer\s+(.+)$/i.exec(req.get('authorization') || '');
+  return m ? m[1].trim() : '';
+}
+
+// 로그인만 돼 있으면 부를 수 있는 곳. 나머지 /api 는 허용 사용자만.
+const LOGIN_ONLY_PATHS = new Set(['/me', '/access-request']);
+
+// 401 = 로그인 필요(토큰 없음·무효), 403 = 로그인했지만 미허용 → 화면이 어느 안내를 띄울지 이걸로 가른다.
+async function authGate(req, res, next) {
+  if (!AUTH_ENABLED) {
+    return res.status(503).json({ error: '서버에 로그인 설정이 없습니다.', code: 'auth_unavailable' });
+  }
+  const token = bearerOf(req);
+  if (!token) return res.status(401).json({ error: '로그인이 필요합니다.', code: 'login_required' });
+  let user;
+  let state;
+  try {
+    user = await verifyToken(token);
+    if (!user) return res.status(401).json({ error: '로그인이 만료됐습니다.', code: 'login_required' });
+    state = await accessOf(user.email);
+  } catch (e) {
+    console.error('[로그인 확인 실패]', e.message);
+    return res.status(503).json({ error: '로그인을 확인하지 못했습니다. 잠시 뒤 다시 시도하세요.', code: 'auth_unavailable' });
+  }
+  req.user = { ...user, state, isAdmin: state === 'admin' };
+  if (LOGIN_ONLY_PATHS.has(req.path) || state === 'admin' || state === 'approved') return next();
+  res.status(403).json({ error: '허용된 사용자만 쓸 수 있습니다.', code: 'not_allowed', state });
+}
+
+function requireAdminUser(req, res, next) {
+  if (req.user && req.user.isAdmin) return next();
+  res.status(403).json({ error: '관리자만 쓸 수 있습니다.', code: 'admin_only' });
+}
+
+// 아래의 모든 /api 라우트보다 먼저 등록해야 관문이 빠짐없이 걸린다.
+app.use('/api', authGate);
+
+async function listAllowedUsers(status) {
+  let url = `${SUPABASE_URL}/rest/v1/${ALLOWED_TABLE}?select=*&order=requested_at.desc`;
+  if (status) url += `&status=eq.${encodeURIComponent(status)}`;
+  const res = await fetchWithTimeout(url, { headers: supabaseHeaders() }, 5000);
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows : [];
+}
+
+app.get('/api/me', async (req, res) => {
+  const u = req.user;
+  const out = { email: u.email, name: u.name, state: u.state, isAdmin: u.isAdmin };
+  if (u.isAdmin) {
+    // 관리자 설정 버튼의 대기 배지용. 실패해도 로그인 확인 자체는 성공으로 돌려준다.
+    try { out.pendingCount = (await listAllowedUsers('pending')).length; } catch { out.pendingCount = 0; }
+  }
+  res.set('Cache-Control', 'no-store');
+  res.json(out);
+});
+
+app.post('/api/access-request', async (req, res) => {
+  const u = req.user;
+  if (u.state !== 'none') return res.json({ state: u.state });
+  try {
+    // ignore-duplicates : 이미 행이 있으면(거절 · 승인) 건드리지 않는다.
+    //   캐시가 낡아 'none' 으로 보였더라도 거절된 사람이 다시 대기로 올라가거나 승인된 사람이 강등되지 않는다.
+    const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${ALLOWED_TABLE}?on_conflict=email`, {
+      method: 'POST',
+      headers: { ...supabaseHeaders(), Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify([{ email: u.email, status: 'pending', name: u.name || null }]),
+    }, 5000);
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+    accessCache.delete(u.email);
+    res.json({ state: await accessOf(u.email) });
+  } catch (e) {
+    console.error('[사용 신청 실패]', e.message);
+    res.status(500).json({ error: '신청을 저장하지 못했습니다. 잠시 뒤 다시 시도하세요.' });
+  }
+});
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function normEmail(v) {
+  const e = String(v || '').trim().toLowerCase();
+  return e.length <= 254 && EMAIL_RE.test(e) ? e : '';
+}
+
+app.get('/api/admin/users', requireAdminUser, async (req, res) => {
+  try {
+    const rows = await listAllowedUsers();
+    const pick = (s) => rows.filter((r) => r.status === s);
+    res.set('Cache-Control', 'no-store');
+    res.json({ pending: pick('pending'), approved: pick('approved'), rejected: pick('rejected'), admins: [...ADMIN_EMAILS] });
+  } catch (e) {
+    console.error('[허용 목록 조회 실패]', e.message);
+    res.status(500).json({ error: '허용 목록을 읽지 못했습니다.' });
+  }
+});
+
+// 승인 · 거절 · 직접 추가(A)를 한 곳에서 한다. 직접 추가는 거절된 사람도 풀어 준다.
+app.post('/api/admin/users', requireAdminUser, async (req, res) => {
+  const email = normEmail(req.body && req.body.email);
+  const status = req.body && req.body.status;
+  if (!email) return res.status(400).json({ error: '이메일 형식이 올바르지 않습니다.' });
+  if (!['approved', 'rejected'].includes(status)) return res.status(400).json({ error: 'status 는 approved 또는 rejected 여야 합니다.' });
+  if (ADMIN_EMAILS.has(email)) return res.status(400).json({ error: '관리자는 목록과 상관없이 항상 허용됩니다.' });
+  try {
+    // merge-duplicates 는 보낸 칸만 고친다 → 신청 때 적힌 이름 · 신청 시각은 그대로 남는다.
+    const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${ALLOWED_TABLE}?on_conflict=email`, {
+      method: 'POST',
+      headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify([{ email, status, decided_at: new Date().toISOString(), decided_by: req.user.email }]),
+    }, 5000);
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+    accessCache.delete(email);
+    res.json({ ok: true, email, status });
+  } catch (e) {
+    console.error('[허용 상태 저장 실패]', e.message);
+    res.status(500).json({ error: '저장하지 못했습니다.' });
+  }
+});
+
+// 권한 해제 = 목록에서 삭제. 그 사람은 다음 접속 때 '사용 신청' 화면을 보고 다시 신청할 수 있다(2026-10-09 결정).
+app.delete('/api/admin/users', requireAdminUser, async (req, res) => {
+  const email = normEmail(req.query.email);
+  if (!email) return res.status(400).json({ error: '이메일 형식이 올바르지 않습니다.' });
+  try {
+    const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${ALLOWED_TABLE}?email=eq.${encodeURIComponent(email)}`, {
+      method: 'DELETE',
+      headers: { ...supabaseHeaders(), Prefer: 'return=minimal' },
+    }, 5000);
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+    accessCache.delete(email);
+    res.json({ ok: true, email });
+  } catch (e) {
+    console.error('[권한 해제 실패]', e.message);
+    res.status(500).json({ error: '해제하지 못했습니다.' });
+  }
+});
 
 // 파일 캐시: Supabase가 죽었을 때만 읽는다. 쓰기는 Supabase 성공 후 따라 쓴다.
 function readKeywordsFile() {
@@ -197,8 +447,8 @@ app.get('/api/settings/keywords', async (req, res) => {
   }
 });
 
-// 공용 설정이라 누구나 덮어쓰면 안 된다. 읽기(GET)는 모두에게 그대로 열어 둔다.
-app.post('/api/settings/keywords', requireAdmin, async (req, res) => {
+// 공용 설정이라 관리자만 덮어쓴다. 읽기(GET)는 허용 사용자 모두에게 열어 둔다.
+app.post('/api/settings/keywords', requireAdminUser, async (req, res) => {
   const kw = req.body && req.body.keywords;
   if (!kw || typeof kw !== 'object' || Array.isArray(kw)) {
     return res.status(400).json({ error: 'keywords 객체가 필요합니다.' });
@@ -531,7 +781,7 @@ function saveArticleCache() {
 
 // Supabase 사본 : 리드문만, 최근 것부터 SUPA_CACHE_MAX 건
 async function saveArticleCacheToSupabase() {
-  if (!SUPABASE_ENABLED || !supaCacheDirty) return;
+  if (!SUPABASE_CACHE_ENABLED || !supaCacheDirty) return;
   const now = Date.now();
   if (now - supaLastSaved < SUPA_MIN_SAVE_GAP) return;   // 너무 잦은 쓰기는 건너뛴다
   const prevSaved = supaLastSaved;
@@ -567,7 +817,7 @@ async function saveArticleCacheToSupabase() {
 // 재배포 직후처럼 로컬 파일이 비었을 때 Supabase 사본으로 캐시를 채운다.
 //   이미 메모리에 있는 항목(=로컬 파일이 더 온전함)은 덮어쓰지 않는다.
 async function loadArticleCacheFromSupabase() {
-  if (!SUPABASE_ENABLED) return;
+  if (!SUPABASE_CACHE_ENABLED) return;
   try {
     const url = `${SUPABASE_URL}/rest/v1/${SETTINGS_TABLE}`
       + `?key=eq.${encodeURIComponent(ARTICLE_CACHE_ROW_KEY)}&select=value`;
@@ -1406,7 +1656,7 @@ const RESP_RESTORE_MAX_AGE = TTL_SECTION.stale;
 let respSupaLastSaved = 0;
 
 async function saveRespCacheToSupabase(keys, { force = false } = {}) {
-  if (!SUPABASE_ENABLED || !keys || !keys.length) return;
+  if (!SUPABASE_CACHE_ENABLED || !keys || !keys.length) return;
   const now = Date.now();
   if (!force && now - respSupaLastSaved < RESP_SUPA_MIN_SAVE_GAP) return;
 
@@ -1445,7 +1695,7 @@ async function saveRespCacheToSupabase(keys, { force = false } = {}) {
 }
 
 async function loadRespCacheFromSupabase() {
-  if (!SUPABASE_ENABLED) return;
+  if (!SUPABASE_CACHE_ENABLED) return;
   try {
     const url = `${SUPABASE_URL}/rest/v1/${SETTINGS_TABLE}`
       + `?key=eq.${encodeURIComponent(RESP_CACHE_ROW_KEY)}&select=value`;
@@ -3204,8 +3454,9 @@ async function callGemini(prompt) {
 //   후보 모델들에게 짧은 요청을 하나씩 보내고 status·소요시간을 표로 돌려준다.
 //   사용법 : https://news-insight.onrender.com/api/gemini-models?test=1
 //           특정 모델만 : ...?test=1&models=gemini-3.5-flash-lite,gemini-3.1-flash-lite
-//   [P0] 관리자 전용. 헤더 x-admin-token 에 ADMIN_TOKEN 값을 실어야 한다(주소창만으로는 열리지 않음).
-//     PowerShell : Invoke-RestMethod 'https://news-insight.onrender.com/api/gemini-models?test=1' -Headers @{'x-admin-token'='토큰'}
+//   [P2] 관리자 전용. 로그인 토큰이 필요해서 주소창만으로는 열리지 않는다.
+//     관리자로 로그인한 화면에서 개발자 도구(F12) 콘솔에 :
+//     await (await apiFetch('/api/gemini-models?test=1')).json()
 // -----------------------------------------------------------------
 // 후보 목록에는 없지만 '대안이 될 수 있나' 확인해 볼 만한 모델들
 const GEMINI_PROBE_EXTRA = [
@@ -3275,8 +3526,8 @@ async function probeGeminiModel(model, long = false, ver = 'v1beta') {
 }
 
 // [추가] 내 API 키로 실제 쓸 수 있는 모델 목록 확인
-//   관리자 전용 : 헤더 x-admin-token 이 필요하다. 누구나 부르면 서버 AI 키의 한도를 소진시킬 수 있다.
-app.get('/api/gemini-models', requireAdmin, async (req, res) => {
+//   관리자 전용 : 누구나 부르면 서버 AI 키의 한도를 소진시킬 수 있다.
+app.get('/api/gemini-models', requireAdminUser, async (req, res) => {
   if (!GEMINI_API_KEY) return res.json({ error: '.env 에 GEMINI_API_KEY 가 없습니다.' });
   try {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`);

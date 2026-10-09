@@ -125,6 +125,31 @@
   applyRootFontSize(readRootFontSize());
 </script>
 
+<!-- [P2] 구글 로그인 : supabase-js 를 버전 고정 + 무결성 확인(SRI)으로 불러온다.
+     jsdelivr 의 .min.js 는 요청 때 만들어지는 파일이라 SRI 를 쓰면 안 된다 → 원본(supabase.js, 이미 압축됨)을 쓴다.
+     defer : 화면 그리기를 막지 않고, DOMContentLoaded(= init) 전에는 실행이 끝나 있다. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+  integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+  crossorigin="anonymous" defer></script>
+<script>
+  // 서버(server.js sendAppHtml)가 이 자리에 { supabaseUrl, anonKey } 를 끼워 넣는다. 파일을 그대로 열면 null.
+  const AUTH_CONFIG = /*__AUTH_CONFIG__*/null;
+  // 마지막으로 확인한 허용 상태 : 'admin' | 'approved' | 'none' | 'pending' | 'rejected'
+  const AUTH_STATE_KEY = 'newsinsight:auth:state:v1';
+  function readAuthState() {
+    try { return localStorage.getItem(AUTH_STATE_KEY) || ''; } catch { return ''; }
+  }
+  // 그리기 전에 앱을 가려 둔다. 로그인 기록이 없는데 앱이 한 번 비쳤다가 로그인 화면으로 바뀌면 안 되고,
+  //   구글에서 막 돌아왔거나(?code=) 지난번에 막혔던 기기도 서버 답을 듣기 전에는 앱을 보여 주지 않는다.
+  (function () {
+    let hasSession = false;
+    try { hasSession = Object.keys(localStorage).some((k) => /^sb-.+-auth-token$/.test(k)); } catch {}
+    const returning = /[?&](code|error)=/.test(location.search);
+    const blocked = ['none', 'pending', 'rejected'].includes(readAuthState());
+    if (!hasSession || returning || blocked) document.documentElement.classList.add('auth-locked');
+  })();
+</script>
+
 <style>
   /* v3 테마 색상 = 밝은 화면(시안 실측값) · tailwind.config의 rgb(var(--c-*)) 가 이 값을 읽는다.
      이름은 v2 그대로(gold = 강조색)이고 값만 시안으로 바꿨다. */
@@ -922,7 +947,6 @@
   }
   .st-tab:hover { background: rgb(var(--c-ink2)); }
   .st-tab.is-on { background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); font-weight: 700; }
-  .st-tab .st-lock { font-size: 11px; line-height: 17px; }
   .st-pane { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   /* 한 줄 = [이름 + 설명 200px] [값]. 키워드 설정처럼 넓은 줄은 위아래로 쌓는다 */
   .st-row { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; padding: 22px 28px; border-bottom: 1px solid rgb(var(--c-paper)); }
@@ -983,22 +1007,56 @@
   .pref-switch[aria-checked="true"] { background: rgb(var(--c-paper)); }
   .pref-switch[aria-checked="true"]::after { transform: translateX(15px); background: rgb(var(--c-ink)); }
 
-  /* 설정 잠금 (시안 1e 오른쪽 작은 창 · 300px) */
-  .st-lockbox .pv-head { padding: 14px 20px; gap: 8px; }
-  .st-lockbox .pv-close { width: 28px; height: 28px; }
-  .st-lockbox .pv-close svg { width: 16px; height: 16px; }
-  .st-lock-body { display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; }
-  .st-lock-body .st-input { width: 100%; letter-spacing: .12em; }
-  .st-lock-lead { font-size: 13px; line-height: 1.6; color: #444141; word-break: keep-all; }
-  .st-lock-err { padding: 8px 10px; background: #fff2ef; color: rgb(var(--c-up)); font-size: 12px; line-height: 1.55; }
-  .st-lock-btns { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  /* [P2] 로그인 관문 : 잠긴 동안은 관문 말고 아무것도 보이지 않는다 */
+  html.auth-locked body > *:not(#auth-gate) { display: none !important; }
+  #auth-gate { display: none; }
+  html.auth-locked #auth-gate {
+    position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
+    padding: 16px; background: rgb(var(--c-ink)); overflow-y: auto;
+  }
+  .ag-box { width: 100%; max-width: 380px; border: 2px solid rgb(var(--c-paper)); background: rgb(var(--c-ink)); }
+  .ag-head { padding: 22px 24px 16px; border-bottom: 2px solid rgb(var(--c-paper)); }
+  .ag-brand { font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
+  .ag-sub { margin-top: 6px; font-size: 12px; line-height: 1.5; color: rgb(var(--c-muted)); }
+  .ag-body { display: flex; flex-direction: column; gap: 12px; padding: 20px 24px 24px; }
+  .ag-msg { font-size: 14px; line-height: 1.7; word-break: keep-all; }
+  .ag-msg b { font-weight: 700; }
+  .ag-btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+    padding: 11px 14px; border: 1px solid rgb(var(--c-paper)); font-size: 14px; font-weight: 700; line-height: 20px;
+    transition: background-color .15s, color .15s;
+  }
+  .ag-btn:hover:not(:disabled) { background: rgb(var(--c-ink2)); }
+  .ag-btn.is-primary { background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); }
+  .ag-btn.is-primary:hover:not(:disabled) { background: rgb(var(--c-paper) / .85); }
+  .ag-btn:disabled { opacity: .5; cursor: default; }
+  .ag-link { align-self: center; font-size: 12px; color: rgb(var(--c-muted)); text-decoration: underline; text-underline-offset: 2px; }
+  .ag-err { padding: 8px 10px; background: #fff2ef; color: rgb(var(--c-up)); font-size: 12px; line-height: 1.55; word-break: break-all; }
+
+  /* [P2] 관리자 : 대기 신청 수 배지 · 허용 사용자 목록 */
+  #admin-setting-btn { position: relative; }
+  /* icon-btn · flex 클래스의 display 가 hidden 속성을 이기지 않게 못 박는다 */
+  #admin-setting-btn[hidden], #setting-toggle-btn[hidden] { display: none !important; }
+  .ni-badge {
+    position: absolute; top: -4px; right: -7px;
+    min-width: 15px; height: 15px; padding: 0 3px;
+    background: rgb(var(--c-up)); color: #fff;
+    font-size: 10px; font-weight: 700; line-height: 15px; text-align: center;
+  }
+  .ni-badge[hidden] { display: none; }
+  .au-add { display: flex; gap: 6px; }
+  .au-add .st-input { flex: 1 1 auto; width: auto; min-width: 0; }
+  .au-group { margin-top: 14px; }
+  .au-group > h4 { font-size: 12px; font-weight: 700; color: rgb(var(--c-muted)); margin-bottom: 4px; }
+  .au-btns { display: flex; flex: none; gap: 4px; }
+  .au-btns .pv-btn { padding: 4px 10px; font-size: 12px; }
+  .au-empty { padding: 8px 0; font-size: 12px; color: rgb(var(--c-muted)); border-bottom: 1px solid rgb(var(--c-paper)); }
 
   /* 모바일 Safari 는 글자 크기 16px 미만인 입력칸에 포커스를 주면 화면을 확대하고, 입력 후에도 확대가 남는다.
-     viewport 의 확대 기능은 그대로 두고, 설정 창·잠금 창의 입력칸만 16px 로 올려 확대가 일어나지 않게 한다. */
+     viewport 의 확대 기능은 그대로 두고, 설정 창의 입력칸만 16px 로 올려 확대가 일어나지 않게 한다. */
   @media (max-width: 1023px) {
-    #password-modal input, #st-pane-admin input, #keyword-settings .kw-input { font-size: 16px; }
+    #st-pane-admin input, #keyword-settings .kw-input { font-size: 16px; }
   }
-  .st-lock-btns .pv-btn { justify-content: center; padding: 9px 14px; }
 
   /* 1024px 미만 : 값 칸이 좁아져 이름 아래로 내린다 */
   @media (max-width: 1023.98px) {
@@ -1493,6 +1551,7 @@
        머리말 52px(레드 라벨 · 메타 · 44px X) / 본문(이 안에서만 스크롤) / 아래에 붙은 버튼 줄(아이콘 위 · 글자 아래, 칸 균등).
        시트가 바닥에 붙으므로 홈 바(안전영역)는 아래 버튼 줄(.pv-foot)이 스스로 비운다. 아래로 쓸어 닫는 손짓은 JS(onSheetTouchStart) 참고.
        비밀번호 잠금 창은 작은 확인 창이라 시트로 만들지 않는다.
+       [P2] 잠금 창은 구글 로그인으로 바뀌며 없어졌다. 아래 :not(#password-modal) 은 선택자 우선순위가 바뀌지 않게 그대로 둔다.
      --------------------------------------------------------------- */
   @keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
   @media (max-width: 639.98px) {
@@ -1630,6 +1689,20 @@
 
 <body class="bg-ink text-paper min-h-screen">
 
+  <!-- [P2] 로그인 관문 : <html class="auth-locked"> 일 때만 보이고 나머지는 전부 가려진다.
+       안의 내용은 renderAuthGate() 가 상태(로그인 · 신청 · 대기 · 거절 …)에 맞춰 바꿔 그린다. -->
+  <div id="auth-gate" role="dialog" aria-modal="true" aria-labelledby="ag-title">
+    <div class="ag-box">
+      <div class="ag-head">
+        <div id="ag-title" class="ag-brand">Beyond News</div>
+        <div class="ag-sub">허용된 사용자만 쓸 수 있는 뉴스 모아보기</div>
+      </div>
+      <div id="ag-body" class="ag-body" aria-live="polite">
+        <p class="ag-msg">로그인 정보를 확인하는 중입니다…</p>
+      </div>
+    </div>
+  </div>
+
   <!-- 헤더 + 지수 티커 (스크롤해도 상단 고정) -->
   <div class="sticky top-0 z-40" id="top-bar">
   <header id="app-header" class="border-b-2 border-paper bg-rail/90 backdrop-blur px-4 py-3 lg:px-8 lg:pt-4 lg:pb-3 flex justify-between items-center">
@@ -1757,8 +1830,9 @@
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 5h18"/><path d="M3 12h18"/><path d="M3 19h18"/></svg>목록
         </button>
       </div>
-      <button id="admin-setting-btn" onclick="openAdminSettings()" title="관리자 Setting" aria-label="관리자 Setting"
+      <button id="admin-setting-btn" onclick="openAdminSettings()" title="관리자 Setting" aria-label="관리자 Setting" hidden
         class="icon-btn w-[32px] h-[32px]">
+        <span id="admin-pending-badge" class="ni-badge" hidden></span>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg>
       </button>
     </div>
@@ -1854,7 +1928,7 @@
 
         <!-- [수정] Setting : 누르면 오른쪽(기사 영역)에서 키워드를 설정한다 -->
         <div>
-          <button id="setting-toggle-btn" onclick="openAdminSettings()"
+          <button id="setting-toggle-btn" onclick="openAdminSettings()" hidden
             class="cat-btn text-[1.09rem] flex items-center justify-between px-4 py-2.5 rounded-xl transition w-full text-muted hover:bg-ink3">
             <span>Admin Setting</span>
             <span class="flex items-center gap-1.5" id="setting-toggle-icons"></span>
@@ -2063,7 +2137,7 @@
 
   <!-- [수정] v3 Phase 8 : 설정 한 창 (시안 1e · 880px). 왼쪽 탭 = 화면 설정 / 관리자 Setting.
        화면 설정(테마 · 본문 크기 · 노출 건수 · 화면 옵션)은 이 기기에만 저장되는 개인 취향이라 잠그지 않는다.
-       관리자 Setting(키워드)은 탭을 열 때 관리자 토큰을 묻는다. 헤더 ⋮ 는 화면 설정, 탭 줄 아이콘·드로어 버튼은 관리자 탭으로 연다. -->
+       관리자 Setting(키워드 · 허용 사용자)은 관리자 계정(ADMIN_EMAILS)에게만 보인다. 헤더 ⋮ 는 화면 설정, 탭 줄 아이콘·드로어 버튼은 관리자 탭으로 연다. -->
   <div id="prefs-modal" class="hidden fixed inset-0 z-[85] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closePrefsOnBackdrop(event)">
     <div class="modal-pop pv-shell st-shell max-w-[880px]" role="dialog" aria-modal="true" aria-labelledby="st-title" onclick="event.stopPropagation()">
       <div class="pv-head">
@@ -2080,7 +2154,6 @@
           </button>
           <button type="button" id="st-tab-admin" class="st-tab" role="tab" aria-controls="st-pane-admin" onclick="selectSettingsTab('admin')">
             <span>관리자 Setting</span>
-            <span id="st-lock" class="st-lock">잠금</span>
           </button>
         </nav>
 
@@ -2114,10 +2187,34 @@
             <div class="st-name"><b>화면 옵션</b><span class="st-hint">이 기기에만 적용</span></div>
             <div id="pref-toggles" class="st-list"></div>
           </div>
+          <!-- [P2] 로그인 계정 · 로그아웃 -->
+          <div class="st-row">
+            <div class="st-name"><b>로그인 계정</b><span class="st-hint">구글 계정으로 로그인돼 있습니다</span></div>
+            <div class="flex items-center justify-between gap-3 min-w-0">
+              <span id="account-email" class="text-[14px] font-semibold truncate"></span>
+              <button type="button" class="pv-btn" onclick="signOut()">로그아웃</button>
+            </div>
+          </div>
         </div>
 
-        <!-- 관리자 Setting : 서버가 확인한 관리자 토큰을 넣어야 보인다 -->
+        <!-- 관리자 Setting : ADMIN_EMAILS 에 있는 구글 계정만 보인다 (서버도 같은 기준으로 막는다) -->
         <div id="st-pane-admin" class="st-pane" role="tabpanel" aria-labelledby="st-tab-admin" hidden>
+          <!-- [P2] 허용 사용자 관리 : 누르는 즉시 서버에 반영된다 (아래 '저장' 버튼과 상관없음) -->
+          <div class="st-row">
+            <div class="st-name">
+              <b>허용 사용자</b>
+              <span class="st-hint">신청을 <b>승인</b>·<b>거절</b>하고, 이메일을 직접 추가합니다.
+                <b>해제</b>하면 목록에서 빠지고 다시 신청할 수 있습니다. 누르는 즉시 반영됩니다.</span>
+            </div>
+            <div class="min-w-0">
+              <div class="au-add">
+                <input type="email" id="au-add-input" class="st-input" placeholder="추가할 구글 이메일" autocapitalize="off" spellcheck="false">
+                <button type="button" class="pv-btn" onclick="adminAddUser()">추가</button>
+              </div>
+              <p id="au-msg" class="st-msg mt-1.5" role="status"></p>
+              <div id="au-lists"></div>
+            </div>
+          </div>
           <div class="st-row is-wide">
             <div class="st-name">
               <b>키워드 설정</b>
@@ -2141,28 +2238,6 @@
         <div class="pv-actions">
           <button type="button" class="pv-btn" onclick="resetKeywordSettings()" title="기본값으로 되돌리기">기본값</button>
           <button type="button" id="setting-save-btn" class="pv-btn is-primary" onclick="saveKeywordSettings()">저장 후 새로고침</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- [수정] 설정 잠금 (시안 1e · 300px) : 관리자 Setting 탭을 열 때 설정 창 위에 뜬다 -->
-  <div id="password-modal" class="hidden fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-4" onclick="closePasswordOnBackdrop(event)">
-    <div class="modal-pop pv-shell st-lockbox max-w-[300px]" role="dialog" aria-modal="true" aria-labelledby="st-lock-title" onclick="event.stopPropagation()">
-      <div class="pv-head">
-        <svg class="w-[15px] h-[15px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <h2 id="st-lock-title" class="text-[14px] font-extrabold">설정 잠금</h2>
-        <button type="button" class="pv-close" onclick="closePasswordModal()" title="닫기" aria-label="닫기">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-        </button>
-      </div>
-      <div class="st-lock-body">
-        <p class="st-lock-lead">관리자 Setting 을 열려면 관리자 토큰을 입력하세요.</p>
-        <input type="password" id="password-input" autocomplete="current-password" autocapitalize="off" spellcheck="false" placeholder="관리자 토큰" class="st-input">
-        <p id="password-error" class="st-lock-err hidden" role="alert">관리자 토큰이 올바르지 않습니다.</p>
-        <div class="st-lock-btns">
-          <button type="button" class="pv-btn is-primary" onclick="submitPassword()">확인</button>
-          <button type="button" class="pv-btn" onclick="closePasswordModal()">취소</button>
         </div>
       </div>
     </div>
@@ -2853,7 +2928,7 @@
     async function loadKeywords() {
       let saved = null;
       try {
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/settings/keywords`);
+        const res = await apiFetch(`/api/settings/keywords`);
         if (res.ok) {
           const data = await res.json();
           const fromServer = data.keywords || {};
@@ -2871,24 +2946,27 @@
       return userKeywords;
     }
 
-    // 결과 : 'ok' · 'auth'(관리자 토큰 거절) · 'fail'(그 밖의 실패)
+    // 결과 : 'ok' · 'auth'(로그인 만료 · 관리자 아님) · 'fail'(그 밖의 실패)
     async function persistKeywords() {
       let status = 0;
       try {
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/settings/keywords`, {
+        const res = await apiFetch('/api/settings/keywords', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ keywords: userKeywords }),
         });
         status = res.status;
       } catch {
         // 연결 실패 → status 0 그대로
       }
-      // 토큰이 거절되면 이 기기 캐시에도 남기지 않는다. 남기면 다음 접속 때 저장된 것처럼 보인다.
-      if (status === 401 || status === 503) {
-        alert(status === 503
-          ? '서버에 관리자 토큰이 설정되지 않아 저장하지 못했습니다.'
-          : '관리자 토큰이 올바르지 않아 저장하지 못했습니다.\n설정 창을 닫고 관리자 토큰을 다시 입력해 주세요.');
+      // 권한이 거절되면 이 기기 캐시에도 남기지 않는다. 남기면 다음 접속 때 저장된 것처럼 보인다.
+      //   401 이면 apiFetch 가 이미 로그인 화면을 띄웠다.
+      if (status === 401 || status === 403 || status === 503) {
+        if (status !== 401) {
+          alert(status === 503
+            ? '서버에서 로그인을 확인하지 못해 저장하지 못했습니다. 잠시 뒤 다시 시도하세요.'
+            : '관리자 계정만 공용 키워드를 저장할 수 있습니다.');
+        }
         return 'auth';
       }
       // 그 밖의 실패라도 캐시는 갱신해 두면 이 기기에서는 설정이 유지된다.
@@ -2963,6 +3041,9 @@
     // 초기화
     // ---------------------------------------------------------------
     async function init() {
+      // [P2] 로그인 · 허용 확인이 먼저다. 막히면 관문 화면만 두고 기사 요청도 타이머도 시작하지 않는다.
+      //   로그인 기록이 있는 기기는 서버 답을 기다리지 않고 바로 넘어간다(확인은 뒤에서).
+      if (!(await authBoot())) return;
       // [속도] 예전에는 여기서 loadKeywords() 를 await 로 기다렸다.
       //   그래서 HTML → 키워드 조회 → 기사 조회가 한 줄로 이어져
       //   서로 상관없는 일인데도 앞의 것이 끝나야 뒤가 시작됐다.
@@ -3099,9 +3180,9 @@
       document.getElementById('search-input').addEventListener('input', syncHeaderSearch);
       document.getElementById('search-input').addEventListener('input', renderSearchClear);
 
-      // [추가] 관리자 토큰 입력창에서 Enter → 바로 확인
-      document.getElementById('password-input').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') submitPassword();
+      // [P2] 허용 사용자 직접 추가 칸에서 Enter → 바로 추가
+      document.getElementById('au-add-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') adminAddUser();
       });
 
       runSearch();
@@ -3595,13 +3676,12 @@
       }
     }
 
-    // 탭 줄 아이콘 · 드로어 'Admin Setting' : 설정 창을 관리자 탭으로 연다 (잠겨 있으면 관리자 토큰부터)
+    // 탭 줄 아이콘 · 드로어 'Admin Setting' : 설정 창을 관리자 탭으로 연다 (관리자에게만 보이는 버튼)
     function openAdminSettings() { openPrefsModal('admin'); }
 
-    // 탭을 누름. 관리자 탭은 이번 세션에 관리자 토큰을 통과해야 넘어간다.
-    //   잠겨 있으면 지금 탭은 그대로 두고 잠금 창만 띄운다 → 취소하면 화면 설정에 머문다.
+    // 탭을 누름. 관리자 탭은 관리자 계정일 때만 넘어간다. (화면에서 막는 건 편의일 뿐, 실제로는 서버가 막는다)
     function selectSettingsTab(tab) {
-      if (tab === 'admin' && !isSettingUnlocked()) { openPasswordModal(); return; }
+      if (tab === 'admin' && !isAdminUser()) return;
       showSettingsTab(tab);
     }
 
@@ -3615,70 +3695,327 @@
         document.getElementById(`st-pane-${k}`).hidden = !on;
         document.getElementById(`st-foot-${k}`).hidden = !on;
       });
-      document.getElementById('st-lock').hidden = isSettingUnlocked();
+      if (tab === 'admin') loadAdminUsers();
       renderSettingToggle();
     }
 
     // ---------------------------------------------------------------
-    // [P0 보안] 관리자 탭 잠금 (임시 관리자 토큰)
-    //   - 예전에는 비밀번호를 이 파일 안에 두고 브라우저에서만 비교해서, 페이지 소스를 보면 누구나 알 수 있었다.
-    //   - 이제 맞는지는 서버가 판정한다. 통과한 토큰은 관리자 요청마다 헤더(x-admin-token)로 붙인다.
-    //   - 구글 로그인(P2)이 생기면 이 잠금은 없어진다.
+    // [P2] 구글 로그인 + 허용 관문
+    //   - 로그인은 supabase-js 가 맡는다(구글 다녀오기 · 로그인 상태 보관 · 1시간마다 토큰 자동 갱신).
+    //   - 모든 /api 요청은 apiFetch 로 보내 토큰을 붙인다. 허용 여부는 서버가 판정하고(401/403),
+    //     화면은 그 답에 맞는 안내(로그인 · 신청 · 대기 · 거절)를 띄울 뿐이다.
+    //   - 이 기기에 로그인 기록이 있으면 앱을 바로 그리고 확인은 뒤에서 한다(PERSONALIZATION.md 2-2).
     // ---------------------------------------------------------------
-    // 토큰은 메모리에만 둔다. 설정 창을 닫으면 지워져서, 관리자 아이콘을 누를 때마다 다시 묻는다.
-    //   localStorage 에 두면 공용 기기에서 다음 사람이 관리자 권한을 그대로 갖게 된다.
-    let adminToken = '';
-    let checkingAdminToken = false;   // 확인을 기다리는 동안 Enter 를 연타해도 한 번만 묻는다
-    function isSettingUnlocked() { return !!adminToken; }
-    function lockSettings() { adminToken = ''; }
-    function adminHeaders() { return adminToken ? { 'x-admin-token': adminToken } : {}; }
+    let sbClient = null;
+    let authMe = null;          // /api/me 결과 { email, name, state, isAdmin, pendingCount }
+    let authBlocked = false;    // 관문 화면이 떠 있으면 타이머들이 API 를 헛불러 대지 않게 바로 실패시킨다
 
-    // 잠금 창은 설정 창 위에 떠야 한다. 두 창의 z-index 가 고정값이면 설정 창(85)이 잠금 창(80)을 덮고,
-    //   Sub Page 팝업을 열수록 modalZ 가 올라가므로 열 때마다 맨 위로 올린다.
-    function openPasswordModal() {
-      const el = document.getElementById('password-modal');
-      const input = document.getElementById('password-input');
-      input.value = '';
-      document.getElementById('password-error').classList.add('hidden');
-      el.classList.remove('hidden');
-      bringModalToFront(el);
-      // 모바일은 '누른 순간' 안에서 focus 해야 키패드가 바로 뜬다. 타이머로 미루면 iOS 가 키패드를 띄우지 않는다.
-      input.focus();
-    }
-
-    function closePasswordModal() {
-      document.getElementById('password-modal').classList.add('hidden');
-    }
-    function closePasswordOnBackdrop(e) { if (e.target.id === 'password-modal') closePasswordModal(); }
-
-    async function submitPassword() {
-      const input = document.getElementById('password-input');
-      const err = document.getElementById('password-error');
-      const token = input.value.trim();
-      if (!token || checkingAdminToken) return;
-      checkingAdminToken = true;
-      let status = 0;
+    function rememberAuthState(state) {
       try {
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/admin/check`, { headers: { 'x-admin-token': token } });
-        status = res.status;
+        if (state) localStorage.setItem(AUTH_STATE_KEY, state);
+        else localStorage.removeItem(AUTH_STATE_KEY);
+      } catch {}
+    }
+
+    // /api/me 가 오기 전에는 지난번 상태로 관리자 버튼을 그린다(깜빡임 방지). 실제 권한은 서버가 판정한다.
+    function isAdminUser() { return authMe ? !!authMe.isAdmin : readAuthState() === 'admin'; }
+
+    function authClient() {
+      if (sbClient) return sbClient;
+      if (!AUTH_CONFIG || !AUTH_CONFIG.supabaseUrl || !AUTH_CONFIG.anonKey) return null;
+      if (!window.supabase || typeof window.supabase.createClient !== 'function') return null;
+      sbClient = window.supabase.createClient(AUTH_CONFIG.supabaseUrl, AUTH_CONFIG.anonKey, {
+        // pkce : 구글에서 돌아올 때 토큰 대신 한 번 쓰고 버리는 code 가 주소에 붙는다(토큰이 주소·기록에 남지 않음)
+        auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      });
+      return sbClient;
+    }
+
+    // 토큰 문자열을 따로 들고 있지 않는다. 1시간마다 바뀌므로 요청마다 getSession() 에서 꺼낸다
+    //   (만료가 가까우면 getSession 이 알아서 갱신해 준다).
+    async function currentAccessToken() {
+      const c = authClient();
+      if (!c) return '';
+      try {
+        const { data } = await c.auth.getSession();
+        return (data && data.session && data.session.access_token) || '';
       } catch {
-        // 연결 실패 → status 0 그대로
-      } finally {
-        checkingAdminToken = false;
+        return '';
       }
-      if (status === 204) {
-        adminToken = token;
-        closePasswordModal();
-        if (isPrefsOpen()) showSettingsTab('admin');
-        else openPrefsModal(pendingSettingsTab);
-        return;
+    }
+
+    // 토큰을 붙여 보낸다. 401 이면 토큰이 막 만료됐을 수 있으니 한 번 갱신해서 다시 보낸다.
+    async function authedFetch(pathAndQuery, options = {}) {
+      const send = async () => {
+        const token = await currentAccessToken();
+        const headers = { ...(options.headers || {}) };
+        if (token) headers.Authorization = `Bearer ${token}`;
+        return fetch(`${NAVER_PROXY_BASE}${pathAndQuery}`, { ...options, headers });
+      };
+      let res = await send();
+      if (res.status === 401 && sbClient) {
+        try { await sbClient.auth.refreshSession(); } catch {}
+        res = await send();
       }
-      err.textContent = status === 401 ? '관리자 토큰이 올바르지 않습니다.'
-        : status === 503 ? '서버에 관리자 토큰이 설정되지 않았습니다.'
-        : '서버에 연결하지 못했습니다. 잠시 뒤 다시 시도하세요.';
-      err.classList.remove('hidden');
-      input.value = '';
-      input.focus();
+      return res;
+    }
+
+    // 화면의 모든 API 호출이 지나는 곳. fetch 와 같은 Response 를 돌려준다.
+    async function apiFetch(pathAndQuery, options = {}) {
+      if (authBlocked) throw new Error('로그인이 필요합니다.');
+      const res = await authedFetch(pathAndQuery, options);
+      if (res.status === 401) {
+        showAuthGate('login');
+      } else if (res.status === 403) {
+        let body = {};
+        try { body = await res.clone().json(); } catch {}
+        // admin_only(관리자 전용 기능) 는 앱을 막을 일이 아니다. 허용이 풀린 경우(not_allowed)만 관문을 띄운다.
+        if (body.code === 'not_allowed') showAuthGate(body.state || 'none');
+      }
+      return res;
+    }
+
+    function showAuthGate(state, opts = {}) {
+      authBlocked = true;
+      if (['none', 'pending', 'rejected'].includes(state)) rememberAuthState(state);
+      else if (state === 'login') rememberAuthState('');
+      document.documentElement.classList.add('auth-locked');
+      renderAuthGate(state, opts);
+    }
+
+    function hideAuthGate() {
+      authBlocked = false;
+      document.documentElement.classList.remove('auth-locked');
+    }
+
+    function renderAuthGate(state, opts = {}) {
+      const body = document.getElementById('ag-body');
+      if (!body) return;
+      const who = authMe && authMe.email ? `<b>${esc(authMe.email)}</b>` : '이 계정';
+      const err = opts.error ? `<p class="ag-err" role="alert">${esc(opts.error)}</p>` : '';
+      const dis = opts.busy ? ' disabled' : '';
+      const logout = '<button type="button" class="ag-link" onclick="signOut()">다른 계정으로 로그인</button>';
+      const googleIcon = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
+      const views = {
+        checking: '<p class="ag-msg">로그인 정보를 확인하는 중입니다…</p>',
+        login: `<p class="ag-msg">구글 계정으로 로그인하세요.<br>허용된 사용자만 쓸 수 있습니다.</p>${err}
+          <button type="button" class="ag-btn is-primary" onclick="signInWithGoogle()"${dis}>${googleIcon}<span>Google 계정으로 로그인</span></button>
+          <a class="ag-link" href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>`,
+        none: `<p class="ag-msg">${who}은(는) 아직 등록되지 않았습니다.<br>사용 신청을 보내면 관리자가 확인합니다.</p>${err}
+          <button type="button" class="ag-btn is-primary" onclick="requestAccess()"${dis}>${opts.busy ? '보내는 중…' : '사용 신청'}</button>${logout}`,
+        pending: `<p class="ag-msg">${who}의 사용 신청을 받았습니다.<br>관리자가 승인하면 바로 쓸 수 있습니다.</p>${err}
+          <button type="button" class="ag-btn" onclick="location.reload()">승인됐는지 다시 확인</button>${logout}`,
+        rejected: `<p class="ag-msg">${who}은(는) 사용이 승인되지 않았습니다.<br>필요하면 관리자에게 문의하세요.</p>${logout}`,
+        config: '<p class="ag-msg">로그인 기능을 불러오지 못했습니다.<br>네트워크를 확인한 뒤 다시 시도하세요.</p><button type="button" class="ag-btn" onclick="location.reload()">다시 시도</button>',
+        error: `<p class="ag-msg">서버에서 로그인을 확인하지 못했습니다.<br>잠시 뒤 다시 시도하세요.</p>${err}
+          <button type="button" class="ag-btn" onclick="location.reload()">다시 시도</button>${logout}`,
+      };
+      body.innerHTML = views[state] || views.error;
+    }
+
+    async function signInWithGoogle() {
+      const c = authClient();
+      if (!c) { renderAuthGate('config'); return; }
+      renderAuthGate('login', { busy: true });
+      // 성공하면 supabase-js 가 구글 로그인 화면으로 이동시킨다. 돌아오는 곳은 지금 주소의 첫 화면.
+      const { error } = await c.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${location.origin}/` } });
+      if (error) renderAuthGate('login', { error: `구글 로그인을 시작하지 못했습니다. (${error.message})` });
+    }
+
+    async function requestAccess() {
+      renderAuthGate('none', { busy: true });
+      try {
+        const res = await authedFetch('/api/access-request', { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `신청하지 못했습니다. (${res.status})`);
+        // 관리자가 그새 직접 추가해 뒀으면 바로 승인 상태로 온다 → 다시 불러 앱으로 들어간다
+        if (data.state === 'approved' || data.state === 'admin') { location.reload(); return; }
+        showAuthGate(data.state || 'pending');
+      } catch (e) {
+        renderAuthGate('none', { error: e.message });
+      }
+    }
+
+    // 이 기기에서만 로그아웃한다. 기본값(global)은 다른 기기(아이폰 · 아이패드)의 로그인까지 끊는다.
+    async function signOut() {
+      rememberAuthState('');
+      try {
+        const c = authClient();
+        if (c) await c.auth.signOut({ scope: 'local' });
+      } catch {}
+      location.replace('/');
+    }
+
+    // 서버에 내 상태를 묻는다. blocking=true 면 답을 듣기 전까지 앱을 열지 않은 상태이므로,
+    //   서버가 응답하지 않을 때 안내 화면을 띄운다. false(앱을 이미 그림)면 일시 장애는 조용히 넘긴다.
+    async function checkMe(blocking) {
+      let res = null;
+      try { res = await authedFetch('/api/me'); } catch {}
+      if (!res || res.status >= 500) {
+        if (blocking) { showAuthGate('error'); return false; }
+        return true;
+      }
+      if (res.status === 401) { showAuthGate('login'); return false; }
+      let me = null;
+      try { me = await res.json(); } catch {}
+      if (!me || !res.ok) {
+        if (blocking) { showAuthGate('error', { error: `HTTP ${res.status}` }); return false; }
+        return true;
+      }
+      authMe = me;
+      if (me.state === 'admin' || me.state === 'approved') {
+        rememberAuthState(me.state);
+        hideAuthGate();
+        applyAuthUi();
+        return true;
+      }
+      showAuthGate(me.state);
+      return false;
+    }
+
+    // 결과 : true = 앱을 그려도 된다 / false = 관문 화면에서 멈춘다(기사 요청 · 타이머를 시작하지 않는다)
+    async function authBoot() {
+      const wasLocked = document.documentElement.classList.contains('auth-locked');
+      const c = authClient();
+      if (!c) { showAuthGate('config'); return false; }
+      if (wasLocked) renderAuthGate('checking');
+      let session = null;
+      try {
+        // 구글에서 막 돌아왔으면 getSession 이 주소의 code 를 세션으로 바꾸는 일까지 기다려 준다.
+        const { data } = await c.auth.getSession();
+        session = data && data.session;
+      } catch {}
+      // 쓰고 난 code 는 주소에서 지운다. 남아 있으면 새로고침 · 공유 때 다시 쓰려다 오류가 난다.
+      const url = new URL(location.href);
+      const oauthErr = url.searchParams.get('error_description') || url.searchParams.get('error');
+      if (url.searchParams.has('code') || oauthErr) {
+        ['code', 'error', 'error_code', 'error_description', 'state'].forEach((k) => url.searchParams.delete(k));
+        history.replaceState(null, '', url.pathname + url.search + url.hash);
+      }
+      if (!session) { showAuthGate('login', oauthErr ? { error: oauthErr } : {}); return false; }
+      // 처음 로그인했거나 지난번에 막혔던 기기 : 앱을 그렸다가 거두지 않도록 서버 답을 기다린다
+      if (wasLocked) return checkMe(true);
+      applyAuthUi();
+      checkMe(false);
+      return true;
+    }
+
+    // 로그인 계정 표시 · 관리자 버튼 · 대기 신청 배지
+    function applyAuthUi() {
+      const admin = isAdminUser();
+      ['admin-setting-btn', 'setting-toggle-btn'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.hidden = !admin;
+      });
+      const emailEl = document.getElementById('account-email');
+      if (emailEl) emailEl.textContent = (authMe && authMe.email) || '';
+      renderPendingBadge(admin && authMe ? authMe.pendingCount : 0);
+    }
+
+    function renderPendingBadge(n) {
+      const count = Number(n) || 0;
+      ['admin-pending-badge', 'tab-settings-badge'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = count > 99 ? '99+' : String(count);
+        el.hidden = count <= 0;
+      });
+      const btn = document.getElementById('admin-setting-btn');
+      if (btn) btn.title = count > 0 ? `관리자 Setting · 사용 신청 ${count}건 대기` : '관리자 Setting';
+    }
+
+    // ---------------------------------------------------------------
+    // [P2] 관리자 : 허용 사용자 관리 (대기 승인 · 거절 · 직접 추가 · 해제)
+    // ---------------------------------------------------------------
+    function setAdminUsersMsg(text, kind = '') {
+      const el = document.getElementById('au-msg');
+      if (!el) return;
+      el.textContent = text || '';
+      el.className = `st-msg mt-1.5${kind ? ` is-${kind}` : ''}`;
+    }
+
+    function fmtAuthTime(iso) {
+      const d = new Date(iso);
+      if (!iso || Number.isNaN(d.getTime())) return '';
+      const p = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    function renderAdminUsers(data) {
+      const wrap = document.getElementById('au-lists');
+      if (!wrap) return;
+      // 버튼의 onclick 에 이메일을 넣으므로 따옴표가 섞여도 깨지지 않게 JSON + HTML 이스케이프를 같이 쓴다
+      const arg = (email) => esc(JSON.stringify(email));
+      const row = (u, hint, btns) => `<div class="st-item">
+          <div class="st-item-name"><span class="truncate">${esc(u.email)}</span><span>${esc(hint)}</span></div>
+          <div class="au-btns">${btns}</div>
+        </div>`;
+      const group = (title, list, render) => `<div class="au-group"><h4>${title} (${list.length})</h4>
+          <div class="st-list">${list.length ? list.map(render).join('') : '<div class="au-empty">없음</div>'}</div></div>`;
+      wrap.innerHTML = [
+        group('대기', data.pending || [], (u) => row(u, [u.name, `신청 ${fmtAuthTime(u.requested_at)}`].filter(Boolean).join(' · '),
+          `<button type="button" class="pv-btn is-primary" onclick="adminSetUser(${arg(u.email)}, 'approved')">승인</button>
+           <button type="button" class="pv-btn" onclick="adminSetUser(${arg(u.email)}, 'rejected')">거절</button>`)),
+        group('허용', data.approved || [], (u) => row(u, [u.name, u.decided_at ? `승인 ${fmtAuthTime(u.decided_at)}` : ''].filter(Boolean).join(' · '),
+          `<button type="button" class="pv-btn" onclick="adminRemoveUser(${arg(u.email)})">해제</button>`)),
+        group('거절', data.rejected || [], (u) => row(u, [u.name, u.decided_at ? `거절 ${fmtAuthTime(u.decided_at)}` : ''].filter(Boolean).join(' · '),
+          `<button type="button" class="pv-btn" onclick="adminSetUser(${arg(u.email)}, 'approved')">허용</button>`)),
+        group('관리자 (ADMIN_EMAILS · 항상 허용)', (data.admins || []).map((email) => ({ email })), (u) => row(u, '서버 환경변수로 지정', '')),
+      ].join('');
+      if (authMe) authMe.pendingCount = (data.pending || []).length;
+      renderPendingBadge((data.pending || []).length);
+    }
+
+    async function loadAdminUsers() {
+      if (!isAdminUser()) return;
+      try {
+        const res = await apiFetch('/api/admin/users');
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        renderAdminUsers(data);
+      } catch (e) {
+        setAdminUsersMsg(`허용 목록을 불러오지 못했습니다. (${e.message})`, 'err');
+      }
+    }
+
+    async function adminSetUser(email, status) {
+      setAdminUsersMsg('저장하는 중…');
+      try {
+        const res = await apiFetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, status }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        setAdminUsersMsg(`${email} : ${status === 'approved' ? '허용했습니다' : '거절했습니다'}.`, 'ok');
+        await loadAdminUsers();
+        return true;
+      } catch (e) {
+        setAdminUsersMsg(e.message, 'err');
+        return false;
+      }
+    }
+
+    async function adminRemoveUser(email) {
+      if (!confirm(`${email} 의 사용 권한을 해제할까요?\n목록에서 빠지고, 다음 접속부터 막힙니다(다시 신청은 가능).`)) return;
+      setAdminUsersMsg('해제하는 중…');
+      try {
+        const res = await apiFetch(`/api/admin/users?email=${encodeURIComponent(email)}`, { method: 'DELETE' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        setAdminUsersMsg(`${email} : 권한을 해제했습니다.`, 'ok');
+        await loadAdminUsers();
+      } catch (e) {
+        setAdminUsersMsg(e.message, 'err');
+      }
+    }
+
+    async function adminAddUser() {
+      const input = document.getElementById('au-add-input');
+      const email = input.value.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setAdminUsersMsg('이메일 형식이 올바르지 않습니다.', 'err'); input.focus(); return; }
+      if (await adminSetUser(email, 'approved')) input.value = '';
     }
 
     // ---------------------------------------------------------------
@@ -3886,30 +4223,30 @@
     // ---------------------------------------------------------------
     // [수정] v3 Phase 8 : 설정 창 열기·닫기 (헤더 ⋮ = 화면 설정 탭, 관리자 아이콘 = 관리자 탭)
     //   화면 설정(테마 · 본문 크기 · 기본 노출 건수 · 화면 옵션)은 이 기기에만 저장되는
-    //   개인 취향이라 비밀번호 없이 누구나 바꿀 수 있다.
+    //   개인 취향이라 로그인한 사람 누구나 바꿀 수 있다.
     // ---------------------------------------------------------------
     // 창을 열 때의 키워드 사본. 저장하지 않고 닫으면 이 값으로 되돌린다.
     //   (고친 값은 곧바로 userKeywords 에 들어가므로, 되돌리지 않으면 저장 안 한 키워드로 기사를 불러오게 된다)
     let keywordsAtOpen = null;
-    let pendingSettingsTab = 'prefs';   // 잠금 창을 통과한 뒤 열 설정 탭
 
-    //   withAdmin : 모바일 하단 '설정' 탭. 화면 설정으로 열되 관리자 탭도 보여 둔다(누르면 잠금 창).
+    //   withAdmin : 모바일 하단 '설정' 탭. 화면 설정으로 열되 관리자 탭도 보여 둔다(관리자 계정일 때만).
     function openPrefsModal(tab = 'prefs', withAdmin = false) {
       closeNav();                        // 모바일 : 드로어가 열려 있으면 닫는다
       const el = document.getElementById('prefs-modal');
       if (!el) return;
-      // 관리자 진입(탭 줄 아이콘·드로어)만 잠근다. 잠겨 있으면 설정 창은 아직 열지 않고 잠금 창만 띄우고,
-      //   통과하면 submitPassword 가 이어서 연다. 헤더 ⋮ (유저용)는 비밀번호 없이 열리고 관리자 탭도 숨긴다.
-      const asAdmin = tab === 'admin';
-      if (asAdmin && !isSettingUnlocked()) { pendingSettingsTab = tab; openPasswordModal(); return; }
-      document.getElementById('st-tab-admin').style.display = asAdmin || withAdmin ? '' : 'none';
+      // [P2] 관리자 탭은 관리자 계정(ADMIN_EMAILS)에게만 보인다. 헤더 ⋮ (유저용)는 관리자 탭을 숨긴다.
+      const admin = isAdminUser();
+      const asAdmin = tab === 'admin' && admin;
+      if (!asAdmin) tab = 'prefs';
+      document.getElementById('st-tab-admin').style.display = admin && (asAdmin || withAdmin) ? '' : 'none';
+      applyAuthUi();                     // 로그인 계정 표시
       renderThemeButtons();              // 현재 선택 상태로 갱신
       renderFontSizeSetting();
       renderCountSetting();
       renderPrefToggles();
       if (!isPrefsOpen()) keywordsAtOpen = cloneKeywords(userKeywords);
       renderKeywordSettings();           // 지금 들고 있는 userKeywords 로 다시 그린다 (서버를 다시 부르지는 않는다)
-      showSettingsTab('prefs');          // 관리자 탭이 잠겨 있으면 화면 설정 위에 잠금 창이 뜬다
+      showSettingsTab('prefs');
       el.classList.remove('hidden');
       bringModalToFront(el);
       selectSettingsTab(tab);
@@ -3920,8 +4257,6 @@
     function closePrefsModal(rerun = false) {
       const el = document.getElementById('prefs-modal');
       if (!el || el.classList.contains('hidden')) return;
-      closePasswordModal();
-      lockSettings();
       el.classList.add('hidden');
       // 저장(저장 후 새로고침 · 기본값)하면 사본도 새 값이 되므로, 여기서 되돌려지는 건 저장 안 한 수정뿐이다.
       if (keywordsAtOpen) { userKeywords = keywordsAtOpen; keywordsAtOpen = null; }
@@ -4496,7 +4831,7 @@
     // 서버 API
     // ---------------------------------------------------------------
     async function apiGet(pathAndQuery) {
-      const response = await fetch(`${NAVER_PROXY_BASE}${pathAndQuery}`);
+      const response = await apiFetch(pathAndQuery);
       if (!response.ok) {
         let message = 'API 요청 실패: ' + response.status;
         try { const b = await response.json(); if (b.error) message = b.error; } catch {}
@@ -4507,7 +4842,7 @@
 
     // [추가] 이어보기(D3)용. 저장 기사 제목을 여러 건 보내야 해서 주소줄에 담기 어렵다.
     async function apiPost(pathAndQuery, body) {
-      const response = await fetch(`${NAVER_PROXY_BASE}${pathAndQuery}`, {
+      const response = await apiFetch(pathAndQuery, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -4773,7 +5108,7 @@
       if (scfiFetching) return;
       scfiFetching = true;
       try {
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/scfi`);
+        const res = await apiFetch(`/api/scfi`);
         if (!res.ok) throw new Error('SCFI API 오류: ' + res.status);
         scfiData = await res.json();
       } catch (err) {
@@ -4853,7 +5188,7 @@
       if (scfiHistoryFetching) return;
       scfiHistoryFetching = true;
       try {
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/scfi/history`);
+        const res = await apiFetch(`/api/scfi/history`);
         if (!res.ok) throw new Error('SCFI 시계열 API 오류: ' + res.status);
         const data = await res.json();
         scfiHistory = (data.points || []).filter(p => p && p.date && Number.isFinite(p.value));
@@ -5149,7 +5484,7 @@
       indexChartStore[cacheKey] = { loading: true };
       const [key, range] = cacheKey.split(':');
       try {
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/index-chart?key=${key}&range=${range}`);
+        const res = await apiFetch(`/api/index-chart?key=${key}&range=${range}`);
         if (!res.ok) throw new Error('지수 차트 API 오류: ' + res.status);
         const data = await res.json();
         const points = (data.points || []).filter((p) => p && Number.isFinite(p.t) && Number.isFinite(p.value));
@@ -5424,7 +5759,7 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // 설정 탭 : 화면 설정으로 열고, 관리자 탭도 보이게 둔다(누르면 관리자 토큰 창).
+    // 설정 탭 : 화면 설정으로 열고, 관리자 탭도 보이게 둔다(관리자 계정일 때만).
     //   모바일은 드로어·탭 줄 아이콘이 없어서 관리자 Setting 으로 가는 길이 여기뿐이다.
     function openSettingsTab() { openPrefsModal('prefs', true); }
 
@@ -6328,7 +6663,7 @@
 
     async function refreshExtraTicker() {
       try {
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/market-extra`);
+        const res = await apiFetch(`/api/market-extra`);
         if (!res.ok) throw new Error('시장지표 API 오류: ' + res.status);
         const data = await res.json();
         lastExtraItems = Array.isArray(data.items) ? data.items : [];
@@ -6368,7 +6703,7 @@
       // (하나가 느리거나 실패해도 다른 하나는 정상적으로 티커에 표시되어야 함)
       refreshExtraTicker().then(() => renderIndexTicker(lastIndexItems));
       try {
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/indices`);
+        const res = await apiFetch(`/api/indices`);
         if (!res.ok) throw new Error('지수 API 오류: ' + res.status);
         const data = await res.json();
         if (!Array.isArray(data.items) || !data.items.length) throw new Error('지수 데이터 없음');
@@ -6581,7 +6916,6 @@
         ['scfi-modal', closeScfiChart],
         ['index-modal', closeIndexChart],
         ['prefs-modal', () => closePrefsModal()],
-        ['password-modal', closePasswordModal],   // 설정 창 위에 뜨므로 Esc 는 잠금 창만 닫는다
       ].filter(([id]) => {
         const el = document.getElementById(id);
         return el && !el.classList.contains('hidden');
@@ -6835,7 +7169,7 @@
         if (item.naverUrl) params.set('naver', item.naverUrl);   // 원문 차단 시 네이버 뉴스로 우회
         // [수정] 본문을 끝내 못 읽으면 네이버 요약문이라도 근거로 쓰도록 함께 전달
         if (Array.isArray(item.summary)) params.set('desc', item.summary.join(' ').slice(0, 1000));
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/deep-brief?${params.toString()}`);
+        const res = await apiFetch(`/api/deep-brief?${params.toString()}`);
         const data = await res.json();
 
         if (data.error) {
@@ -6990,7 +7324,7 @@
         const params = new URLSearchParams({ url: link, title: item.title });
         if (item.naverUrl) params.set('naver', item.naverUrl);
         if (Array.isArray(item.summary)) params.set('desc', item.summary.join(' ').slice(0, 1000));
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/insight?${params.toString()}`);
+        const res = await apiFetch(`/api/insight?${params.toString()}`);
         const data = await res.json();
 
         if (data.error) {
@@ -7057,7 +7391,7 @@
 
       try {
         const p = new URLSearchParams({ title: item.title, url: articleLink(item), display: '5' });
-        const res = await fetch(`${NAVER_PROXY_BASE}/api/related?${p.toString()}`);
+        const res = await apiFetch(`/api/related?${p.toString()}`);
         const data = await res.json();
 
         if (data.error) {
@@ -7388,7 +7722,7 @@
       저장
     </button>
     <button type="button" onclick="openSettingsTab()" data-tab="settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg>
+      <span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg><span id="tab-settings-badge" class="ni-badge" hidden></span></span>
       설정
     </button>
   </nav>

@@ -1,6 +1,6 @@
 # 개인화 (구글 로그인 · 허용 사용자 · 좋아요/싫어요 · 계정별 설정 · 개인 AI 키·모델) 작업 계획
 
-> 상태 : **P0 배포 완료 · P1 완료 · 다음은 P2** · 작성 2026-10-09 · 2차 결정 반영 2026-10-09
+> 상태 : **P0 배포 완료 · P1 완료 · P2 코드 완료(실계정 확인 대기) · 다음은 P3** · 작성 2026-10-09 · 2차 결정 반영 2026-10-09
 > 순서 : 이 작업을 먼저 하고, v3 리디자인의 남은 일(다크 테마)은 그 뒤에 한다.
 > 규칙 : 한 Phase 씩 진행하고, 끝나면 멈추고 확인받는다. 캐시를 건드리는 Phase 는 [PERFORMANCE.md](PERFORMANCE.md) 4장을, AI 호출을 건드리는 Phase 는 같은 문서의 Gemini 절을 먼저 읽는다.
 > 브랜치 : `main` 에 push 하면 Render 에 자동 배포되므로 **`feat/personalize` 브랜치**에서 작업한다. (P0 만 예외로 먼저 배포)
@@ -148,7 +148,7 @@
 |---|---|---|---|
 | **P0** 보안 응급조치 ✅ **배포 완료** 2026-10-09 · 커밋 `02a41a2` · 병합 `fb62738` | ① 키워드 저장 API 와 모델 진단 API 를 서버에서 막는다(임시 관리자 토큰 환경변수). ② `'7780'` 하드코딩을 제거한다. 로그인이 생기기 전까지 쓸 최소 조치. **이 Phase 만 먼저 배포** | Opus 5.5 / high | Render 에 임시 관리자 토큰 등록 |
 | **P1** 준비물 안내 | 구글 OAuth 클라이언트, Supabase Google provider, 리다이렉트 URL(localhost · onrender), 환경변수(`SUPABASE_ANON_KEY` · `ADMIN_EMAILS` · `KEY_ENCRYPTION_SECRET`), 테이블 생성 SQL, **기존 `app_settings` 를 포함한 RLS 켜기 SQL** 을 단계별 가이드로 작성 | Haiku 5.5 / low (SQL·RLS 검토는 Opus 5.5 / high) | 콘솔 설정과 SQL 실행 (계정 · 키 입력은 사용자가 직접) |
-| **P2** 로그인 + 허용 관문 | `supabase-js` 도입(버전 고정), 로그인 화면, 로그인/로그아웃, 서버 토큰 확인(메모리 캐시), `/api/me`, **모든 `/api/*` 에 허용 판정**, 신청 · 대기 · 거절 화면, 관리자 허용 관리(대기 목록 · 승인/거절 · 직접 추가 · 해제 · 배지) | Opus 5.5 / high | 계정 2개(관리자 · 일반)로 신청~승인 흐름 확인 |
+| **P2** 로그인 + 허용 관문 ✅ 코드 완료 2026-10-09 (브랜치) | `supabase-js` 도입(버전 고정), 로그인 화면, 로그인/로그아웃, 서버 토큰 확인(메모리 캐시), `/api/me`, **모든 `/api/*` 에 허용 판정**, 신청 · 대기 · 거절 화면, 관리자 허용 관리(대기 목록 · 승인/거절 · 직접 추가 · 해제 · 배지) | Opus 5.5 / high | 계정 2개(관리자 · 일반)로 신청~승인 흐름 확인 |
 | **P3** 좋아요/싫어요 기록 | 카드·목록 버튼, `article_votes` API, 낙관적 반영(누르면 바로 바뀌고 저장은 뒤에서), 싫어요 즉시 숨김 + 후보로 채우기 | Sonnet 5.5 / medium | 모바일·PC 버튼 위치 확인 |
 | **P4** 추천 알고리즘 (전체 화면) | 2-8 의 점수 계산과 재정렬, 섹션 건수 조정, 비개인화 20%, 추천 끄기/초기화 | Opus 5.5 / high | 며칠 써 보며 강도 조절 |
 | **P5** 계정별 키워드 설정 | `user_settings.keywords` (덮어쓰기 방식), 설정 화면을 '내 설정'과 '공용 기본 설정(관리자)'으로 나눔 | Opus 5.5 / high | — |
@@ -175,6 +175,17 @@
   - RLS 는 **정책 없이** 켠다(브라우저는 테이블 직접 접근 안 함, 서버 service 키만 통과) + anon/authenticated 권한 회수.
   - 주의 : 기존 `app_settings` 에도 RLS 를 걸므로, Render 의 `SUPABASE_SERVICE_KEY` 가 비밀용(service_role) 키인지 SQL 실행 **전에** 확인해야 한다(가이드 1단계).
   - 구글 OAuth 는 앱 게시(프로덕션)를 권장 — 테스트 상태는 7일마다 로그인이 풀린다.
+- **P2 결과 (2026-10-09, 브랜치 `feat/personalize`)**
+  - 결정 : ① 권한 해제 = `allowed_users` 행 삭제(다시 신청 가능) ② 공개 파일을 허용 목록으로 좁힘 ③ 로컬용 캐시 동기화 끄기 스위치 `SUPABASE_CACHE_SYNC=off` 추가(값이 없으면 지금과 같음).
+  - 서버 : `Authorization: Bearer <Supabase 토큰>` 을 `/auth/v1/user` 로 확인(토큰 해시 기준 최대 5분 · 토큰 만료 전까지 메모리 보관, 같은 토큰 동시 요청은 1번만 확인). **구글 로그인 + 이메일 확인된 계정만 인정**(이메일/비밀번호 가짜 가입으로 관리자 이메일을 쓰는 것 방지). 허용 상태는 이메일별 2분 캐시, 관리 동작 직후 즉시 지움.
+  - 관문 : `app.use('/api', authGate)`. 토큰 없음·무효 **401** `login_required` / 미허용 **403** `not_allowed` + state / 설정 없음·Supabase 무응답 **503** `auth_unavailable`(닫힘). `/api/me` · `/api/access-request` 만 로그인만으로 통과. 관리자 전용 : 키워드 저장 POST · `/api/gemini-models` · `/api/admin/users`(GET 목록 · POST 승인/거절/직접추가 · DELETE 해제).
+  - `ADMIN_TOKEN` · `/api/admin/check` · 비밀번호 잠금 창은 코드에서 삭제. **Render 의 `ADMIN_TOKEN` 은 P11 배포 때 지운다**(운영은 그때까지 P0 코드).
+  - 공개 파일 : `privacy.html` · 아이콘 4종 · `manifest.webmanifest` 만. 예전엔 `server.js` · `keywords.json` · `.md` · `sql/` · `node_modules` 까지 열려 있었다. 화면이 새 그림 파일을 쓰면 server.js `PUBLIC_FILES` 에 더해야 한다.
+  - 화면 : `supabase-js@2.117.2`(jsdelivr 정적 UMD + SRI, defer). 설정값(Supabase 주소 · anon 키)은 서버가 HTML 의 `/*__AUTH_CONFIG__*/` 자리에 끼워 보낸다. 모든 API 호출은 `apiFetch` 하나를 지나며 요청마다 `getSession()` 토큰을 붙인다. 관문 화면 : 로그인 · 사용 신청 · 승인 대기 · 거절 · 오류. 관리자 탭에 허용 사용자 관리 + 대기 배지(관리자 아이콘 · 하단 설정 탭). 화면 설정 탭에 로그인 계정 · 로그아웃(이 기기만, `scope: 'local'`).
+  - 진단 API 는 이제 관리자로 로그인한 화면의 개발자 도구 콘솔에서 `await (await apiFetch('/api/gemini-models?test=1')).json()` 으로 부른다.
+  - 실측 (로컬, 가짜 Supabase) : 관문 시나리오 26개(토큰 없음 · 엉터리 · 만료 · 이메일 가입 관리자 · 미확인 이메일 → 401, 신청 → 대기 → 승인 → 거절 → 해제, 재신청 막힘, 비관리자 관리 API 403 등) 모두 기대대로. 동시 요청 10개 → Supabase 확인 1번. 공개 목록 밖 파일 404. 브라우저 : 손님은 로그인 화면만 · API 요청 0건, 대기 기기는 새로고침해도 `/api/me` 1건만, 해제된 사용자는 다음 새로고침에 신청 화면.
+  - 첫 화면 (로그인 상태, 새로고침 3회) : 첫 API 요청 시작 **약 100ms → 135ms** (+35ms = supabase-js 실행). 첫 방문 기기는 supabase-js 55KB(gzip) 내려받기가 더해진다.
+  - **로컬에서 실계정 시험하려면** `.env` 에 `SUPABASE_URL` · `SUPABASE_SERVICE_KEY` · `SUPABASE_CACHE_SYNC=off` 를 넣는다(사용자 작업). 이때 로컬 `keywords.json` 은 운영 키워드로 덮어써진다(서버가 Supabase 값을 파일 캐시에 따라 쓴다). Supabase Redirect URLs 에 로컬 포트(autoPort 면 그 포트)를 등록해야 한다.
 - P3·P4 를 P5·P6 보다 먼저 둔 이유 : 투표와 추천은 화면 쪽 작업이라 캐시 위험이 없고, 원하는 기능을 먼저 써 볼 수 있다.
 - **P5 와 P6 는 같이 배포한다.** P5 만 배포하면 키워드를 바꾼 사용자의 첫 화면이 느려진다.
 - P1~P11 은 브랜치에 쌓아 두었다가 P11 에서 한꺼번에 배포한다. 허용 관문(P2)만 먼저 나가면 기존 사용자가 갑자기 막히기 때문이다.
