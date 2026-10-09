@@ -806,15 +806,20 @@ app.get('/api/sync', async (req, res) => {
   if (!SUPABASE_ENABLED) return res.status(503).json({ error: '계정 저장소가 설정되지 않았습니다.' });
   const uid = req.user.id;
   const q = `user_id=eq.${encodeURIComponent(uid)}`;
+  const aiStartedAt = Date.now();
   try {
-    const [prefs, savedRows, readRows] = await Promise.all([
+    const [prefs, savedRows, readRows, aiRow] = await Promise.all([
       readUserPrefs(uid),
       restGet(`${SAVED_TABLE}?${q}&select=url_key,article,saved_at&order=saved_at.desc&limit=${SAVED_MAX}`),
       restGet(`${READ_TABLE}?${q}&select=url_key&order=read_at.desc&limit=${READ_MAX}`),
+      // [P8] AI 키 유무(끝 4자리). 이 읽기만 실패하면 칸을 빼고 보낸다(화면은 '모름'으로 두고 버튼을 흐리지 않는다).
+      //   읽은 김에 풀어 둔 키를 캐시에 넣어 첫 AI 요청이 Supabase 를 다시 부르지 않게 한다.
+      AI_KEY_CIPHER_KEY ? readAiKeyRow(uid).catch(() => undefined) : undefined,
     ]);
     res.set('Cache-Control', 'no-store');
     res.json({
       uid,
+      ...(aiRow !== undefined ? { aiKey: aiKeyPublic(cacheAiKeyRead(uid, aiRow, aiStartedAt)) } : {}),
       prefs,
       saved: savedRows.map((x) => ({
         ...(isPlainObj(x.article) ? x.article : {}), key: x.url_key, savedAt: Date.parse(x.saved_at) || 0,
@@ -868,6 +873,210 @@ app.post('/api/sync', async (req, res) => {
   } catch (e) {
     console.error('[동기화 저장 실패]', e.message);
     res.status(500).json({ error: '저장하지 못했습니다.' });
+  }
+});
+
+// -----------------------------------------------------------------
+// [P8] 개인 AI 키 (PERSONALIZATION.md 2-6)
+//   - 주요 내용 · Insight 는 요청한 사람의 구글 AI 키로 부른다. 서버 공용 키(GEMINI_API_KEY)는 관리자 진단 전용이다.
+//   - 키는 AES-256-GCM 으로 암호화해 user_ai_keys 에 둔다. 한번 저장한 키는 화면으로 다시 내려보내지 않는다(끝 4자리만).
+//   - 암호문에 user_id 를 함께 묶는다(AAD) → 다른 사람 줄로 옮겨 붙인 암호문은 풀리지 않는다.
+//   - 키 원문은 응답 · 로그 · 오류 메시지 어디에도 싣지 않는다.
+// -----------------------------------------------------------------
+const AI_KEYS_TABLE = 'user_ai_keys';
+const KEY_ENCRYPTION_SECRET = String(process.env.KEY_ENCRYPTION_SECRET || '').trim();
+// 비밀값은 P1 가이드대로 무작위 32바이트(base64)지만, 모양에 상관없이 32바이트 열쇠가 되도록 sha256 을 거친다.
+//   앞 글자는 용도 표시 — 같은 비밀값을 나중에 다른 용도에 써도 열쇠가 겹치지 않게.
+const AI_KEY_CIPHER_KEY = KEY_ENCRYPTION_SECRET.length >= 16
+  ? crypto.createHash('sha256').update(`newsinsight:user-ai-key:v1|${KEY_ENCRYPTION_SECRET}`).digest()
+  : null;
+if (!AI_KEY_CIPHER_KEY) console.warn('[경고] KEY_ENCRYPTION_SECRET 이 없거나 짧아 개인 AI 키를 쓸 수 없습니다. (주요 내용 · Insight 꺼짐)');
+
+function encryptAiKey(userId, plain) {
+  const iv = crypto.randomBytes(12);   // 매번 새로 만든다. 같은 iv 를 두 번 쓰면 GCM 의 보호가 깨진다
+  const c = crypto.createCipheriv('aes-256-gcm', AI_KEY_CIPHER_KEY, iv);
+  c.setAAD(Buffer.from(String(userId), 'utf8'));
+  const ct = Buffer.concat([c.update(plain, 'utf8'), c.final()]);
+  return `v1:${Buffer.concat([iv, c.getAuthTag(), ct]).toString('base64')}`;
+}
+
+// 풀지 못하면(비밀값이 바뀜 · 다른 사람 줄 · 깨진 값) null. 500 으로 올리지 않고 '다시 등록하세요'로 안내한다.
+function decryptAiKey(userId, stored) {
+  if (!AI_KEY_CIPHER_KEY || typeof stored !== 'string' || !stored.startsWith('v1:')) return null;
+  try {
+    const buf = Buffer.from(stored.slice(3), 'base64');
+    if (buf.length < 12 + 16 + 1) return null;
+    const d = crypto.createDecipheriv('aes-256-gcm', AI_KEY_CIPHER_KEY, buf.subarray(0, 12));
+    d.setAAD(Buffer.from(String(userId), 'utf8'));
+    d.setAuthTag(buf.subarray(12, 28));
+    return Buffer.concat([d.update(buf.subarray(28)), d.final()]).toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+// AI 요청마다 Supabase 에 묻지 않도록 풀어 둔 키를 담아 둔다. 이 서버만 키를 쓰므로 저장 · 삭제 때 바로 바꾼다.
+//   { ts, key: 원문|null, last4, updatedAt, broken }  — key=null 이고 broken=false 면 '등록 안 함'
+const AI_KEY_TTL = 1000 * 60 * 10;
+const AI_KEY_CACHE_MAX = 500;
+const aiKeyCache = new Map();      // user id -> 위 모양
+const aiKeyInflight = new Map();   // 같은 사람이 동시에 물으면 한 번만 읽는다
+const aiKeyLocks = new Map();      // 저장 · 삭제를 한 줄로 세운다
+
+function aiKeyEntryFromRow(userId, row) {
+  if (!row) return { ts: Date.now(), key: null, last4: '', updatedAt: null, broken: false };
+  const key = decryptAiKey(userId, row.key_cipher);
+  return { ts: Date.now(), key, last4: String(row.key_last4 || ''), updatedAt: row.updated_at || null, broken: !key };
+}
+
+function setAiKeyCache(userId, entry) {
+  aiKeyCache.delete(userId);   // 넣은 순서 = 오래된 순서가 되게 지웠다 다시 넣는다
+  aiKeyCache.set(userId, entry);
+  if (aiKeyCache.size > AI_KEY_CACHE_MAX) aiKeyCache.delete(aiKeyCache.keys().next().value);
+  return entry;
+}
+
+// 읽기를 시작한 뒤에 저장 · 삭제가 끝났으면 그쪽 값이 더 새것이다 → 읽어 온 (낡은) 줄로 덮지 않는다.
+function cacheAiKeyRead(userId, row, startedAt) {
+  const cur = aiKeyCache.get(userId);
+  if (cur && cur.ts >= startedAt) return cur;
+  return setAiKeyCache(userId, aiKeyEntryFromRow(userId, row));
+}
+
+async function readAiKeyRow(userId) {
+  const rows = await restGet(`${AI_KEYS_TABLE}?user_id=eq.${encodeURIComponent(userId)}&select=key_cipher,key_last4,updated_at`);
+  return rows[0] || null;
+}
+
+async function getAiKeyEntry(userId) {
+  const hit = aiKeyCache.get(userId);
+  if (hit && Date.now() - hit.ts < AI_KEY_TTL) return hit;
+  if (aiKeyInflight.has(userId)) return aiKeyInflight.get(userId);
+  const startedAt = Date.now();
+  const p = (async () => {
+    try {
+      return cacheAiKeyRead(userId, await readAiKeyRow(userId), startedAt);
+    } catch (e) {
+      // Supabase 가 잠깐 흔들려도 방금까지 쓰던 키로 계속 돈다
+      if (hit) { console.error('[AI 키 조회 실패 → 직전 값 사용]', e.message); return hit; }
+      throw e;
+    } finally {
+      aiKeyInflight.delete(userId);
+    }
+  })();
+  aiKeyInflight.set(userId, p);
+  return p;
+}
+
+// 화면에 내려보내는 모양. 키 원문은 절대 넣지 않는다. null = 등록 안 함
+function aiKeyPublic(entry) {
+  if (!entry || (!entry.key && !entry.broken)) return null;
+  return { last4: entry.last4, updatedAt: entry.updatedAt, broken: entry.broken };
+}
+
+// AI 라우트 맨 앞에서 부른다. 쓸 수 있는 키가 있으면 { key }, 없으면 안내를 응답하고 null.
+//   401 은 쓰지 않는다 — 화면(apiFetch)이 401 을 '로그인 만료'로 읽고 로그인 화면을 띄우기 때문이다.
+async function aiKeyForRequest(req, res) {
+  if (!SUPABASE_ENABLED || !AI_KEY_CIPHER_KEY) {
+    res.json({ error: '서버에 AI 키 저장 설정이 없어 AI 기능을 쓸 수 없습니다.', code: 'ai_unavailable' });
+    return null;
+  }
+  let entry;
+  try {
+    entry = await getAiKeyEntry(req.user.id);
+  } catch (e) {
+    console.error('[AI 키 조회 실패]', e.message);
+    res.json({ error: 'AI 키를 확인하지 못했습니다. 잠시 뒤 다시 시도하세요.' });
+    return null;
+  }
+  if (entry.broken) {
+    res.json({ error: '저장된 AI 키를 읽지 못했습니다. 설정에서 키를 다시 등록하세요.', code: 'ai_key_invalid' });
+    return null;
+  }
+  if (!entry.key) {
+    res.json({ error: '주요 내용 · Insight 는 내 구글 AI 키를 등록해야 볼 수 있습니다.', code: 'no_ai_key' });
+    return null;
+  }
+  return { key: entry.key };
+}
+
+// 구글이 키 자체를 거절한 경우(지운 키 · 막힌 키)는 원문 오류 대신 '다시 등록하세요'로 알린다.
+function isGeminiKeyRejected(e) {
+  if (e?.status === 401 || e?.status === 403) return true;
+  return e?.status === 400 && /api[_ ]key/i.test(e.message || '');
+}
+function aiErrorBody(err) {
+  if (isGeminiKeyRejected(err)) {
+    return { error: '구글이 등록한 AI 키를 받지 않았습니다(지웠거나 막힌 키일 수 있습니다). 설정에서 키를 다시 등록하세요.', code: 'ai_key_invalid' };
+  }
+  return { error: err.message };
+}
+
+// 저장 전에 구글에 한 번 물어 쓸 수 있는 키인지 본다. 모델 목록 조회라 글 생성 한도를 쓰지 않는다.
+//   문제가 없으면 null, 있으면 { status, code?, error }.
+async function checkGeminiKey(key) {
+  let r;
+  try {
+    r = await fetchWithTimeout('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1',
+      { headers: geminiHeaders(key) }, 8000);
+  } catch {
+    return { status: 502, error: '구글에 키를 확인하지 못했습니다. 잠시 뒤 다시 저장하세요.' };
+  }
+  if (r.ok) return null;
+  if (r.status === 400 || r.status === 401) {
+    return { status: 400, code: 'ai_key_invalid', error: '구글이 이 키를 받지 않았습니다. AI Studio 에서 복사한 키가 맞는지 확인하세요.' };
+  }
+  if (r.status === 403) {
+    return { status: 400, code: 'ai_key_invalid', error: '이 키로는 Gemini API 를 쓸 수 없습니다. AI Studio 에서 만든 키인지, 키 사용 제한을 확인하세요.' };
+  }
+  if (r.status === 429) return { status: 429, error: '구글이 잠시 확인을 막았습니다. 1분쯤 뒤 다시 저장하세요.' };
+  return { status: 502, error: `구글에 키를 확인하지 못했습니다(HTTP ${r.status}). 잠시 뒤 다시 저장하세요.` };
+}
+
+// 본문 { key }. 구글에 확인한 뒤 암호화해 저장한다. 응답에는 끝 4자리만.
+app.put('/api/ai-key', async (req, res) => {
+  if (!SUPABASE_ENABLED || !AI_KEY_CIPHER_KEY) return res.status(503).json({ error: '서버에 AI 키 저장 설정이 없습니다.' });
+  const key = typeof req.body?.key === 'string' ? req.body.key.trim() : '';
+  // 지금 구글 키는 39자(AIza…)다. 모양이 바뀌어도 막히지 않게 글자 종류와 길이만 본다
+  if (!/^[A-Za-z0-9._-]{20,200}$/.test(key)) {
+    return res.status(400).json({ error: '구글 AI 키 모양이 아닙니다. AI Studio 에서 복사한 키를 그대로 붙여 넣으세요.', code: 'ai_key_invalid' });
+  }
+  const bad = await checkGeminiKey(key);
+  if (bad) return res.status(bad.status).json({ error: bad.error, code: bad.code });
+  const uid = req.user.id;
+  try {
+    const entry = await runAfter(aiKeyLocks, uid, async () => {
+      const updatedAt = new Date().toISOString();
+      const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${AI_KEYS_TABLE}?on_conflict=user_id`, {
+        method: 'POST',
+        headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify([{ user_id: uid, key_cipher: encryptAiKey(uid, key), key_last4: key.slice(-4), updated_at: updatedAt }]),
+      }, 5000);
+      if (!r.ok) throw new Error(`HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
+      return setAiKeyCache(uid, { ts: Date.now(), key, last4: key.slice(-4), updatedAt, broken: false });
+    });
+    res.json({ ok: true, aiKey: aiKeyPublic(entry) });
+  } catch (e) {
+    console.error('[AI 키 저장 실패]', e.message);
+    res.status(500).json({ error: '키를 저장하지 못했습니다. 잠시 뒤 다시 시도하세요.' });
+  }
+});
+
+app.delete('/api/ai-key', async (req, res) => {
+  if (!SUPABASE_ENABLED) return res.status(503).json({ error: '계정 저장소가 설정되지 않았습니다.' });
+  const uid = req.user.id;
+  try {
+    await runAfter(aiKeyLocks, uid, async () => {
+      const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${AI_KEYS_TABLE}?user_id=eq.${encodeURIComponent(uid)}`, {
+        method: 'DELETE', headers: { ...supabaseHeaders(), Prefer: 'return=minimal' },
+      }, 5000);
+      if (!r.ok) throw new Error(`HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
+      setAiKeyCache(uid, aiKeyEntryFromRow(uid, null));
+    });
+    res.json({ ok: true, aiKey: null });
+  } catch (e) {
+    console.error('[AI 키 삭제 실패]', e.message);
+    res.status(500).json({ error: '키를 지우지 못했습니다. 잠시 뒤 다시 시도하세요.' });
   }
 });
 
@@ -3627,8 +3836,9 @@ const MODEL_CANDIDATES = [
 
 let ACTIVE_MODEL = null; // 실제로 성공한 모델 이름
 
+// [P8] 서버 공용 키는 관리자 진단(/api/gemini-models) 전용이다. 주요 내용 · Insight 는 사용자 각자의 키로 돈다.
 if (!GEMINI_API_KEY) {
-  console.warn('[경고] .env 에 GEMINI_API_KEY 가 없습니다. (주요 내용 기능 비활성화)');
+  console.warn('[안내] .env 에 GEMINI_API_KEY 가 없습니다. (관리자 모델 진단만 꺼짐)');
 }
 
 const briefCache = new Map();            // url -> { ts, brief }
@@ -3682,8 +3892,13 @@ const GEMINI_SLOW_MODELS = {
 };
 function geminiTimeoutFor(model) { return GEMINI_SLOW_MODELS[model] || GEMINI_TIMEOUT_MS; }
 
-async function callGeminiOnce(model, prompt, limitOverrideMs) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+// [P8] 키는 주소가 아니라 헤더로 보낸다. 연결 오류 메시지에는 주소가 통째로 찍히고 그게 로그에 남기 때문이다.
+function geminiHeaders(apiKey) {
+  return { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey };
+}
+
+async function callGeminiOnce(model, prompt, limitOverrideMs, apiKey) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   // 남은 전체 시간이 모델 상한보다 짧으면 그만큼만 기다린다 (호출자가 넘겨준다)
   const limitMs = limitOverrideMs || geminiTimeoutFor(model);
   const controller = new AbortController();
@@ -3692,7 +3907,7 @@ async function callGeminiOnce(model, prompt, limitOverrideMs) {
     const r = await fetch(url, {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json' },
+      headers: geminiHeaders(apiKey),
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
@@ -3763,7 +3978,9 @@ function isGeminiCooling(model) {
 //  - 503 등 일시 장애    → 그 모델이 붐비는 것이므로 역시 다음 후보로 우회
 //  - 429(한도 초과)     → 그 모델을 쿨다운에 넣고 다음 후보로 우회
 //  - 응답 없음/연결 실패 → 역시 쿨다운에 넣고 다음 후보로 우회 (deadline 안에서만)
-async function callGeminiModels(prompt, deadline = Date.now() + GEMINI_TOTAL_BUDGET_MS) {
+//   [P8] apiKey = 요청한 사용자의 키. 결과는 { text, model } — 만든 모델을 전역 ACTIVE_MODEL 로 읽으면
+//   동시에 돈 다른 사람의 요청이 값을 바꿔 놓을 수 있다.
+async function callGeminiModels(prompt, apiKey, deadline = Date.now() + GEMINI_TOTAL_BUDGET_MS) {
   const base = ACTIVE_MODEL ? [ACTIVE_MODEL] : MODEL_CANDIDATES;
   // 쉬고 있는 모델은 건너뛴다. 다만 전부 쉬는 중이면 그냥 원래 목록대로 부딪쳐 본다
   //   (쿨다운이 실제보다 길게 잡혔을 수 있으므로 아예 못 부르는 상태는 만들지 않는다)
@@ -3784,24 +4001,24 @@ async function callGeminiModels(prompt, deadline = Date.now() + GEMINI_TOTAL_BUD
       break;
     }
     try {
-      const out = await callGeminiOnce(model, prompt, Math.min(geminiTimeoutFor(model), remain));
+      const out = await callGeminiOnce(model, prompt, Math.min(geminiTimeoutFor(model), remain), apiKey);
       if (ACTIVE_MODEL !== model) console.log(`[Gemini] 사용 모델 확정: ${model}`);
       ACTIVE_MODEL = model;
       geminiCooldown.delete(model);   // 성공했으면 쿨다운 해제
-      return out;
+      return { text: out, model };
     } catch (e) {
       lastErr = e;
       fails.push({ model, e });
       if (e.status === 404) {
         console.warn(`[Gemini] ${model} 사용 불가(404) → 다음 후보 시도`);
         // 확정돼 있던 모델이 갑자기 막혔다면 확정을 풀고 전체 후보를 다시 시도
-        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, deadline); }
+        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, apiKey, deadline); }
         continue; // 모델이 없는 경우만 다음 후보로
       }
       if (isTransientGeminiError(e)) {
         console.warn(`[Gemini] ${model} 일시 장애(${e.status}) → 다른 모델로 우회 시도`);
         // 확정 모델이 붐비는 중 → 확정을 풀고 나머지 후보들을 훑는다
-        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, deadline); }
+        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, apiKey, deadline); }
         continue;
       }
       if (e.status === 429) {
@@ -3810,7 +4027,7 @@ async function callGeminiModels(prompt, deadline = Date.now() + GEMINI_TOTAL_BUD
         const cool = Math.max(e.retryAfterMs || 0, GEMINI_COOLDOWN_MS);
         geminiCooldown.set(model, Date.now() + cool);
         console.warn(`[Gemini] ${model} 한도 초과(429) → ${Math.round(cool / 60000)}분간 쉬고 다음 후보 시도`);
-        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, deadline); }
+        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, apiKey, deadline); }
         continue;
       }
       if (e.noAnswer) {
@@ -3818,7 +4035,7 @@ async function callGeminiModels(prompt, deadline = Date.now() + GEMINI_TOTAL_BUD
         //   이 모델만 잠시 쉬게 하고 다음 후보로 넘어간다.
         geminiCooldown.set(model, Date.now() + GEMINI_NOANSWER_COOLDOWN_MS);
         console.warn(`[Gemini] ${e.message} → ${GEMINI_NOANSWER_COOLDOWN_MS / 60000}분간 쉬고 다음 후보 시도`);
-        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, deadline); }
+        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, apiKey, deadline); }
         continue;
       }
       throw e; // 400 등은 모델을 바꿔도 소용없으므로 위로 던진다
@@ -3903,11 +4120,11 @@ function enqueueGemini(task) {
 //   ② 429면 잠깐 기다렸다 자동 재시도(backoff). 구글이 알려준 대기 시간을 우선 사용.
 //   ③ 끝내 실패하면 사용자에게 '친절한 안내 메시지'를 던진다.
 // -----------------------------------------------------------------
-async function callGemini(prompt) {
+async function callGemini(prompt, apiKey) {
   const MAX_RETRY = 2; // 429 / 503 등일 때 최대 2번 더 시도
   for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
     try {
-      return await enqueueGemini(() => callGeminiModels(prompt));
+      return await enqueueGemini(() => callGeminiModels(prompt, apiKey));
     } catch (e) {
       // [추가] 503(모델 과부하) 등 일시 장애 : 짧게 기다렸다 다시 시도
       //   한도 초과(429)와 달리 금방 풀리는 경우가 많아 대기 시간을 더 짧게 잡는다.
@@ -3980,7 +4197,7 @@ function probeLongPrompt() {
 async function probeGeminiModel(model, long = false, ver = 'v1beta') {
   // ver 은 API 버전(v1beta / v1). Render 에서 특정 모델만 응답이 없을 때
   //   '경로 문제인지 모델 문제인지' 가르려고 바꿔 볼 수 있게 열어 뒀다.
-  const url = `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent`;
   const limitMs = long ? PROBE_LONG_TIMEOUT_MS : PROBE_TIMEOUT_MS;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), limitMs);
@@ -3989,7 +4206,7 @@ async function probeGeminiModel(model, long = false, ver = 'v1beta') {
     const r = await fetch(url, {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json' },
+      headers: geminiHeaders(GEMINI_API_KEY),
       body: JSON.stringify({
         contents: [{ parts: [{ text: long ? probeLongPrompt() : '{"ok":true} 만 출력해라.' }] }],
         generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
@@ -4025,7 +4242,7 @@ async function probeGeminiModel(model, long = false, ver = 'v1beta') {
 app.get('/api/gemini-models', requireAdminUser, async (req, res) => {
   if (!GEMINI_API_KEY) return res.json({ error: '.env 에 GEMINI_API_KEY 가 없습니다.' });
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`);
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models', { headers: geminiHeaders(GEMINI_API_KEY) });
     const data = await r.json();
     const usable = (data.models || [])
       .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
@@ -4076,8 +4293,10 @@ app.get('/api/deep-brief', async (req, res) => {
   const url = req.query.url;
   const title = String(req.query.title || '').slice(0, 200);
 
-  if (!GEMINI_API_KEY) return res.json({ error: '.env 에 GEMINI_API_KEY 가 없습니다.' });
   if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'url이 필요합니다.' });
+  // [P8] 키 확인을 캐시보다 먼저 한다 — 키가 없는 사람에게는 남이 만든 결과가 있어도 보여 주지 않는다(결정 9).
+  const ai = await aiKeyForRequest(req, res);
+  if (!ai) return;
 
   const cached = briefCache.get(url);
   if (cached && Date.now() - cached.ts < BRIEF_TTL) return res.json(cached.brief);
@@ -4104,7 +4323,7 @@ app.get('/api/deep-brief', async (req, res) => {
     //   품질은 크게 안 떨어지면서 토큰(=사용량)을 아낄 수 있다.
     const bodyForAI = body.slice(0, 3500);
 
-    const raw = await callGemini(`${BRIEF_PROMPT}\n\n[기사 제목]\n${title}\n\n[기사 본문]\n${bodyForAI}`);
+    const { text: raw, model } = await callGemini(`${BRIEF_PROMPT}\n\n[기사 제목]\n${title}\n\n[기사 본문]\n${bodyForAI}`, ai.key);
 
     let brief;
     try {
@@ -4113,13 +4332,13 @@ app.get('/api/deep-brief', async (req, res) => {
       return res.json({ error: 'AI 응답을 해석하지 못했습니다. 다시 시도해 주세요.' });
     }
 
-    brief.model = ACTIVE_MODEL || 'Gemini';
+    brief.model = model || 'Gemini';
     if (partial) brief.partial = true;   // 요약문만으로 정리한 경우
     briefCache.set(url, { ts: Date.now(), brief });
     res.json(brief);
   } catch (err) {
     console.error('[deep-brief]', err.message);
-    res.json({ error: err.message });
+    res.json(aiErrorBody(err));
   }
 });
 
@@ -4193,8 +4412,10 @@ app.get('/api/insight', async (req, res) => {
   const url = req.query.url;
   const title = String(req.query.title || '').slice(0, 200);
 
-  if (!GEMINI_API_KEY) return res.json({ error: '.env 에 GEMINI_API_KEY 가 없습니다.' });
   if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'url이 필요합니다.' });
+  // [P8] deep-brief 와 같다 : 키 확인이 캐시보다 먼저
+  const ai = await aiKeyForRequest(req, res);
+  if (!ai) return;
 
   const cached = insightCache.get(insightKey(url));
   if (cached && Date.now() - cached.ts < INSIGHT_TTL) return res.json(cached.insight);
@@ -4219,7 +4440,7 @@ app.get('/api/insight', async (req, res) => {
 
     const bodyForAI = body.slice(0, 3500);   // 토큰 절약 (deep-brief와 동일)
 
-    const raw = await callGemini(`${INSIGHT_PROMPT}\n\n[기사 제목]\n${title}\n\n[기사 본문]\n${bodyForAI}`);
+    const { text: raw, model } = await callGemini(`${INSIGHT_PROMPT}\n\n[기사 제목]\n${title}\n\n[기사 본문]\n${bodyForAI}`, ai.key);
 
     let insight;
     try {
@@ -4228,13 +4449,13 @@ app.get('/api/insight', async (req, res) => {
       return res.json({ error: 'AI 응답을 해석하지 못했습니다. 다시 시도해 주세요.' });
     }
 
-    insight.model = ACTIVE_MODEL || 'Gemini';
+    insight.model = model || 'Gemini';
     if (partial) insight.partial = true;
     insightCache.set(insightKey(url), { ts: Date.now(), insight });
     res.json(insight);
   } catch (err) {
     console.error('[insight]', err.message);
-    res.json({ error: err.message });
+    res.json(aiErrorBody(err));
   }
 });
 
