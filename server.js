@@ -159,8 +159,9 @@ if (!AUTH_ENABLED) {
 }
 if (!ADMIN_EMAILS.size) console.warn('[경고] ADMIN_EMAILS 가 비어 있어 관리자가 없습니다.');
 
-// 첫 화면에서 /api 요청이 10개쯤 동시에 나간다. 매번 Supabase 에 물으면 그만큼 느려지므로 잠시 담아 둔다.
-const TOKEN_TTL = 5 * 60 * 1000;
+// 첫 화면에서 /api 요청이 10개쯤 동시에 나간다. 매번 Supabase 에 물으면 그만큼 느려지므로 담아 둔다.
+//   기간은 토큰 만료(Supabase 기본 1시간)까지다. 5분마다 다시 물으면 Render 에서 앱을 열 때마다
+//   Supabase 왕복이 붙는다. 권한 해제는 이 캐시가 아니라 허용 상태 캐시(ACCESS_TTL, 2분)가 맡으므로 늦어지지 않는다.
 const TOKEN_CACHE_MAX = 500;
 const tokenCache = new Map();      // sha256(토큰) -> { exp, user }   user=null 은 '무효 토큰'
 const tokenInflight = new Map();   // 같은 토큰을 동시에 물으면 한 번만 확인한다
@@ -210,7 +211,7 @@ async function verifyToken(token) {
   if (tokenInflight.has(key)) return tokenInflight.get(key);
   const p = fetchAuthUser(token).then((user) => {
     tokenCache.delete(key);
-    tokenCache.set(key, { exp: Math.min(Date.now() + TOKEN_TTL, jwtExp), user });
+    tokenCache.set(key, { exp: jwtExp, user });
     while (tokenCache.size > TOKEN_CACHE_MAX) tokenCache.delete(tokenCache.keys().next().value);
     return user;
   }).finally(() => tokenInflight.delete(key));

@@ -177,7 +177,7 @@
   - 구글 OAuth 는 앱 게시(프로덕션)를 권장 — 테스트 상태는 7일마다 로그인이 풀린다.
 - **P2 결과 (2026-10-09, 브랜치 `feat/personalize`)**
   - 결정 : ① 권한 해제 = `allowed_users` 행 삭제(다시 신청 가능) ② 공개 파일을 허용 목록으로 좁힘 ③ 로컬용 캐시 동기화 끄기 스위치 `SUPABASE_CACHE_SYNC=off` 추가(값이 없으면 지금과 같음).
-  - 서버 : `Authorization: Bearer <Supabase 토큰>` 을 `/auth/v1/user` 로 확인(토큰 해시 기준 최대 5분 · 토큰 만료 전까지 메모리 보관, 같은 토큰 동시 요청은 1번만 확인). **구글 로그인 + 이메일 확인된 계정만 인정**(이메일/비밀번호 가짜 가입으로 관리자 이메일을 쓰는 것 방지). 허용 상태는 이메일별 2분 캐시, 관리 동작 직후 즉시 지움.
+  - 서버 : `Authorization: Bearer <Supabase 토큰>` 을 `/auth/v1/user` 로 확인(토큰 해시 기준, **토큰 만료(최대 1시간)까지** 메모리 보관 — 2026-10-09 사용자 결정으로 5분에서 변경. 같은 토큰 동시 요청은 1번만 확인). **구글 로그인 + 이메일 확인된 계정만 인정**(이메일/비밀번호 가짜 가입으로 관리자 이메일을 쓰는 것 방지). 허용 상태는 이메일별 2분 캐시, 관리 동작 직후 즉시 지움.
   - 관문 : `app.use('/api', authGate)`. 토큰 없음·무효 **401** `login_required` / 미허용 **403** `not_allowed` + state / 설정 없음·Supabase 무응답 **503** `auth_unavailable`(닫힘). `/api/me` · `/api/access-request` 만 로그인만으로 통과. 관리자 전용 : 키워드 저장 POST · `/api/gemini-models` · `/api/admin/users`(GET 목록 · POST 승인/거절/직접추가 · DELETE 해제).
   - `ADMIN_TOKEN` · `/api/admin/check` · 비밀번호 잠금 창은 코드에서 삭제. **Render 의 `ADMIN_TOKEN` 은 P11 배포 때 지운다**(운영은 그때까지 P0 코드).
   - 공개 파일 : `privacy.html` · 아이콘 4종 · `manifest.webmanifest` 만. 예전엔 `server.js` · `keywords.json` · `.md` · `sql/` · `node_modules` 까지 열려 있었다. 화면이 새 그림 파일을 쓰면 server.js `PUBLIC_FILES` 에 더해야 한다.
@@ -185,8 +185,8 @@
   - 진단 API 는 이제 관리자로 로그인한 화면의 개발자 도구 콘솔에서 `await (await apiFetch('/api/gemini-models?test=1')).json()` 으로 부른다.
   - 실측 (로컬, 가짜 Supabase) : 관문 시나리오 26개(토큰 없음 · 엉터리 · 만료 · 이메일 가입 관리자 · 미확인 이메일 → 401, 신청 → 대기 → 승인 → 거절 → 해제, 재신청 막힘, 비관리자 관리 API 403 등) 모두 기대대로. 동시 요청 10개 → Supabase 확인 1번. 공개 목록 밖 파일 404. 브라우저 : 손님은 로그인 화면만 · API 요청 0건, 대기 기기는 새로고침해도 `/api/me` 1건만, 해제된 사용자는 다음 새로고침에 신청 화면.
   - 첫 화면 (로그인 상태, 새로고침 3회) : 첫 API 요청 시작 **약 100ms → 135ms** (+35ms = supabase-js 실행). 첫 방문 기기는 supabase-js 55KB(gzip) 내려받기가 더해진다.
-    - **이 값은 '토큰 확인 캐시가 있을 때'만이다.** 가짜 Supabase 가 같은 PC 에 있어서 왕복이 0 에 가깝다. Render 에서는 ① 토큰 확인 캐시(5분)가 지난 뒤 첫 요청마다 Render→Supabase `/auth/v1/user` 왕복, ② 1시간 넘게 쉬었다 열면 브라우저→Supabase 토큰 갱신이 첫 요청 앞에 붙는다. **P11 에서 운영 실측한다.**
-    - 줄일 방법(미적용, 결정 필요) : 토큰 확인 결과를 5분이 아니라 토큰 만료(최대 1시간)까지 담아 두기. 권한 해제는 별도의 허용 상태 캐시(2분)가 맡으므로 해제가 늦어지지 않는다.
+    - **이 값은 '토큰 확인 캐시가 있을 때'만이다.** 가짜 Supabase 가 같은 PC 에 있어서 왕복이 0 에 가깝다. Render 에서는 ① 새 토큰(약 1시간마다 갱신)의 첫 요청에 Render→Supabase `/auth/v1/user` 왕복 1번, ② 1시간 넘게 쉬었다 열면 브라우저→Supabase 토큰 갱신이 첫 요청 앞에 붙는다. **P11 에서 운영 실측한다.**
+    - 적용함(2026-10-09) : 토큰 확인 결과를 5분이 아니라 토큰 만료(최대 1시간)까지 담아 둔다. 권한 해제는 별도의 허용 상태 캐시(2분)가 맡으므로 해제가 늦어지지 않는다. 가짜 Supabase 실측 : 같은 토큰 5회 → 확인 1회, 3초짜리 토큰은 만료 뒤 401.
   - **로컬에서 실계정 시험하려면** `.env` 에 `SUPABASE_URL` · `SUPABASE_SERVICE_KEY` · `SUPABASE_CACHE_SYNC=off` 를 넣는다(사용자 작업). 이때 로컬 `keywords.json` 은 운영 키워드로 덮어써진다(서버가 Supabase 값을 파일 캐시에 따라 쓴다).
     - **포트를 고정한다.** `autoPort` 는 실행할 때마다 포트가 바뀐다(이번에 58886 → 60263). Redirect URLs 에 없는 주소로 돌아가려 하면 Supabase 는 Site URL(운영 onrender)로 보내고, 로그인 정보(PKCE)는 localhost 에 있어 **조용히 실패**한다. → 3000 번을 비우고(예전에 켜 둔 `node server.js` 종료) `http://localhost:3000/**` 하나만 등록. 구글 로그인 뒤 onrender 주소로 가 버리면 로컬 주소가 등록 안 된 것이다.
     - **로컬도 운영 데이터를 쓴다** (캐시 사본만 꺼진다) :
