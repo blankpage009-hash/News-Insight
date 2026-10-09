@@ -523,7 +523,9 @@ async function getCommonKw() {
 }
 
 const USER_SETTINGS_TABLE = 'user_settings';
-const USER_KW_TTL = 10 * 60 * 1000;    // 이 서버만 쓰므로 저장 때 바로 바뀐다. 기간은 혹시 모를 어긋남의 상한일 뿐
+// 이 서버만 쓰므로 저장 때 바로 바뀐다. 기간은 혹시 모를 어긋남의 상한일 뿐.
+//   10분이면 쉬었다 연 첫 기사 요청에 Supabase 왕복(운영 실측 +230ms)이 붙어서 하루로 늘렸다(P11).
+const USER_KW_TTL = 24 * 60 * 60 * 1000;
 const USER_KW_CACHE_MAX = 500;
 const userKwCache = new Map();         // user id -> { ts, keywords }
 const userKwInflight = new Map();
