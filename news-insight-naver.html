@@ -132,6 +132,12 @@
   integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
   crossorigin="anonymous" defer></script>
 <script>
+  // 앱 버전 표시 (헤더 · 모바일 헤더 · 로그인 화면). 버전을 올릴 때는 이 값 하나만 바꾼다.
+  //   data-app-version 이 붙은 자리에 DOMContentLoaded 때 채운다. 자리 안의 글자는 스크립트가 돌기 전 기본값이다.
+  const APP_VERSION = 'v3.0';
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-app-version]').forEach((el) => { el.textContent = APP_VERSION; });
+  });
   // 서버(server.js sendAppHtml)가 이 자리에 { supabaseUrl, anonKey } 를 끼워 넣는다. 파일을 그대로 열면 null.
   const AUTH_CONFIG = /*__AUTH_CONFIG__*/null;
   // 마지막으로 확인한 허용 상태 : 'admin' | 'approved' | 'none' | 'pending' | 'rejected'
@@ -1017,7 +1023,9 @@
   .ag-box { width: 100%; max-width: 380px; border: 2px solid rgb(var(--c-paper)); background: rgb(var(--c-ink)); }
   .ag-head { padding: 22px 24px 16px; border-bottom: 2px solid rgb(var(--c-paper)); }
   .ag-brand { font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
-  .ag-sub { margin-top: 6px; font-size: 12px; line-height: 1.5; color: rgb(var(--c-muted)); }
+  /* 헤더 부제와 같은 말투 : 대문자 · 자간 넓게, 버전 숫자만 소문자 그대로 */
+  .ag-sub { margin-top: 6px; font-size: 12px; line-height: 1.5; color: rgb(var(--c-muted)); text-transform: uppercase; letter-spacing: .08em; }
+  .ag-sub .ag-ver { margin-left: 4px; text-transform: none; letter-spacing: normal; }
   .ag-body { display: flex; flex-direction: column; gap: 12px; padding: 20px 24px 24px; }
   .ag-msg { font-size: 14px; line-height: 1.7; word-break: keep-all; }
   .ag-msg b { font-weight: 700; }
@@ -1695,7 +1703,7 @@
     <div class="ag-box">
       <div class="ag-head">
         <div id="ag-title" class="ag-brand">Beyond News</div>
-        <div class="ag-sub">허용된 사용자만 쓸 수 있는 뉴스 모아보기</div>
+        <div class="ag-sub">Real-Time Wire Desk <span class="ag-ver" data-app-version>v3.0</span></div>
       </div>
       <div id="ag-body" class="ag-body" aria-live="polite">
         <p class="ag-msg">로그인 정보를 확인하는 중입니다…</p>
@@ -1720,10 +1728,10 @@
             </svg>
             <span class="logo-word">Beyond News</span>          </span>
         </h1>
-        <p id="app-subtitle" class="font-sans text-muted uppercase tracking-[0.08em] leading-none text-[0.75rem] lg:text-[0.87rem] pb-[2px] whitespace-nowrap hidden sm:block">Real-Time Wire Desk <span class="text-[calc(0.7125rem+1px)] tracking-normal normal-case ml-1.5">v3.0</span></p>
+        <p id="app-subtitle" class="font-sans text-muted uppercase tracking-[0.08em] leading-none text-[0.75rem] lg:text-[0.87rem] pb-[2px] whitespace-nowrap hidden sm:block">Real-Time Wire Desk <span class="text-[calc(0.7125rem+1px)] tracking-normal normal-case ml-1.5" data-app-version>v3.0</span></p>
       </div>
       <!-- 부제가 숨는 좁은 화면(sm 미만)에서는 로고 글자 아래(글자 시작선에 맞춤)에 작게 보인다 -->
-      <p class="sm:hidden ml-[35px] mt-2 text-[calc(0.65rem+1px)] font-normal leading-none text-muted whitespace-nowrap">Real-Time Wire Desk&ensp;v3.0</p>
+      <p class="sm:hidden ml-[35px] mt-2 text-[calc(0.65rem+1px)] font-normal leading-none text-muted whitespace-nowrap">Real-Time Wire Desk&ensp;<span data-app-version>v3.0</span></p>
     </div>
 
     <!-- [추가] Phase 7 D1 · 시안 01번 : 헤더 가운데 검색창 (데스크톱 전용)
