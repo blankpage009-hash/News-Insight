@@ -1766,6 +1766,8 @@ async function fetchBreaking(limit = 10, terms = ['속보'], exclude = null) {
 // 실제로 쓰이는 조합은 '화면 종류 × 필터 조합'이라 수십 개 수준이다.
 // [P6] 전체 화면이 섹션 7칸으로 나뉘어 필터 조합 하나에 7칸을 쓴다 → 120 에서 240 으로 늘렸다.
 //   대신 칸 하나가 예전 화면 통째 칸(운영 80KB 남짓)의 1/7 이라, 메모리 상한은 예전(120 × 80KB)보다 작다.
+// [P6-2] 브리핑(소스 6칸) · 엄선 목록(4곳 소스 20칸)도 칸을 나눠 프리워밍 칸이 13 → 34칸이 됐다(로컬 실측).
+//   칸이 작아(대부분 10KB 아래) 240 은 그대로 둔다. 프리워밍이 30분마다 다시 넣어 '최근'으로 올리므로 밀려나지 않는다.
 const RESP_CACHE_MAX = 240;
 const respCache = new Map();      // key -> { ts, value }   (Map = 삽입순 유지 → LRU)
 const respInflight = new Map();   // key -> Promise         (진행 중인 계산)
@@ -1829,6 +1831,30 @@ async function cachedResponse(key, ttl, producer) {
   }
 
   return runProducer(key, producer);
+}
+
+// [P6-2] 여러 칸을 읽어 '고르는' 화면(브리핑 · 엄선 목록)의 고른 결과를 기억해 둔다.
+//   칸을 나누면서 고르기를 요청마다 하게 됐는데, 로컬 실측 브리핑 6~16ms · 엄선 목록 최대 7ms 다.
+//   무료 서버는 CPU 가 작아 이 값이 몇 배로 늘 수 있고, 첫 화면(브리핑)에 그대로 얹힌다.
+//   열쇠에 칸의 '값 객체'를 넣는다 : 칸이 새로 만들어지면 객체가 바뀌어 저절로 다시 고른다.
+//   그래서 화면 통째 칸처럼 낡은 칸의 결과를 '지금' 시각으로 찍어 오래 붙잡는 일이 없다.
+//   respCache 에 넣지 않는다 — 재배포 사본에 실리지 않아도 되고, 섹션 칸을 밀어내면 안 된다.
+const PICK_MEMO_MAX = 100;
+const pickMemo = new Map();          // 열쇠 -> 고른 결과 (돌려받은 쪽은 고치지 말 것)
+const pickValueIds = new WeakMap();  // 칸 값 객체 -> 번호 (객체가 버려지면 같이 사라진다)
+let pickValueSeq = 0;
+
+function memoPick(key, values, pick) {
+  const ids = values.map((v) => {
+    if (!pickValueIds.has(v)) pickValueIds.set(v, ++pickValueSeq);
+    return pickValueIds.get(v);
+  });
+  const k = `${key}|${ids.join(',')}`;
+  if (pickMemo.has(k)) return pickMemo.get(k);
+  const out = pick();
+  pickMemo.set(k, out);
+  while (pickMemo.size > PICK_MEMO_MAX) pickMemo.delete(pickMemo.keys().next().value);
+  return out;
 }
 
 // 캐시 수명 (밀리초)
@@ -2232,10 +2258,6 @@ function briefingConfig(kwMap) {
   return { sections, per };
 }
 
-function briefingIsDefault(cfg) {
-  return !cfg.sections.length && !Object.keys(cfg.per).length;
-}
-
 // 고른 섹션(없으면 기본 6개) + 모자랄 때 채울 기본 섹션
 function briefingSourcePlan(cfg) {
   const main = (cfg.sections.length ? cfg.sections : BRIEFING_SOURCES.map((s) => s.cat))
@@ -2244,33 +2266,62 @@ function briefingSourcePlan(cfg) {
   return { main, fill };
 }
 
-function buildBriefingKey({ limit, dateFrom, dateTo, hours }, kwMap) {
+// [P6-2] 브리핑 캐시를 화면 통째 1칸이 아니라 '후보 수집 칸'으로 나눈다.
+//   예전 열쇠는 소스 섹션 6개의 검색어 · 브리핑 설정 · 건수를 모두 합친 해시라, 그중 하나만 다른 사용자도
+//   (경제 키워드 · 브리핑 제외어 · 노출 건수) 브리핑을 통째로 새로 만들었다(네이버 9~10회).
+//   이제 칸은 '네이버에 무엇을 묻는가'로만 나눈다 : 소스 섹션 1개(그 섹션 검색어) 또는 브리핑 키워드 1개.
+//   사람마다 다른 Brief 제외어 · 태그 · 고르기(selectBriefing)는 요청마다 한다.
+//   화면 통째 칸을 겉에 두지 않는 이유는 /api/all/sections 와 같다(낡은 칸을 '지금' 시각으로 찍게 됨).
+//   칸에는 고르기 전 후보만 있으므로 선발 규칙을 바꿔도 칸 이름을 바꿀 필요가 없다.
+//   반대로 칸에 담는 내용(검색 건수 · 붙이는 값)을 바꾸면 이름(briefsrc · briefkw)을 바꿔야
+//   재배포 사본에서 되살린 옛 모양의 칸을 쓰지 않는다.
+
+// 소스 섹션 하나의 후보 칸. 섹션 화면의 '포함/제외 키워드'로 찾는다.
+function briefingSourcePart(src, kwMap, { dateFrom, dateTo, hours }) {
+  const { terms, exclude } = resolveSectionKw(kwMap, { key: src.cat, terms: src.terms });
+  // 속보는 '최근 1시간' 규칙으로 거르고 기간을 검색에 넘기지 않는다 → 열쇠에서도 빼서 기간이 달라도 같이 쓴다
+  const range = src.cat === 'breaking' ? '||' : `${dateFrom || ''}|${dateTo || ''}|${hours || ''}`;
+  return {
+    key: `briefsrc/${src.cat}|${range}|${kwSig([{ key: src.cat, terms: src.terms }], kwMap)}`,
+    run: async () => {
+      const items = src.cat === 'breaking'
+        ? await fetchBreaking(10, terms, exclude)
+        : (await searchByTerms(terms, { display: 10, dateFrom, dateTo, hours, domain: src.domain, exclude })).slice(0, 10);
+      return { items: items.map((it) => ({ ...it, cat: src.cat })) };
+    },
+  };
+}
+
+// 키워드 하나의 후보 칸. 원문 검증(verify)은 기사마다 언론사 페이지를 긁어 느리므로 끄고,
+//   대신 제목에 키워드가 들어간 기사만 쓴다(본문에 스치기만 한 기사는 대개 다른 이야기다).
+//   10건으로 자르기 전 목록을 담는다. 예전처럼 Brief 제외어를 먼저 걸고 잘라야
+//   제외어를 쓴 사람도 10건까지 받는다.
+function briefingKeywordPart(word, { dateFrom, dateTo, hours }) {
+  return {
+    key: `briefkw/${word}|${dateFrom || ''}|${dateTo || ''}|${hours || ''}`,
+    run: async () => {
+      const items = await searchByTerms([word], { display: 10, dateFrom, dateTo, hours, verify: false });
+      return { items: items.filter((it) => textContainsTerm(it.title, word)) };
+    },
+  };
+}
+
+// 브리핑이 쓰는 칸 전부. 화면 요청 · 프리워밍 · 재배포 사본이 모두 이것으로 열쇠를 만들어야 칸이 맞는다.
+//   fill(고르지 않은 기본 섹션)은 화면 요청에서는 모자랄 때만 부른다.
+function briefingParts({ dateFrom, dateTo, hours }, kwMap) {
+  const range = { dateFrom, dateTo, hours };
   const cfg = briefingConfig(kwMap);
   const { main, fill } = briefingSourcePlan(cfg);
-  const sig = kwSig([...main, ...fill].map((s) => ({ key: s.cat, terms: s.terms })), kwMap);
-  // 설정이 비어 있으면 예전 키와 똑같이 둔다 → 저장된 설정에 briefing 이 없는 프리워밍과도 키가 맞는다
-  const cfgSig = briefingIsDefault(cfg) ? '' : `|${shortHash(JSON.stringify(cfg))}`;
-  // 'briefing3' : 선발 규칙이 바뀌면(같은 내용 판정 · 속보 2건 등) 숫자를 올린다. 이름을 바꿔야 재배포 너머로
-  //   되살린 옛 규칙의 캐시를 첫 화면에 내보내지 않는다. (3 = 요약문 비교 추가)
-  return `briefing3|${limit}|${dateFrom || ''}|${dateTo || ''}|${hours || ''}|${sig}${cfgSig}`;
-}
-
-// 섹션 하나에서 후보 수집. 섹션 화면의 '포함/제외 키워드'로 찾고, Brief 전용 제외어를 한 번 더 건다.
-async function fetchBriefingSource(src, kwMap, { dateFrom, dateTo, hours }, briefExclude = []) {
-  const { terms, exclude } = resolveSectionKw(kwMap, { key: src.cat, terms: src.terms });
-  const items = src.cat === 'breaking'
-    ? await fetchBreaking(10, terms, exclude)
-    : (await searchByTerms(terms, { display: 10, dateFrom, dateTo, hours, domain: src.domain, exclude })).slice(0, 10);
-  return applyExcludeList(items, briefExclude).map((it) => ({ ...it, cat: src.cat }));
-}
-
-// 키워드 하나에서 후보 수집. 원문 검증(verify)은 기사마다 언론사 페이지를 긁어 느리므로 끄고,
-//   대신 제목에 키워드가 들어간 기사만 쓴다(본문에 스치기만 한 기사는 대개 다른 이야기다).
-//   태그는 키워드(mykw) + 그 키워드를 둔 섹션.
-async function fetchBriefingKeyword(word, sec, { dateFrom, dateTo, hours }, briefExclude = []) {
-  const items = await searchByTerms([word], { display: 10, dateFrom, dateTo, hours, verify: false });
-  return applyExcludeList(items.filter((it) => textContainsTerm(it.title, word)), briefExclude).slice(0, 10)
-    .map((it) => ({ ...it, cat: 'mykw', cats: ['mykw', sec], kw: word }));
+  // 같은 키워드를 여러 섹션에 넣었으면 한 번만 찾는다 (앞 섹션 태그)
+  const words = Object.entries(cfg.per).flatMap(([sec, v]) => v.include.map((w) => ({ sec, w })))
+    .filter((x, i, a) => a.findIndex((y) => y.w === x.w) === i);
+  const srcPart = (src) => ({ src, ...briefingSourcePart(src, kwMap, range) });
+  return {
+    cfg,
+    main: main.map(srcPart),
+    words: words.map(({ sec, w }) => ({ sec, w, ...briefingKeywordPart(w, range) })),
+    fill: fill.map(srcPart),
+  };
 }
 
 // 브리핑은 열 건 남짓이라 비슷한 기사 둘이 나란히 뜨면 바로 눈에 띈다. 그래서 다른 화면보다 엄하게 본다.
@@ -2419,31 +2470,36 @@ function selectBriefing(groups, limit) {
 }
 
 async function buildBriefing({ limit, dateFrom, dateTo, hours }, kwMap) {
-  const range = { dateFrom, dateTo, hours };
-  const cfg = briefingConfig(kwMap);
-  const { main, fill } = briefingSourcePlan(cfg);
+  const { cfg, main, words, fill } = briefingParts({ dateFrom, dateTo, hours }, kwMap);
+  const get = (p) => cachedResponse(p.key, TTL_SECTION, p.run);
   const exOf = (sec) => (cfg.per[sec] && cfg.per[sec].exclude) || [];
-  // 같은 키워드를 여러 섹션에 넣었으면 한 번만 찾는다 (앞 섹션 태그)
-  const words = Object.entries(cfg.per).flatMap(([sec, v]) => v.include.map((w) => ({ sec, w })))
-    .filter((x, i, a) => a.findIndex((y) => y.w === x.w) === i);
+  // 칸 말고 고르기를 바꾸는 값 : 건수 · 브리핑 설정(고른 섹션 순서 · 키워드와 그 섹션 · Brief 제외어)
+  const memoKey = `briefing|${limit}|${JSON.stringify(cfg)}`;
 
   // 1) 고른 섹션 + 섹션별 키워드를 한꺼번에 수집 (카테고리별로 따로 받아 속보 쏠림 방지)
-  const [mainLists, kwLists] = await Promise.all([
-    Promise.all(main.map((src) => fetchBriefingSource(src, kwMap, range, exOf(src.cat)))),
-    Promise.all(words.map(({ sec, w }) => fetchBriefingKeyword(w, sec, range, exOf(sec)))),
-  ]);
-  const groups = [
-    ...main.map((src, i) => ({ id: src.cat, tier: 1, items: mainLists[i] })),
-    ...words.map(({ sec, w }, i) => ({ id: `kw:${sec}:${w}`, tier: 2, items: kwLists[i] })),
+  const [mainData, kwData] = await Promise.all([Promise.all(main.map(get)), Promise.all(words.map(get))]);
+  // Brief 제외어와 키워드 태그(키워드 + 그 키워드를 둔 섹션)는 칸을 읽은 뒤에 건다.
+  //   칸은 사람마다 다른 이 값들과 상관없이 같이 쓴다. 칸의 배열 · 기사는 고치지 않는다(selectBriefing 도 복사본만 고친다).
+  const firstGroups = () => [
+    ...main.map((p, i) => ({ id: p.src.cat, tier: 1, items: applyExcludeList(mainData[i].items, exOf(p.src.cat)) })),
+    ...words.map((p, i) => ({
+      id: `kw:${p.sec}:${p.w}`,
+      tier: 2,
+      items: applyExcludeList(kwData[i].items, exOf(p.sec)).slice(0, 10)
+        .map((it) => ({ ...it, cat: 'mykw', cats: ['mykw', p.sec], kw: p.w })),
+    })),
   ];
+  const firstValues = [...mainData, ...kwData];
 
-  let items = selectBriefing(groups, limit);
+  let items = memoPick(`${memoKey}|1`, firstValues, () => selectBriefing(firstGroups(), limit));
 
   // 2) 그래도 모자라면 고르지 않은 기본 섹션으로 채운다 (모자랄 때만 불러 네이버 호출을 아낀다)
   if (items.length < limit && fill.length) {
-    const fillLists = await Promise.all(fill.map((src) => fetchBriefingSource(src, kwMap, range)));
-    fill.forEach((src, i) => groups.push({ id: src.cat, tier: 3, items: fillLists[i] }));
-    items = selectBriefing(groups, limit);
+    const fillData = await Promise.all(fill.map(get));
+    items = memoPick(`${memoKey}|2`, [...firstValues, ...fillData], () => selectBriefing([
+      ...firstGroups(),
+      ...fill.map((p, i) => ({ id: p.src.cat, tier: 3, items: fillData[i].items })),
+    ], limit));
   }
 
   return { items };
@@ -2455,11 +2511,7 @@ app.get('/api/briefing', async (req, res) => {
   const kwMap = await kwMapFor(req);
 
   try {
-    res.json(await cachedResponse(
-      buildBriefingKey(opts, kwMap),
-      TTL_SECTION,
-      () => buildBriefing(opts, kwMap),
-    ));
+    res.json(await buildBriefing(opts, kwMap));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '브리핑을 구성하지 못했습니다.' });
@@ -3106,11 +3158,13 @@ registerSubSectionRoute('economy', ECONOMY_SECTIONS); // [추가] 경제 하위 
 //     · 최신성  : 얼마나 최근 기사인지
 //     · 교차노출 : 하위 섹션 여러 곳에 동시에 걸렸는지
 //
-//   캐시를 아끼려고 '건수(display)'와 '정렬(sort)'은 캐시 키에 넣지 않는다.
-//   항상 DIGEST_KEEP 건까지 순위를 매겨 캐시해 두고, 응답할 때만 자르고 늘어놓는다.
+//   [P6-2] 캐시는 엄선 목록 통째 1칸이 아니라 '소스 섹션(상위 자신 + 하위 섹션)마다 후보 1칸'이다.
+//   예전 열쇠는 소스 섹션 전부의 검색어를 합친 해시라, 그중 하나만 바꾼 사용자도 엄선 목록을
+//   통째로 새로 만들었다(경제 9회). 이제 바꾼 섹션의 칸만 새로 부르고 나머지는 남과 같이 쓴다.
+//   합치기 · 점수 · 고르기는 요청마다 한다. 그래서 '건수(display)'와 '정렬(sort)'은 칸 열쇠에 없다.
 //   → 설정에서 노출 건수를 3 → 10 으로 바꿔도 네이버를 다시 부르지 않는다.
 // -----------------------------------------------------------------
-const DIGEST_KEEP = 30;             // 캐시에 담아 둘 최대 건수 (화면 노출 건수 최대치와 같다)
+const DIGEST_KEEP = 30;             // 순위를 매겨 둘 최대 건수 (화면 노출 건수 최대치와 같다)
 const DIGEST_POOL_PER_SECTION = 20; // 섹션마다 후보로 모아 둘 최대 건수
 const DIGEST_SPREAD_PENALTY = 1.5;  // 같은 섹션에서 연달아 뽑을 때의 감점 (한 곳이 독식하지 않게)
 
@@ -3131,23 +3185,36 @@ function digestSources(base, SECTIONS) {
   return parent ? [parent, ...SECTIONS] : [...SECTIONS];
 }
 
-function buildDigestKey(base, sources, { dateFrom, dateTo, hours }, kwMap) {
-  return `${base}/digest|${dateFrom || ''}|${dateTo || ''}|${hours || ''}|${kwSig(sources, kwMap)}`;
+// 엄선 목록이 쓰는 칸 전부(소스 섹션마다 1칸). 화면 요청 · 프리워밍 · 재배포 사본이 모두 이것으로 열쇠를 만든다.
+//   'digsrc/' 은 예전 통째 칸('<base>/digest|…')과 겹치지 않게 붙인 새 이름이다.
+//   섹션 키가 같으면 검색 도메인도 같으므로(섹션 정의가 하나) 열쇠에 도메인은 넣지 않는다.
+function digestParts(sources, { dateFrom, dateTo, hours }, kwMap) {
+  return sources.map((sec) => ({
+    key: `digsrc/${sec.key}|${dateFrom || ''}|${dateTo || ''}|${hours || ''}|${kwSig([sec], kwMap)}`,
+    run: async () => {
+      // 정렬은 화면 설정과 무관하게 항상 정확도순(sim) : '몇 번째로 나왔는지'를 점수로 써야 하고,
+      //   엄선 목록은 최신순으로 긁어오면 정확도 신호가 통째로 사라진다.
+      const { terms, exclude } = resolveSectionKw(kwMap, sec);
+      const items = await searchByTerms(terms, {
+        display: DIGEST_POOL_PER_SECTION, dateFrom, dateTo, hours,
+        sort: 'sim', domain: sec.domain, exclude,
+      });
+      return { items: items.slice(0, DIGEST_POOL_PER_SECTION) };
+    },
+  }));
 }
 
-async function buildDigest(sources, { dateFrom, dateTo, hours }, kwMap) {
-  // 1) 섹션별로 후보를 모은다.
-  //    정렬은 화면 설정과 무관하게 항상 정확도순(sim) : '몇 번째로 나왔는지'를 점수로 써야 하고,
-  //    엄선 목록은 최신순으로 긁어오면 정확도 신호가 통째로 사라진다.
-  const perSec = await Promise.all(sources.map(async (sec) => {
-    const { terms, exclude } = resolveSectionKw(kwMap, sec);
-    const items = await searchByTerms(terms, {
-      display: DIGEST_POOL_PER_SECTION, dateFrom, dateTo, hours,
-      sort: 'sim', domain: sec.domain, exclude,
-    });
-    return items.slice(0, DIGEST_POOL_PER_SECTION)
-      .map((it, i) => ({ ...it, _sec: sec.key, _rank: i }));
-  }));
+async function buildDigest(sources, opts, kwMap) {
+  const lists = await Promise.all(
+    digestParts(sources, opts, kwMap).map((p) => cachedResponse(p.key, TTL_SECTION, p.run))
+  );
+  // 순위는 소스 섹션 목록과 칸 내용만으로 정해진다 → 같은 칸이면 사용자가 달라도 같은 결과를 다시 쓴다
+  return memoPick(`digest|${sources.map((s) => s.key).join(',')}`, lists, () => rankDigest(sources, lists));
+}
+
+function rankDigest(sources, lists) {
+  // 1) 섹션별 후보. 순번(_rank)은 칸을 고치지 않게 복사본에 붙인다.
+  const perSec = lists.map((d, s) => d.items.map((it, i) => ({ ...it, _sec: sources[s].key, _rank: i })));
 
   // 2) 같은 기사(URL)는 하나로 합치고, 걸린 섹션은 cats 에 모은다.
   const byUrl = new Map();
@@ -3204,13 +3271,8 @@ function registerDigestRoute(base, SECTIONS) {
     const opts = { dateFrom, dateTo, hours };
     const limit = Math.min(Math.max(Number(display) || 10, 1), DIGEST_KEEP);
     try {
-      const data = await cachedResponse(
-        buildDigestKey(base, sources, opts, kwMap),
-        TTL_SECTION,
-        () => buildDigest(sources, opts, kwMap),
-      );
-      // 캐시본은 건드리지 않는다 (slice 로 새 배열을 만들어 자른다).
-      let items = (data.items || []).slice(0, limit);
+      const data = await buildDigest(sources, opts, kwMap);
+      let items = data.items.slice(0, limit);
       // 최신순을 골랐으면 '뽑힌 기사들' 안에서만 시간순으로 다시 늘어놓는다.
       //   무엇을 뽑을지는 정렬과 상관없이 언제나 중요도 기준이다.
       if (sort === 'date') {
@@ -4931,14 +4993,13 @@ let lastWarmKeys = [];
 // 프리워밍은 '완성된 응답'을 미리 만들어 캐시에 넣어 둔다.
 //   중요 : 화면이 실제로 보내는 요청과 조건이 완전히 같아야 캐시 키가 맞아떨어진다.
 //   하나라도 다르면 다른 칸에 저장돼 데워봐야 헛일이 된다.
-//   (화면 기본값 : 게재기간 1일=24, 섹션당 30건, 브리핑 10건)
+//   (화면 기본값 : 게재기간 1일=24, 섹션당 30건. 브리핑 · 엄선 목록의 건수는 [P6-2] 부터 칸 열쇠에 없다)
 //   [P6] 정렬은 최신순=date. v3.0(2026-10-06)부터 화면은 Daily Brief 만 정확도순이고 '전체' 화면은 최신순인데
 //   (html SECTION_FILTER_DEFAULTS), 여기는 sim 으로 남아 전체 화면이 프리워밍 칸을 한 번도 못 썼다.
 //   정렬은 네이버 호출에 들어가지 않고(buildOneOfAllSections) 순서만 바꾸므로 sim 까지 같이 데우지는 않는다.
 const WARM_HOURS = '24';
 const WARM_SORT = 'date';
 const WARM_PER_SECTION = 30;
-const WARM_BRIEFING_LIMIT = 10;
 
 // 키워드를 받는 섹션 전부. 사용자 키워드 저장 때 '아는 섹션 키'를 고르는 데도 쓴다(knownKwKeys).
 function sectionsNeedingKw() {
@@ -4975,12 +5036,15 @@ function warnUncoveredSections(kwMap) {
 //   섹션마다 따로 작업으로 두면 사이마다 WARM_GAP 이 붙어 전체 화면이 15초쯤 늦게 데워진다.
 function warmJobs(kwMap) {
   const secOpts = { limit: WARM_PER_SECTION, hours: WARM_HOURS, sort: WARM_SORT };
-  const briefOpts = { limit: WARM_BRIEFING_LIMIT, hours: WARM_HOURS };
+  // [P6-2] 브리핑은 소스 섹션 · 키워드마다 1칸이다. 건수는 고를 때만 쓰므로 칸 열쇠에 없다.
+  //   fill 칸은 화면 요청에선 모자랄 때만 부르지만 여기서는 같이 데운다. 공용 설정에 브리핑 섹션
+  //   고르기가 없으면(기본) fill 은 비어 있고, 있으면 모자랄 때 첫 사람이 기다리지 않게 미리 둔다.
+  const brief = briefingParts({ hours: WARM_HOURS }, kwMap);
 
   const jobs = [
     {
       name: 'briefing',
-      parts: [{ key: buildBriefingKey(briefOpts, kwMap), run: () => buildBriefing(briefOpts, kwMap) }],
+      parts: [...brief.main, ...brief.words, ...brief.fill],
     },
     {
       name: 'all/sections',
@@ -4991,13 +5055,10 @@ function warmJobs(kwMap) {
   // [수정] 하위 섹션이 있는 상위 섹션(물류·경제·증시·스포츠)을 누르면
   //   이제 '전체보기'가 아니라 엄선 목록(digest)이 뜬다. 그래서 데울 대상도 digest 로 바꿨다.
   //   건수·정렬은 캐시 키에 없으므로 여기서 정하지 않는다.
+  //   [P6-2] 엄선 목록 하나 = 소스 섹션 칸 여러 개. 예전처럼 한 작업 안에서 동시에 데운다.
   const digestOpts = { hours: WARM_HOURS };
   DIGEST_BASES.forEach(([base, SECTIONS]) => {
-    const sources = digestSources(base, SECTIONS);
-    jobs.push({
-      name: `${base}/digest`,
-      parts: [{ key: buildDigestKey(base, sources, digestOpts, kwMap), run: () => buildDigest(sources, digestOpts, kwMap) }],
-    });
+    jobs.push({ name: `${base}/digest`, parts: digestParts(digestSources(base, SECTIONS), digestOpts, kwMap) });
   });
 
   return jobs;
