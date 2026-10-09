@@ -1,6 +1,6 @@
 # 개인화 (구글 로그인 · 허용 사용자 · 좋아요/싫어요 · 계정별 설정 · 개인 AI 키·모델) 작업 계획
 
-> 상태 : **P0 배포 완료 · P1 가이드 작성 완료(사용자 실행 대기)** · 작성 2026-10-09 · 2차 결정 반영 2026-10-09
+> 상태 : **P0 배포 완료 · P1 완료 · 다음은 P2** · 작성 2026-10-09 · 2차 결정 반영 2026-10-09
 > 순서 : 이 작업을 먼저 하고, v3 리디자인의 남은 일(다크 테마)은 그 뒤에 한다.
 > 규칙 : 한 Phase 씩 진행하고, 끝나면 멈추고 확인받는다. 캐시를 건드리는 Phase 는 [PERFORMANCE.md](PERFORMANCE.md) 4장을, AI 호출을 건드리는 Phase 는 같은 문서의 Gemini 절을 먼저 읽는다.
 > 브랜치 : `main` 에 push 하면 Render 에 자동 배포되므로 **`feat/personalize` 브랜치**에서 작업한다. (P0 만 예외로 먼저 배포)
@@ -168,7 +168,10 @@
   - 배포 : Render 에 `ADMIN_TOKEN` 등록 후 `main` 병합(`fb62738`) · push. 운영 실측 : 모델 진단 · 키워드 저장 모두 토큰 없음/틀린 토큰 **401**, 설정 읽기 · 화면 200. 사용자가 맞는 토큰으로 진단 결과 수신 · 관리자 탭 키워드 저장 성공 확인.
   - 진단은 이제 주소창이 아니라 헤더를 붙여 부른다 (server.js 진단 절 주석 참고).
   - 이 임시 토큰은 P2(구글 로그인 · `ADMIN_EMAILS`)에서 없앤다. 그때 Render 의 `ADMIN_TOKEN` 도 지운다.
-- **P1 결과 (2026-10-09, 브랜치 `feat/personalize`)** : 코드 변경 없음. 가이드 [PERSONALIZATION-P1-SETUP.md](PERSONALIZATION-P1-SETUP.md) 와 SQL [sql/personalization-p1.sql](sql/personalization-p1.sql) 작성. 사용자 실행 대기 중(체크리스트는 가이드 끝).
+- **P1 결과 (2026-10-09, 브랜치 `feat/personalize`)** : 코드 변경 없음. 가이드 [PERSONALIZATION-P1-SETUP.md](PERSONALIZATION-P1-SETUP.md) 와 SQL [sql/personalization-p1.sql](sql/personalization-p1.sql) 작성. **사용자 실행 완료 (2026-10-09)**.
+  - 실행 결과 : SQL 실행(7개 테이블 RLS 켬, 반드시 'Logs' 가 아닌 PRIVATE 쿼리에서 실행) · 구글 OAuth 클라이언트 생성 · Supabase Google 로그인 · Site URL/Redirect URLs 등록 · 환경변수 3개(`SUPABASE_ANON_KEY` · `ADMIN_EMAILS` · `KEY_ENCRYPTION_SECRET`) Render 와 로컬 `.env` 에 등록. 등록 후 운영 화면 · 설정 읽기 · 방침 페이지 모두 200.
+  - 추가로 한 일 : 구글 앱 게시에 개인정보처리방침 URL 이 필요해 [privacy.html](privacy.html) 을 만들어 `main` 에 배포(병합 `780641a`). 주소 `https://news-insight.onrender.com/privacy.html`. 로고는 넣지 않았다(게시 후 로고가 있으면 구글 인증 심사 대상). 승인된 도메인은 `news-insight.onrender.com` 하나(`onrender.com` · `supabase.co` 는 구글이 거부).
+  - 남은 확인 : 로컬에서 로그인 시험 시 `autoPort` 로 3000 이 아닌 포트가 뜨면 Supabase Redirect URLs 에 그 포트를 추가해야 한다(P2 시험 때). 방침에 'P10 내 데이터 지우기' 를 언급했으므로 P10 전까지는 이메일 삭제 요청으로 대응.
   - RLS 는 **정책 없이** 켠다(브라우저는 테이블 직접 접근 안 함, 서버 service 키만 통과) + anon/authenticated 권한 회수.
   - 주의 : 기존 `app_settings` 에도 RLS 를 걸므로, Render 의 `SUPABASE_SERVICE_KEY` 가 비밀용(service_role) 키인지 SQL 실행 **전에** 확인해야 한다(가이드 1단계).
   - 구글 OAuth 는 앱 게시(프로덕션)를 권장 — 테스트 상태는 7일마다 로그인이 풀린다.
