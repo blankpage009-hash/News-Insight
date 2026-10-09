@@ -389,6 +389,70 @@ app.delete('/api/admin/users', requireAdminUser, async (req, res) => {
   }
 });
 
+// -----------------------------------------------------------------
+// [P3] 좋아요 / 싫어요 (article_votes)
+//   - 열쇠(url_key)는 화면이 쓰는 기사 주소(savedKeyOf)다. 같은 기사는 늘 같은 열쇠.
+//   - 내 것만 읽고 쓴다 : user_id 는 토큰에서 나온 req.user.id 로만 정한다(본문 값을 믿지 않는다).
+//   - 추천 계산은 브라우저가 한다. 서버는 저장만 하므로 캐시 키에 사용자 정보가 들어가지 않는다.
+// -----------------------------------------------------------------
+const VOTES_TABLE = 'article_votes';
+const VOTES_READ_MAX = 2000;   // 화면이 한 번에 받는 최근 투표 수 (시간 감쇠로 오래된 건 어차피 거의 안 쓴다)
+
+app.get('/api/votes', async (req, res) => {
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/${VOTES_TABLE}?user_id=eq.${encodeURIComponent(req.user.id)}`
+      + `&select=url_key,vote,section,title,created_at&order=created_at.desc&limit=${VOTES_READ_MAX}`;
+    const r = await fetchWithTimeout(url, { headers: supabaseHeaders() }, 5000);
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+    const rows = await r.json();
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      votes: (Array.isArray(rows) ? rows : []).map((x) => ({
+        key: x.url_key, vote: x.vote, section: x.section || '', title: x.title || '', t: Date.parse(x.created_at) || 0,
+      })),
+    });
+  } catch (e) {
+    console.error('[투표 조회 실패]', e.message);
+    res.status(500).json({ error: '투표 기록을 읽지 못했습니다.' });
+  }
+});
+
+// vote : 1 좋아요 · -1 싫어요 · 0 취소(행 삭제)
+app.put('/api/votes', async (req, res) => {
+  const b = req.body || {};
+  const key = typeof b.key === 'string' ? b.key.trim() : '';
+  const vote = Number(b.vote);
+  if (!key || key.length > 2000) return res.status(400).json({ error: '기사 주소가 올바르지 않습니다.' });
+  if (![1, -1, 0].includes(vote)) return res.status(400).json({ error: 'vote 는 1, -1, 0 중 하나여야 합니다.' });
+  try {
+    if (vote === 0) {
+      const url = `${SUPABASE_URL}/rest/v1/${VOTES_TABLE}?user_id=eq.${encodeURIComponent(req.user.id)}&url_key=eq.${encodeURIComponent(key)}`;
+      const r = await fetchWithTimeout(url, { method: 'DELETE', headers: { ...supabaseHeaders(), Prefer: 'return=minimal' } }, 5000);
+      if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+      return res.json({ ok: true, vote: 0 });
+    }
+    // created_at 도 함께 갱신한다 : 마음을 바꾼 시각부터 시간 감쇠(14일 절반)를 센다.
+    const row = {
+      user_id: req.user.id,
+      url_key: key,
+      vote,
+      section: typeof b.section === 'string' ? b.section.slice(0, 40) : null,
+      title: typeof b.title === 'string' ? b.title.slice(0, 300) : null,
+      created_at: new Date().toISOString(),
+    };
+    const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${VOTES_TABLE}?on_conflict=user_id,url_key`, {
+      method: 'POST',
+      headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify([row]),
+    }, 5000);
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+    res.json({ ok: true, vote });
+  } catch (e) {
+    console.error('[투표 저장 실패]', e.message);
+    res.status(500).json({ error: '투표를 저장하지 못했습니다.' });
+  }
+});
+
 // 파일 캐시: Supabase가 죽었을 때만 읽는다. 쓰기는 Supabase 성공 후 따라 쓴다.
 function readKeywordsFile() {
   try {

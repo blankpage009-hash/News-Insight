@@ -1157,7 +1157,7 @@
     font-size: 1rem; line-height: 1.7; color: #444141; text-wrap: pretty; word-break: keep-all;
     -webkit-mask-image: linear-gradient(#000 calc(100% - 2.4em), transparent); mask-image: linear-gradient(#000 calc(100% - 2.4em), transparent);
   }
-  .bc-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 2px solid rgb(var(--c-paper)); }
+  .bc-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; border-top: 2px solid rgb(var(--c-paper)); }
   .bc-act {
     display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px;
     padding: 10px 16px; font-size: .933rem; font-weight: 800; line-height: 1.2; white-space: nowrap;
@@ -1175,6 +1175,29 @@
   .bc-save.is-row { width: 32px; height: 32px; }
   .bc-save.is-row:hover { background: rgb(var(--c-gold) / .1); }
   .bc-save svg { width: 16px; height: 16px; }
+
+  /* [추가] P3 : 좋아요/싫어요. 카드는 버튼 줄 맨 오른쪽 칸, 목록 행은 버튼 줄 끝에 붙는다. 눌린 쪽은 아이콘 안을 채운다. */
+  .bc-vote { display: inline-flex; align-items: stretch; border-left: 1px solid rgb(var(--c-paper) / .4); }
+  .bc-vbtn {
+    display: inline-flex; align-items: center; justify-content: center; width: 40px; flex: none;
+    color: rgb(var(--c-paper)); cursor: pointer; transition: background-color .15s, color .15s;
+  }
+  .bc-vbtn:hover { background: rgb(var(--c-ink3)); }
+  .bc-vbtn svg { width: 15px; height: 15px; fill: none; }
+  .bc-vbtn.is-on { color: rgb(var(--c-gold)); }
+  .bc-vbtn.is-on svg { fill: currentColor; }
+  .bc-row .bc-vote { border-left: 0; gap: 6px; }
+  .bc-row .bc-vbtn { width: 32px; border: 1px solid rgb(var(--c-paper) / .4); }
+
+  /* 되돌리기 알림 : 싫어요로 기사를 숨기면 잠깐 뜬다 */
+  #ni-toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 200;
+    display: flex; align-items: center; gap: 14px; max-width: calc(100vw - 32px);
+    padding: 10px 16px; font-size: 13px; font-weight: 600;
+    background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); box-shadow: 0 8px 24px rgb(0 0 0 / .25);
+  }
+  #ni-toast[hidden] { display: none; }
+  #ni-toast button { flex: none; padding: 4px 2px; font-weight: 800; color: rgb(var(--c-gold)); cursor: pointer; }
 
   .bc-nav { display: flex; align-items: center; gap: 16px; padding: 4px 0 2rem; }
   .bc-arrow {
@@ -1301,6 +1324,8 @@
       min-height: 40px; padding: 6px 4px; font-size: 12px; font-weight: 600;
     }
     .bc-actions .bc-act svg { width: 15px; height: 15px; }
+    .bc-actions .bc-vbtn { width: 32px; }
+    #ni-toast { bottom: 84px; }   /* 하단 탭 바 위로 */
 
     /* 아래 : [01 / 10] [진행 막대] — 이전/다음 화살표는 손가락으로 밀면 되므로 감춘다 */
     .bc-top { grid-row: 2; grid-column: 1; top: 11px; padding: 0; }   /* top 11px : 카드 아래~하단 탭 바 사이 빈 칸의 가운데로 내린다 */
@@ -1338,6 +1363,8 @@
       font-size: 12px; font-weight: 600; color: rgb(var(--c-paper));
     }
     :is(#news-list, .pv-rows) .bc-row .bc-act svg { width: 13px; height: 13px; }
+    :is(#news-list, .pv-rows) .bc-row .bc-vote { gap: 0; }
+    :is(#news-list, .pv-rows) .bc-row .bc-vbtn { flex: 1; width: auto; height: 44px; border: 0; }
     :is(#news-list, .pv-rows) .bc-row .bc-act.is-primary { font-weight: 700; color: rgb(var(--c-up)); }
 
     /* '전체' 화면 섹션 상자 */
@@ -2562,7 +2589,9 @@
       'chevrons-left': '<path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>',
       'chevrons-right': '<path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/>',
       sliders: '<line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/>',
-      settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
+      settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+      'thumbs-up': '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>',
+      'thumbs-down': '<path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/>'
     };
     function icon(name, cls) {
       return `<svg class="${cls || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] || ''}</svg>`;
@@ -2742,7 +2771,7 @@
     function openFollowupFromPanel(key) {
       const a = savedArticles.find((x) => x.key === key);
       if (!a) return;
-      const [item] = decorateItems([a], (a.cats && a.cats[0]) || 'society');
+      const [item] = decorateItems([a], (a.cats && a.cats[0]) || 'society', true);
       followupItems.push(item);
       openFollowup(item.id);
     }
@@ -2751,7 +2780,7 @@
     function openBriefFromPanel(key) {
       const a = savedArticles.find((x) => x.key === key);
       if (!a) return;
-      const [item] = decorateItems([a], (a.cats && a.cats[0]) || 'society');
+      const [item] = decorateItems([a], (a.cats && a.cats[0]) || 'society', true);
       followupItems.push(item);
       openBrief(item.id);
     }
@@ -2812,6 +2841,179 @@
       document.querySelectorAll('[data-read-key]').forEach((el) => {
         if (el.dataset.readKey === key) el.classList.add('is-read');
       });
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] P3 좋아요/싫어요
+    //   - 누르면 화면부터 바꾸고(낙관적 반영) 서버 저장은 뒤에서 한다. 저장이 실패하면 되돌리고 알린다.
+    //   - 싫어요는 목록에서 바로 숨긴다. 전체 화면은 섹션마다 30건을 받아 두므로 다음 후보가 그 자리를 채운다.
+    //   - 저장한 기사 화면에서는 숨기지 않는다(내가 저장한 기사를 투표 때문에 잃지 않게). 기록만 한다.
+    //   - votes 는 첫 화면을 빨리 그리려고 이 기기에도 사본을 둔다. 서버 값이 오면 통째로 바꾼다. 로그아웃하면 지운다.
+    //   - 추천 계산(P4)은 이 votes 를 그대로 쓴다.
+    // ---------------------------------------------------------------
+    const VOTE_STORAGE_KEY = 'newsinsight:votes:v1';
+    let votes = new Map();          // key -> { v: 1 | -1, section, title, t }
+    let voteChain = Promise.resolve();   // 저장 요청을 눌린 순서대로 보낸다(같은 기사를 빠르게 눌러도 순서가 뒤바뀌지 않게)
+    let lastHidden = null;          // 되돌리기용 : { key, spots: [{ sec, index, item }] }
+
+    function loadVotesFromCache() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(VOTE_STORAGE_KEY) || '[]');
+        votes = new Map((Array.isArray(raw) ? raw : []).filter((x) => x && x.k && (x.v === 1 || x.v === -1))
+          .map((x) => [x.k, { v: x.v, section: x.s || '', title: x.ti || '', t: x.t || 0 }]));
+      } catch { votes = new Map(); }
+    }
+
+    function persistVotes() {
+      try {
+        localStorage.setItem(VOTE_STORAGE_KEY, JSON.stringify([...votes].map(([k, e]) => ({ k, v: e.v, s: e.section, ti: e.title, t: e.t }))));
+      } catch (e) { console.error('투표 사본을 기록하지 못했습니다.', e); }
+    }
+
+    function clearVoteCache() { try { localStorage.removeItem(VOTE_STORAGE_KEY); } catch {} }
+
+    function voteOf(key) { const e = key && votes.get(key); return e ? e.v : 0; }
+    function isDislikedKey(key) { return voteOf(key) === -1; }
+
+    // 서버의 내 투표로 통째로 바꾼다. 다른 기기에서 바뀐 것도 여기서 따라온다.
+    async function syncVotesInBackground() {
+      try {
+        const data = await apiGet('/api/votes');
+        votes = new Map((data.votes || []).filter((x) => x && x.key && (x.vote === 1 || x.vote === -1))
+          .map((x) => [x.key, { v: x.vote, section: x.section || '', title: x.title || '', t: x.t || 0 }]));
+        persistVotes();
+        document.querySelectorAll('[data-vote-key]').forEach((b) => paintVoteButton(b));
+        dropDislikedFromScreen();
+      } catch (e) { console.error('투표 기록을 불러오지 못했습니다.', e); }
+    }
+
+    function paintVoteButton(btn) {
+      const on = voteOf(btn.dataset.voteKey) === Number(btn.dataset.vote);
+      btn.classList.toggle('is-on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+
+    function voteButtonsHtml(item, key) {
+      const mk = (val, name, label) => {
+        const on = voteOf(key) === val;
+        return `<button type="button" onclick="castVote(${item.id}, ${val})" data-vote-key="${esc(key)}" data-vote="${val}"
+          aria-pressed="${on}" aria-label="${label}" title="${label}" class="bc-vbtn${on ? ' is-on' : ''}">${icon(name)}</button>`;
+      };
+      return `<span class="bc-vote" role="group" aria-label="기사 평가">${mk(1, 'thumbs-up', '좋아요')}${mk(-1, 'thumbs-down', '싫어요')}</span>`;
+    }
+
+    // 같은 버튼을 다시 누르면 취소다.
+    function castVote(id, want) {
+      const item = findItem(id);
+      const key = savedKeyOf(item);
+      if (!key) return;
+      const prev = votes.get(key) || null;
+      const next = prev && prev.v === want ? 0 : want;
+      const meta = { section: (item.cats && item.cats[0]) || item.category || '', title: plainText(item.title || '').slice(0, 300) };
+      setVoteLocal(key, next, meta);
+      if (next === -1 && currentCategory !== 'saved') {
+        const spots = hideFromLists(key);
+        if (spots.length) {
+          lastHidden = { key, spots };
+          rerenderListIfShown();
+          showToast('싫어요를 눌러 이 기사를 숨겼습니다.', '되돌리기', undoHide);
+        }
+      }
+      sendVote(key, next, meta, prev);
+    }
+
+    function setVoteLocal(key, v, meta) {
+      if (v === 0) votes.delete(key);
+      else votes.set(key, { v, section: meta.section, title: meta.title, t: Date.now() });
+      persistVotes();
+      document.querySelectorAll('[data-vote-key]').forEach((b) => { if (b.dataset.voteKey === key) paintVoteButton(b); });
+    }
+
+    function sendVote(key, v, meta, prev) {
+      voteChain = voteChain.then(async () => {
+        try {
+          const res = await apiFetch('/api/votes', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, vote: v, section: meta.section, title: meta.title }),
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+        } catch (e) {
+          console.error('투표를 저장하지 못했습니다.', e);
+          // 그 사이 같은 기사를 또 눌렀다면(= 현재 값이 내가 보낸 값이 아님) 건드리지 않는다.
+          if (voteOf(key) === v) {
+            if (prev) setVoteLocal(key, prev.v, prev); else setVoteLocal(key, 0, meta);
+            showToast('투표를 저장하지 못했습니다. 잠시 뒤 다시 눌러 주세요.');
+          }
+        }
+      });
+    }
+
+    // 지금 화면의 목록들에서 이 기사를 빼고 어디에 있었는지 기억한다(되돌리기용).
+    function hideFromLists(key) {
+      const spots = [];
+      const cut = (arr, sec) => {
+        for (let i = arr.length - 1; i >= 0; i--) {
+          if (savedKeyOf(arr[i]) === key) spots.unshift({ sec, index: i, item: arr.splice(i, 1)[0] });
+        }
+      };
+      sectionState.forEach((s) => cut(s.items, s.key));
+      cut(currentResults, '');
+      return spots;
+    }
+
+    function undoHide() {
+      const h = lastHidden;
+      lastHidden = null;
+      if (!h) return;
+      const meta = { section: '', title: '' };
+      setVoteLocal(h.key, 0, meta);
+      h.spots.forEach(({ sec, index, item }) => {
+        const arr = sec ? (sectionState.find((s) => s.key === sec) || {}).items : currentResults;
+        if (arr) arr.splice(Math.min(index, arr.length), 0, item);
+      });
+      rerenderListIfShown();
+      sendVote(h.key, 0, meta, null);
+    }
+
+    // 서버 값이 늦게 도착했을 때 : 이미 그려 둔 목록에서 싫어요 기사를 걷어 낸다.
+    function dropDislikedFromScreen() {
+      if (currentCategory === 'saved') return;
+      let removed = 0;
+      const sweep = (arr) => {
+        for (let i = arr.length - 1; i >= 0; i--) {
+          if (isDislikedKey(savedKeyOf(arr[i]))) { arr.splice(i, 1); removed++; }
+        }
+      };
+      sectionState.forEach((s) => sweep(s.items));
+      sweep(currentResults);
+      if (removed) rerenderListIfShown();
+    }
+
+    // 알림 한 줄. 새 알림이 오면 이전 것을 대신한다.
+    let toastTimer = 0;
+    function showToast(text, actionLabel, onAction) {
+      let el = document.getElementById('ni-toast');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'ni-toast';
+        el.setAttribute('role', 'status');
+        document.body.appendChild(el);
+      }
+      el.replaceChildren();
+      const span = document.createElement('span');
+      span.textContent = text;
+      el.appendChild(span);
+      if (actionLabel && onAction) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = actionLabel;
+        b.onclick = () => { el.hidden = true; onAction(); };
+        el.appendChild(b);
+      }
+      el.hidden = false;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { el.hidden = true; lastHidden = null; }, 7000);
     }
 
     // ---------------------------------------------------------------
@@ -3061,6 +3263,8 @@
       applyDefaultCounts();         // [추가] 첫 화면(Briefing) 건수를 기본값으로 맞춤
       loadSavedArticles();          // [추가] 저장한 기사 보관함 (사이드바 건수·북마크 표시에 필요)
       loadReadArticles();           // [추가] 읽은 기사 목록 (목록을 그리기 전에 있어야 흐리게 표시된다)
+      loadVotesFromCache();         // [추가] P3 : 싫어요 기사를 처음부터 빼고 그리려고 이 기기의 사본을 먼저 읽는다
+      syncVotesInBackground();      // 서버의 내 투표로 바꾸고, 그 사이 그려진 목록에서 싫어요 기사를 걷어 낸다
       loadScreenPrefs();            // [추가] 화면 옵션 (읽음 흐리게) — 첫 렌더 전에 적용
       renderCategoryButtons();
       renderSearchToggle();
@@ -3786,7 +3990,7 @@
     function showAuthGate(state, opts = {}) {
       authBlocked = true;
       if (['none', 'pending', 'rejected'].includes(state)) rememberAuthState(state);
-      else if (state === 'login') rememberAuthState('');
+      else if (state === 'login') { rememberAuthState(''); clearVoteCache(); }
       document.documentElement.classList.add('auth-locked');
       renderAuthGate(state, opts);
     }
@@ -3847,6 +4051,7 @@
     // 이 기기에서만 로그아웃한다. 기본값(global)은 다른 기기(아이폰 · 아이패드)의 로그인까지 끊는다.
     async function signOut() {
       rememberAuthState('');
+      clearVoteCache();   // 공용 기기에서 다음 사람에게 내 투표가 보이지 않게
       try {
         const c = authClient();
         if (c) await c.auth.signOut({ scope: 'local' });
@@ -4954,8 +5159,10 @@
       return looksLikeArticleUrl(orig) ? orig : naver;
     }
 
-    function decorateItems(items, category) {
-      return items.map((item) => ({
+    //   keepAll : 싫어요 기사도 남긴다 (저장한 기사 · 이어보기처럼 사용자가 직접 연 기사)
+    function decorateItems(items, category, keepAll = false) {
+      const shown = keepAll || category === 'saved' ? items : items.filter((item) => !isDislikedKey(savedKeyOf(item)));
+      return shown.map((item) => ({
         id: nextId++,
         title: item.title || '(제목 없음)',
         summary: Array.isArray(item.summary) && item.summary.length ? item.summary : ['요약 없음'],
@@ -6160,7 +6367,7 @@
           <button onclick="openInsight(${item.id})" title="Insight" class="bc-act is-primary">${icon('lightbulb')}Insight</button>
           <a href="${esc(articleLink(item))}" target="_blank" rel="noopener noreferrer" draggable="false" title="원문 보기"
             onclick="markRead(${item.id})" class="bc-act">${icon('external-link')}원문 보기</a>
-          ${noRelated ? '' : `<button onclick="openRelated(${item.id})" title="관련 기사" class="bc-act">${icon('link')}관련 기사</button>`}${followup}${save}
+          ${noRelated ? '' : `<button onclick="openRelated(${item.id})" title="관련 기사" class="bc-act">${icon('link')}관련 기사</button>`}${followup}${save}${voteButtonsHtml(item, key)}
         </div>`;
     }
 
