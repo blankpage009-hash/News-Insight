@@ -499,16 +499,171 @@ async function writeKeywordsToSupabase(keywords) {
   if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
 }
 
+// -----------------------------------------------------------------
+// [P5] 공용 기본 키워드 + 계정별 키워드 (PERSONALIZATION.md 2-4)
+//   - 기사 요청의 키워드는 서버가 '공용 기본값 위에 내가 바꾼 섹션만 덮어써서' 정한다.
+//     예전엔 화면이 설정 전체(약 13.8KB)를 주소 kw= 에 실어 보냈는데, 운영 앞단은 주소를 16KB 까지만 받는다.
+//   - 내 설정이 없는 사람은 프리워밍과 똑같은 값을 쓰므로 캐시 키가 저절로 맞는다(사용자 id 는 키에 넣지 않는다).
+//   - 둘 다 메모리에 담아 둔다. 기사 요청마다 Supabase 를 부르면 첫 화면이 그만큼 느려진다.
+// -----------------------------------------------------------------
+let commonKw = null;               // 공용 기본 키워드 (app_settings.keywords)
+let commonKwLoading = null;
+
+function setCommonKw(v) {
+  commonKw = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+}
+
+async function getCommonKw() {
+  if (commonKw) return commonKw;
+  if (!commonKwLoading) {
+    commonKwLoading = readWarmKeywords().then(setCommonKw).finally(() => { commonKwLoading = null; });
+  }
+  await commonKwLoading;
+  return commonKw;
+}
+
+const USER_SETTINGS_TABLE = 'user_settings';
+const USER_KW_TTL = 10 * 60 * 1000;    // 이 서버만 쓰므로 저장 때 바로 바뀐다. 기간은 혹시 모를 어긋남의 상한일 뿐
+const USER_KW_CACHE_MAX = 500;
+const userKwCache = new Map();         // user id -> { ts, keywords }
+const userKwInflight = new Map();
+// 사용자 키워드는 캐시가 없을 때 포함 키워드마다 네이버를 한 번씩 부른다 → 한 사람이 하루 한도를 태우지 않게 묶는다.
+//   관리자의 공용 기본값은 묶지 않는다.
+const USER_KW_MAX_TERMS = 10;
+const USER_KW_MAX_LEN = 30;
+
+async function readUserKeywords(userId) {
+  const url = `${SUPABASE_URL}/rest/v1/${USER_SETTINGS_TABLE}?user_id=eq.${encodeURIComponent(userId)}&select=keywords`;
+  const r = await fetchWithTimeout(url, { headers: supabaseHeaders() }, 5000);
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+  const rows = await r.json();
+  const v = Array.isArray(rows) && rows.length ? rows[0].keywords : null;
+  return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+}
+
+function cacheUserKw(userId, keywords) {
+  userKwCache.delete(userId);
+  userKwCache.set(userId, { ts: Date.now(), keywords });
+  while (userKwCache.size > USER_KW_CACHE_MAX) userKwCache.delete(userKwCache.keys().next().value);
+}
+
+// 실패해도 기사는 보여야 하므로 던지지 않는다 : 직전 값 → 없으면 공용만.
+async function getUserKw(userId) {
+  if (!userId || !SUPABASE_ENABLED) return {};
+  const hit = userKwCache.get(userId);
+  if (hit && Date.now() - hit.ts < USER_KW_TTL) return hit.keywords;
+  if (!userKwInflight.has(userId)) {
+    const p = readUserKeywords(userId)
+      .then((kw) => { cacheUserKw(userId, kw); return kw; })
+      .catch((e) => {
+        console.error('[내 키워드 조회 실패 → 직전 값 또는 공용 사용]', e.message);
+        return hit ? hit.keywords : {};
+      })
+      .finally(() => userKwInflight.delete(userId));
+    userKwInflight.set(userId, p);
+  }
+  return userKwInflight.get(userId);
+}
+
+// 기사 라우트가 쓰는 키워드. 요청 주소의 kw 는 보지 않는다(옛 화면이 보내도 무시).
+async function kwMapFor(req) {
+  const common = await getCommonKw();
+  const mine = await getUserKw(req.user && req.user.id);
+  return Object.keys(mine).length ? { ...common, ...mine } : common;
+}
+
+// 서버가 실제로 읽는 섹션 키. 이 밖의 키는 저장해도 아무 데도 안 쓰이므로 버린다.
+function knownKwKeys() {
+  return new Set([
+    ...sectionsNeedingKw().map((sec) => sec.key),
+    BREAKING_SEC.key,
+    'briefing',
+    ...BRIEFING_PICKABLE.map((k) => `brief_${k}`),
+  ]);
+}
+
+// 같은 값인지 비교할 수 있게 모양을 맞춘다. exclude 가 없을 때와 [] 일 때 서버 동작이 달라서(resolveSectionKw)
+//   항상 배열로 채운다 — 관리자 저장(POST)이 만드는 모양과 같다.
+function normUserSection(key, v) {
+  const pick = (arr) => [...new Set(cleanList(arr).map((s) => s.slice(0, USER_KW_MAX_LEN)))].slice(0, USER_KW_MAX_TERMS);
+  const out = { include: pick(v && v.include), exclude: pick(v && v.exclude) };
+  if (key === 'briefing') {
+    out.sections = [...new Set(cleanList(v && v.sections))].filter((k) => BRIEFING_PICKABLE.includes(k));
+  }
+  return out;
+}
+
+function sameSection(a, b) {
+  const norm = (v) => JSON.stringify([cleanList(v && v.include), cleanList(v && v.exclude), cleanList(v && v.sections)]);
+  return norm(a) === norm(b);
+}
+
+// 화면이 보낸 '내가 바꾼 섹션들'을 정리한다. 지금 공용값과 같은 섹션은 빼서
+//   다시 공용을 따라가게 한다(관리자가 나중에 고치면 같이 바뀌도록).
+function cleanUserKeywords(kw, common) {
+  const known = knownKwKeys();
+  const out = {};
+  Object.keys(kw).forEach((key) => {
+    if (!known.has(key)) return;
+    const v = normUserSection(key, kw[key]);
+    if (common[key] && sameSection(v, common[key])) return;
+    out[key] = v;
+  });
+  return out;
+}
+
+// keywords 칸만 보낸다. merge-duplicates 는 보낸 칸만 고치므로 prefs(P7)는 그대로 남는다.
+async function writeUserKeywords(userId, keywords) {
+  const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${USER_SETTINGS_TABLE}?on_conflict=user_id`, {
+    method: 'POST',
+    headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify([{ user_id: userId, keywords, updated_at: new Date().toISOString() }]),
+  }, 5000);
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+  cacheUserKw(userId, keywords);
+}
+
+// keywords = 공용 기본값, mine = 내가 바꾼 섹션만. 화면은 둘을 합쳐 설정 화면 · 추천 계산에 쓴다.
 app.get('/api/settings/keywords', async (req, res) => {
-  if (!SUPABASE_ENABLED) return res.json({ keywords: readKeywordsFile(), source: 'file' });
+  const mine = await getUserKw(req.user.id);
+  res.set('Cache-Control', 'no-store');
+  if (!SUPABASE_ENABLED) return res.json({ keywords: readKeywordsFile(), mine, source: 'file' });
   try {
     const keywords = await readKeywordsFromSupabase();
     writeKeywordsFile(keywords);                       // 다음 장애 때 쓸 캐시 갱신
-    res.json({ keywords, source: 'supabase' });
+    setCommonKw(keywords);
+    res.json({ keywords, mine, source: 'supabase' });
   } catch (e) {
     // Supabase를 못 읽었다. 캐시를 내려주되, 이게 최신이 아닐 수 있음을 알린다.
     console.error('[키워드 조회 실패 → 파일 캐시 사용]', e.message);
-    res.json({ keywords: readKeywordsFile(), source: 'cache', stale: true });
+    res.json({ keywords: commonKw || readKeywordsFile(), mine, source: 'cache', stale: true });
+  }
+});
+
+// 내 키워드 저장. 본문은 '내가 바꾸고 싶은 섹션들' 전체다(빠진 섹션 = 공용값을 따름).
+app.put('/api/settings/my-keywords', async (req, res) => {
+  const kw = req.body && req.body.keywords;
+  if (!kw || typeof kw !== 'object' || Array.isArray(kw)) {
+    return res.status(400).json({ error: 'keywords 객체가 필요합니다.' });
+  }
+  try {
+    const mine = cleanUserKeywords(kw, await getCommonKw());
+    await writeUserKeywords(req.user.id, mine);
+    res.json({ ok: true, mine });
+  } catch (e) {
+    console.error('[내 키워드 저장 실패]', e.message);
+    res.status(500).json({ error: '내 키워드를 저장하지 못했습니다.' });
+  }
+});
+
+// 모두 공용값으로 = 내가 바꾼 섹션을 비운다. 행은 남긴다(prefs 가 같은 행에 산다).
+app.delete('/api/settings/my-keywords', async (req, res) => {
+  try {
+    await writeUserKeywords(req.user.id, {});
+    res.json({ ok: true, mine: {} });
+  } catch (e) {
+    console.error('[내 키워드 지우기 실패]', e.message);
+    res.status(500).json({ error: '내 키워드를 지우지 못했습니다.' });
   }
 });
 
@@ -530,6 +685,7 @@ app.post('/api/settings/keywords', requireAdminUser, async (req, res) => {
 
   if (!SUPABASE_ENABLED) {
     writeKeywordsFile(clean);
+    setCommonKw(clean);
     return res.json({ ok: true, keywords: clean, source: 'file' });
   }
   try {
@@ -537,6 +693,7 @@ app.post('/api/settings/keywords', requireAdminUser, async (req, res) => {
     // 다음 재배포 때 조용히 사라져 사용자가 잃어버린 줄도 모르게 된다.
     await writeKeywordsToSupabase(clean);
     writeKeywordsFile(clean);
+    setCommonKw(clean);
     res.json({ ok: true, keywords: clean, source: 'supabase' });
   } catch (e) {
     console.error('[키워드 저장 실패]', e.message);
@@ -1474,21 +1631,12 @@ function applyExcludeList(items, exclude) {
 }
 
 // -----------------------------------------------------------------
-// [설정] 프런트(화면)에서 보낸 '기사 가져오기 키워드' 적용
-//   요청에 kw=<JSON> 형태로 온다.
-//   kw = { "섹션키": { "include": ["단어",...], "exclude": ["단어",...] }, ... }
+// [설정] '기사 가져오기 키워드' 적용
+//   [P5] 예전엔 화면이 주소 kw=<JSON> 으로 보냈다. 이제 서버가 공용 + 내 설정으로 정한다(kwMapFor).
+//   kwMap = { "섹션키": { "include": ["단어",...], "exclude": ["단어",...] }, ... }
 //   - include 가 있으면 그 섹션의 검색어(terms)로 사용한다.
 //   - exclude 가 있으면 그 섹션의 제외어로 사용한다. (없으면 도메인 기본 제외어)
 // -----------------------------------------------------------------
-function parseKw(raw) {
-  if (!raw) return {};
-  try {
-    const o = JSON.parse(raw);
-    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
-  } catch {
-    return {};
-  }
-}
 
 // 문자열 배열만 남기고 앞뒤 공백/빈값 정리
 function cleanList(arr) {
@@ -1814,7 +1962,7 @@ async function buildBreaking(limit, kwMap) {
 
 app.get('/api/breaking', async (req, res) => {
   const limit = Math.min(Number(req.query.display) || 20, 50);
-  const kwMap = parseKw(req.query.kw);
+  const kwMap = await kwMapFor(req);
   try {
     res.json(await cachedResponse(
       buildBreakingKey(limit, kwMap),
@@ -2300,9 +2448,9 @@ async function buildBriefing({ limit, dateFrom, dateTo, hours }, kwMap) {
 }
 
 app.get('/api/briefing', async (req, res) => {
-  const { dateFrom, dateTo, hours, kw } = req.query;
+  const { dateFrom, dateTo, hours } = req.query;
   const opts = { limit: Math.min(Number(req.query.limit) || 5, 30), dateFrom, dateTo, hours };
-  const kwMap = parseKw(kw);
+  const kwMap = await kwMapFor(req);
 
   try {
     res.json(await cachedResponse(
@@ -2337,8 +2485,8 @@ async function buildAllSections({ limit, dateFrom, dateTo, hours, sort }, kwMap)
 }
 
 app.get('/api/all/sections', async (req, res) => {
-  const { dateFrom, dateTo, perSection = '5', hours, sort, kw } = req.query;
-  const kwMap = parseKw(kw);
+  const { dateFrom, dateTo, perSection = '5', hours, sort } = req.query;
+  const kwMap = await kwMapFor(req);
   const opts = { limit: Math.min(Number(perSection) || 5, 30), dateFrom, dateTo, hours, sort };
   try {
     res.json(await cachedResponse(
@@ -2459,8 +2607,8 @@ function countTitleWords(sections, kwMap) {
     .map(([key, count]) => ({ key, word: pickSurface(key), count }));
 }
 
-app.get('/api/keyword-rank', (req, res) => {
-  const kwMap = parseKw(req.query.kw);
+app.get('/api/keyword-rank', async (req, res) => {
+  const kwMap = await kwMapFor(req);
   const limit = Math.min(Number(req.query.limit) || 5, 20);
 
   // 기간·정렬·건수는 프리워밍과 똑같이 고정한다. 화면의 설정을 따라가면
@@ -2910,8 +3058,8 @@ function registerSubSectionRoute(base, SECTIONS) {
     const sec = SECTIONS.find((s) => s.key === req.params.key);
     if (!sec) return res.status(404).json({ error: '존재하지 않는 카테고리입니다.' });
 
-    const { dateFrom, dateTo, display = '20', hours, sort, kw } = req.query;
-    const kwMap = parseKw(kw);
+    const { dateFrom, dateTo, display = '20', hours, sort } = req.query;
+    const kwMap = await kwMapFor(req);
     const opts = { limit: Math.min(Number(display) || 20, 50), dateFrom, dateTo, hours, sort };
     try {
       res.json(await cachedResponse(
@@ -3035,8 +3183,8 @@ function registerDigestRoute(base, SECTIONS) {
   const label = (digestParent(base) || {}).label || base;
 
   app.get(`/api/${base}/digest`, async (req, res) => {
-    const { dateFrom, dateTo, display = '10', hours, sort, kw } = req.query;
-    const kwMap = parseKw(kw);
+    const { dateFrom, dateTo, display = '10', hours, sort } = req.query;
+    const kwMap = await kwMapFor(req);
     const opts = { dateFrom, dateTo, hours };
     const limit = Math.min(Math.max(Number(display) || 10, 1), DIGEST_KEEP);
     try {
@@ -3086,8 +3234,8 @@ app.get('/api/topic/:key', async (req, res) => {
   const sec = ALL_SECTIONS.find((s) => s.key === req.params.key);
   if (!sec) return res.status(404).json({ error: '존재하지 않는 섹션입니다.' });
 
-  const { dateFrom, dateTo, display = '20', hours, sort, kw } = req.query;
-  const kwMap = parseKw(kw);
+  const { dateFrom, dateTo, display = '20', hours, sort } = req.query;
+  const kwMap = await kwMapFor(req);
   const opts = { limit: Math.min(Number(display) || 20, 50), dateFrom, dateTo, hours, sort };
   try {
     res.json(await cachedResponse(
@@ -4773,13 +4921,9 @@ const WARM_SORT = 'sim';
 const WARM_PER_SECTION = 30;
 const WARM_BRIEFING_LIMIT = 10;
 
-// 프리워밍이 만든 캐시를 화면이 그대로 쓰려면, 양쪽이 같은 키워드로 계산해야 한다.
-//   화면은 설정에 없는 섹션을 자기 기본값으로 채워서 보내지만,
-//   서버 프리워밍은 저장된 설정만 본다. 그래서 저장된 설정에 빠진 섹션이 있으면
-//   키가 어긋나 프리워밍이 조용히 헛돈다(느려지는 게 아니라 '안 빨라진다').
-//   눈에 보이게 로그로 남긴다.
-function warnUncoveredSections(kwMap) {
-  const needed = [
+// 키워드를 받는 섹션 전부. 사용자 키워드 저장 때 '아는 섹션 키'를 고르는 데도 쓴다(knownKwKeys).
+function sectionsNeedingKw() {
+  return [
     ...ALL_SECTIONS,
     ...LOGISTICS_SECTIONS,
     ...STOCK_SECTIONS,
@@ -4788,14 +4932,21 @@ function warnUncoveredSections(kwMap) {
     ...Object.values(DIGEST_EXTRA_PARENTS), // [추가] 스포츠 상위 (전체 화면엔 없는 섹션)
     ...BRIEFING_SOURCES.map((s) => ({ key: s.cat })),
   ];
+}
+
+// [P5] 이제 화면 요청도 서버가 같은 저장값으로 키워드를 정하므로 프리워밍과 어긋나지 않는다.
+//   다만 저장된 설정에 빠진 섹션은 화면 설정 창의 기본값(DEFAULT_KEYWORDS)이 아니라
+//   서버 섹션 정의의 검색어로 검색된다. 설정 창에 보이는 값과 다를 수 있으니 로그로 남긴다.
+function warnUncoveredSections(kwMap) {
+  const needed = sectionsNeedingKw();
   const missing = [...new Set(
     needed.filter((sec) => !(kwMap && kwMap[sec.key])).map((sec) => sec.key)
   )];
   if (missing.length) {
     console.warn(
       `[프리워밍] 저장된 키워드에 없는 섹션 ${missing.length}개: ${missing.join(', ')}\n` +
-      `           이 섹션들은 화면 요청과 캐시 키가 달라져 미리 데워도 효과가 없습니다.\n` +
-      `           설정 화면에서 한 번 저장하면 해결됩니다.`
+      `           이 섹션들은 서버 기본 검색어로 찾습니다(설정 창에 보이는 기본값과 다를 수 있음).\n` +
+      `           관리자 탭의 공용 기본 키워드를 한 번 저장하면 해결됩니다.`
     );
   }
 }
@@ -4836,6 +4987,7 @@ function warmJobs(kwMap) {
 
 // 프리워밍에 쓸 키워드. 반드시 '화면이 실제로 쓰는 값'과 같아야 한다.
 //   다르면 엉뚱한 기사로 캐시를 데우게 되어 프리워밍이 헛돈다.
+//   [P5] 기사 요청의 공용 키워드(commonKw)도 이 함수로 채운다 → 둘이 같은 값을 본다.
 //   로컬 파일은 재배포 때 사라지고 기동 직후엔 비어 있으므로, 원본인
 //   Supabase를 먼저 읽고 실패했을 때만 파일 캐시로 물러선다.
 async function readWarmKeywords() {
@@ -4855,6 +5007,7 @@ async function warmCache() {
   const t0 = Date.now();
   const before = articleTextCache.size;
   const kwMap = await readWarmKeywords();
+  setCommonKw(kwMap);               // 다른 서버(운영 P0 등)가 공용 키워드를 바꿨어도 회차마다 따라간다
   // 지표 티커(market-extra)는 네이버 API를 쓰지 않아 429 걱정이 없다.
   //   기사 프리워밍을 기다리게 하지 말고 옆에서 같이 데운다.
   runProducer(MARKET_EXTRA_KEY, buildMarketExtra)
@@ -4902,10 +5055,9 @@ async function warmCache() {
 }
 
 // [P2] 머리말 한도를 Node 기본 16KB 에서 32KB 로 올린다.
-//   화면은 키워드 설정 전체를 주소(kw=)에 실어 보내는데, 한글이 인코딩되면 이미 약 13.8KB 다(2026-10-09 운영 키워드).
+//   P4 까지 화면은 키워드 설정 전체를 주소(kw=)에 실어 보냈다(한글 인코딩 후 약 13.8KB, 2026-10-09 운영 키워드).
 //   여기에 로그인 토큰(Authorization, 1~2KB)이 붙자 16KB 를 넘어 431 로 거절됐다.
-//   주의 : Render 앞단(Cloudflare)은 주소 자체를 16KB 까지만 받는다. 키워드가 더 늘면 이 조치로는 못 막는다
-//   → kw 를 주소에 싣는 방식은 P5·P6(계정별 키워드 · 섹션 단위 캐시)에서 바꾼다.
+//   [P5] 이제 kw 를 주소에 싣지 않는다(서버가 kwMapFor 로 정함). 옛 화면이 남아 긴 주소를 보낼 수 있어 한도는 그대로 둔다.
 const server = http.createServer({ maxHeaderSize: 32 * 1024 }, app);
 server.listen(PORT, () => {
   console.log(`네이버 뉴스 프록시 서버 실행 중: http://localhost:${PORT}`);

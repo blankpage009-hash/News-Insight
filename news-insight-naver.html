@@ -1063,7 +1063,7 @@
   /* 모바일 Safari 는 글자 크기 16px 미만인 입력칸에 포커스를 주면 화면을 확대하고, 입력 후에도 확대가 남는다.
      viewport 의 확대 기능은 그대로 두고, 설정 창의 입력칸만 16px 로 올려 확대가 일어나지 않게 한다. */
   @media (max-width: 1023px) {
-    #st-pane-admin input, #keyword-settings .kw-input { font-size: 16px; }
+    #st-pane-admin input, #keyword-settings .kw-input, #my-keyword-settings .kw-input { font-size: 16px; }
   }
 
   /* 1024px 미만 : 값 칸이 좁아져 이름 아래로 내린다 */
@@ -1570,6 +1570,9 @@
   .kw-pick.is-on, .kw-pick.is-on:hover { background: #fff2ef; color: #7c1405; box-shadow: inset 0 0 0 1px #7c1405; font-weight: 600; }
   .kw-warn { color: #7c1405; font-weight: 600; }
   .kw-note { font-size: 12px; line-height: 18px; color: rgb(var(--c-muted)); }
+  /* [P5] 내 키워드 탭 : 공용 기본값과 다른 섹션 표시 · 섹션별 '공용값으로' */
+  .kw-mine { flex: none; font-size: 10.5px; font-weight: 700; line-height: 16px; padding: 0 5px; border-radius: 4px; color: rgb(var(--c-gold)); box-shadow: inset 0 0 0 1px currentColor; white-space: nowrap; }
+  .kw-revert { display: flex; justify-content: flex-end; margin-top: 6px; }
 
   @media (prefers-reduced-motion: reduce) {
     .skeleton, .modal-pop { animation: none; }
@@ -2187,6 +2190,9 @@
           <button type="button" id="st-tab-prefs" class="st-tab" role="tab" aria-controls="st-pane-prefs" onclick="selectSettingsTab('prefs')">
             <span>화면 설정</span>
           </button>
+          <button type="button" id="st-tab-mine" class="st-tab" role="tab" aria-controls="st-pane-mine" onclick="selectSettingsTab('mine')">
+            <span>내 키워드</span>
+          </button>
           <button type="button" id="st-tab-admin" class="st-tab" role="tab" aria-controls="st-pane-admin" onclick="selectSettingsTab('admin')">
             <span>관리자 Setting</span>
           </button>
@@ -2247,6 +2253,19 @@
           </div>
         </div>
 
+        <!-- [P5] 내 키워드 : 허용 사용자 누구나. 공용 기본값과 다른 섹션만 내 계정에 저장된다 -->
+        <div id="st-pane-mine" class="st-pane" role="tabpanel" aria-labelledby="st-tab-mine" hidden>
+          <div class="st-row is-wide">
+            <div class="st-name">
+              <b>내 키워드</b>
+              <span class="st-hint">바꾼 섹션만 내 계정에 저장되고(모든 기기에 적용), 나머지는 <b>공용 기본 키워드</b>를 따라갑니다.
+                섹션마다 포함·제외 각 10개까지. 입력칸에 적고 <b>Enter</b>(또는 콤마)를 누르면 조각으로 담기고, <b>×</b> 로 지웁니다.</span>
+              <p id="my-kw-msg" class="st-msg is-err mt-1.5" role="status"></p>
+            </div>
+            <div id="my-keyword-settings" class="kw-acc"></div>
+          </div>
+        </div>
+
         <!-- 관리자 Setting : ADMIN_EMAILS 에 있는 구글 계정만 보인다 (서버도 같은 기준으로 막는다) -->
         <div id="st-pane-admin" class="st-pane" role="tabpanel" aria-labelledby="st-tab-admin" hidden>
           <!-- [P2] 허용 사용자 관리 : 누르는 즉시 서버에 반영된다 (아래 '저장' 버튼과 상관없음) -->
@@ -2267,8 +2286,9 @@
           </div>
           <div class="st-row is-wide">
             <div class="st-name">
-              <b>키워드 설정</b>
-              <span class="st-hint">섹션별 <b>포함</b>·<b>제외</b> 키워드를 정하면 항상 이 값을 기준으로 기사를 가져옵니다.
+              <b>공용 기본 키워드</b>
+              <span class="st-hint">모든 사용자의 기본값입니다. 각자 <b>내 키워드</b>에서 바꾼 섹션은 그 사람 값이 우선합니다.
+                섹션별 <b>포함</b>·<b>제외</b> 키워드를 정하면 이 값을 기준으로 기사를 가져옵니다.
                 입력칸에 적고 <b>Enter</b>(또는 콤마)를 누르면 조각으로 담기고, <b>×</b> 로 지웁니다.</span>
             </div>
             <!-- 섹션 줄 · 키워드 칩 (JS가 그려 넣음) -->
@@ -2283,8 +2303,15 @@
           <button type="button" class="pv-btn" onclick="closePrefsModal()">닫기</button>
         </div>
       </div>
+      <div id="st-foot-mine" class="pv-foot" hidden>
+        <span class="pv-note">저장하면 내 키워드 기준으로 기사를 다시 가져옵니다.</span>
+        <div class="pv-actions">
+          <button type="button" class="pv-btn" onclick="resetMyKeywords()" title="내가 바꾼 섹션을 모두 지우고 공용 기본 키워드를 따릅니다">모두 공용값으로</button>
+          <button type="button" class="pv-btn is-primary" onclick="saveMyKeywords()">저장 후 새로고침</button>
+        </div>
+      </div>
       <div id="st-foot-admin" class="pv-foot" hidden>
-        <span class="pv-note">저장하면 새 키워드 기준으로 기사를 다시 가져옵니다.</span>
+        <span class="pv-note">저장하면 모든 사용자의 공용 기본값이 바뀌고, 새 키워드 기준으로 기사를 다시 가져옵니다.</span>
         <div class="pv-actions">
           <button type="button" class="pv-btn" onclick="resetKeywordSettings()" title="기본값으로 되돌리기">기본값</button>
           <button type="button" id="setting-save-btn" class="pv-btn is-primary" onclick="saveKeywordSettings()">저장 후 새로고침</button>
@@ -3068,7 +3095,7 @@
       return inter / (A.size + B.size - inter);
     }
     const clampAbs = (v, cap) => Math.max(-cap, Math.min(cap, v));
-    // 키워드는 화면에서 고치는 중일 수도 있으니 kwOf(값을 만들어 넣음) 대신 읽기만 한다.
+    // 키워드는 실제 사용값(userKeywords)에서 읽기만 한다. (kwOf 는 설정 창의 편집 사본용이고 값을 만들어 넣는다)
     const recoIncludes = (s) => (userKeywords[s] && Array.isArray(userKeywords[s].include)) ? userKeywords[s].include : [];
 
     // 취향 점수. 반영할 투표가 MIN_VOTES 보다 적거나 추천이 꺼져 있으면 null.
@@ -3310,17 +3337,48 @@
       { key: 'sports_etc', depth: 1 },
     ];
 
-    const KEYWORDS_STORAGE_KEY = 'newsInsightKeywords_v1';
-    let userKeywords = {};   // 현재 사용 중인 키워드 설정
+    // [P5] 기사 요청의 키워드는 서버가 로그인 정보로 정한다(공용 기본값 위에 내가 바꾼 섹션을 덮어씀).
+    //   화면이 들고 있는 값은 설정 창과 추천 계산용이다. 주소(kw=)에는 더 이상 싣지 않는다.
+    //   이 기기 사본 = { common, mine }. 내 설정이 들어 있으므로 로그아웃 · 로그인 화면으로 갈 때 지운다.
+    const KEYWORDS_STORAGE_KEY = 'newsinsight:keywords:v2';
+    const KEYWORDS_LEGACY_KEY = 'newsInsightKeywords_v1';   // P4 까지의 사본 (공용값만 들어 있다)
+    let commonKeywords = {};  // 공용 기본 키워드 (빠진 섹션은 DEFAULT_KEYWORDS 로 채움)
+    let myKeywords = {};      // 내가 바꾼 섹션만 (서버 user_settings.keywords)
+    let userKeywords = {};    // 실제로 쓰는 값 = 공용 위에 내 섹션을 덮어쓴 것 (추천 계산이 읽는다)
+    // server.js USER_KW_MAX_TERMS · USER_KW_MAX_LEN 과 같게. 넘는 값은 서버가 잘라 저장한다.
+    const MY_KW_MAX_TERMS = 10;
+    const MY_KW_MAX_LEN = 30;
+
+    function cloneSection(v) {
+      const out = { include: [...((v && v.include) || [])], exclude: [...((v && v.exclude) || [])] };
+      if (v && Array.isArray(v.sections)) out.sections = [...v.sections];
+      return out;
+    }
 
     // 깊은 복사 (기본값을 건드리지 않기 위해)
     function cloneKeywords(src) {
       const out = {};
-      Object.keys(src).forEach((k) => {
-        out[k] = { include: [...(src[k].include || [])], exclude: [...(src[k].exclude || [])] };
-        if (Array.isArray(src[k].sections)) out[k].sections = [...src[k].sections];
-      });
+      Object.keys(src).forEach((k) => { out[k] = cloneSection(src[k]); });
       return out;
+    }
+
+    // 섹션을 통째로 덮어쓴다 — 서버 kwMapFor 와 같은 규칙
+    function applyMyKeywords(common, mine) {
+      const out = cloneKeywords(common);
+      Object.keys(mine || {}).forEach((k) => { out[k] = cloneSection(mine[k]); });
+      return out;
+    }
+
+    // 서버 sameSection 과 같은 비교. 같으면 '내 설정'이 아니다(저장해도 공용을 따라간다).
+    function sameKwSection(a, b) {
+      const n = (v) => JSON.stringify([(v && v.include) || [], (v && v.exclude) || [], (v && v.sections) || []]);
+      return n(a) === n(b);
+    }
+
+    function setKeywordState(commonSaved, mine) {
+      commonKeywords = mergeKeywords(commonSaved);
+      myKeywords = mine && typeof mine === 'object' && !Array.isArray(mine) ? mine : {};
+      userKeywords = applyMyKeywords(commonKeywords, myKeywords);
     }
 
     // 저장된 설정(saved)을 기본값 위에 덮어써 누락 없이 채운다.
@@ -3337,13 +3395,34 @@
     }
 
     function readLocalKeywords() {
-      try { return JSON.parse(localStorage.getItem(KEYWORDS_STORAGE_KEY) || '{}') || {}; } catch { return {}; }
+      try {
+        const v = JSON.parse(localStorage.getItem(KEYWORDS_STORAGE_KEY) || 'null');
+        if (v && typeof v === 'object') return { common: v.common || {}, mine: v.mine || {} };
+      } catch {}
+      try {
+        return { common: JSON.parse(localStorage.getItem(KEYWORDS_LEGACY_KEY) || '{}') || {}, mine: {} };
+      } catch {
+        return { common: {}, mine: {} };
+      }
+    }
+
+    function writeLocalKeywords(common, mine) {
+      try {
+        localStorage.setItem(KEYWORDS_STORAGE_KEY, JSON.stringify({ common, mine }));
+        localStorage.removeItem(KEYWORDS_LEGACY_KEY);
+      } catch {}
+    }
+
+    function clearKeywordCache() {
+      try { localStorage.removeItem(KEYWORDS_STORAGE_KEY); localStorage.removeItem(KEYWORDS_LEGACY_KEY); } catch {}
     }
 
     // 설정은 서버에 보관한다. → 웹·아이폰·아이패드가 같은 값을 공유한다.
     // 서버에 못 붙으면(오프라인 등) 마지막으로 받아둔 localStorage 캐시로 동작한다.
     async function loadKeywords() {
-      let saved = null;
+      const cached = readLocalKeywords();
+      let common = null;
+      let mine = cached.mine;
       try {
         const res = await apiFetch(`/api/settings/keywords`);
         if (res.ok) {
@@ -3352,45 +3431,39 @@
           // 서버가 빈 설정을 주는 건 '저장된 적 없음' 또는 '저장소가 초기화됨'이라는 뜻이다.
           // 이걸 그대로 받아 캐시까지 덮어쓰면, 저장소가 한 번 날아갔을 때
           // 접속하는 기기마다 캐시가 연쇄적으로 지워진다. 빈 값이면 캐시를 지키고 그대로 쓴다.
-          if (Object.keys(fromServer).length) {
-            saved = fromServer;
-            try { localStorage.setItem(KEYWORDS_STORAGE_KEY, JSON.stringify(saved)); } catch {}
-          }
+          if (Object.keys(fromServer).length) common = fromServer;
+          if (data.mine && typeof data.mine === 'object') mine = data.mine;
+          writeLocalKeywords(common || cached.common, mine);
         }
       } catch {}
-      if (!saved) saved = readLocalKeywords();   // 서버 실패·빈 응답 시 캐시 폴백
-      userKeywords = mergeKeywords(saved);
+      setKeywordState(common || cached.common, mine);   // 서버 실패·빈 응답 시 캐시 폴백
       return userKeywords;
     }
 
-    // 결과 : 'ok' · 'auth'(로그인 만료 · 관리자 아님) · 'fail'(그 밖의 실패)
-    async function persistKeywords() {
+    // 키워드 저장 요청 하나. 실패하면 안내만 하고 { ok: false }.
+    //   [P5] 예전엔 실패해도 이 기기 사본에 남겨 '이 기기에서만 적용'했지만, 이제 기사 키워드는 서버가 정하므로
+    //   사본에만 남기면 저장된 것처럼 보이기만 하고 기사에는 반영되지 않는다. 그래서 남기지 않는다.
+    async function sendKeywords(path, method, keywords) {
       let status = 0;
+      let data = null;
       try {
-        const res = await apiFetch('/api/settings/keywords', {
-          method: 'POST',
+        const res = await apiFetch(path, {
+          method,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keywords: userKeywords }),
+          body: keywords ? JSON.stringify({ keywords }) : undefined,
         });
         status = res.status;
+        try { data = await res.json(); } catch {}
       } catch {
         // 연결 실패 → status 0 그대로
       }
-      // 권한이 거절되면 이 기기 캐시에도 남기지 않는다. 남기면 다음 접속 때 저장된 것처럼 보인다.
-      //   401 이면 apiFetch 가 이미 로그인 화면을 띄웠다.
-      if (status === 401 || status === 403 || status === 503) {
-        if (status !== 401) {
-          alert(status === 503
-            ? '서버에서 로그인을 확인하지 못해 저장하지 못했습니다. 잠시 뒤 다시 시도하세요.'
-            : '관리자 계정만 공용 키워드를 저장할 수 있습니다.');
-        }
-        return 'auth';
-      }
-      // 그 밖의 실패라도 캐시는 갱신해 두면 이 기기에서는 설정이 유지된다.
-      try { localStorage.setItem(KEYWORDS_STORAGE_KEY, JSON.stringify(userKeywords)); } catch {}
-      if (status >= 200 && status < 300) return 'ok';
-      alert('설정을 서버에 저장하지 못했습니다.\n이 기기에서만 적용되며, 다른 기기와 동기화되지 않습니다.');
-      return 'fail';
+      if (status >= 200 && status < 300) return { ok: true, data: data || {} };
+      // 401 은 apiFetch 가 로그인 화면을, 403 not_allowed 는 관문 화면을 이미 띄웠다.
+      if (status === 401 || (status === 403 && !(data && data.code === 'admin_only'))) return { ok: false };
+      alert(status === 403 ? '관리자 계정만 공용 키워드를 저장할 수 있습니다.'
+        : status === 503 ? '서버에서 로그인을 확인하지 못해 저장하지 못했습니다. 잠시 뒤 다시 시도하세요.'
+        : '설정을 서버에 저장하지 못했습니다. 잠시 뒤 다시 시도하세요.');
+      return { ok: false };
     }
 
     // [속도] 접속 직후엔 localStorage 캐시로 즉시 시작한다.
@@ -3398,22 +3471,14 @@
     //   못 해서 첫 화면이 1초 이상 그냥 비어 있었다.
     //   캐시로 먼저 그리고, 서버 값이 다를 때만 다시 그린다.
     function seedKeywordsFromCache() {
-      userKeywords = mergeKeywords(readLocalKeywords());
+      const c = readLocalKeywords();
+      setKeywordState(c.common, c.mine);
     }
 
+    // [P5] 기사는 처음부터 서버에 저장된 키워드로 왔으므로 값이 달라도 다시 불러오지 않는다.
+    //   설정 창 · 추천 계산이 쓸 값만 맞춘다. (열려 있는 설정 창의 고치던 사본은 건드리지 않는다)
     async function syncKeywordsInBackground() {
-      const before = JSON.stringify(userKeywords);
-      try { await loadKeywords(); } catch { return; }
-      if (JSON.stringify(userKeywords) === before) return;   // 캐시가 최신이었다 → 할 일 없음
-      renderKeywordSettings();
-      await searchDone.catch(() => {});   // 먼저 시작한 검색이 끝난 뒤에 (실패했어도 진행)
-      runSearch();                        // 새 설정으로 다시 불러온다
-    }
-
-    // 서버 요청에 붙일 kw 파라미터에 현재 설정을 담는다.
-    function setKwParam(params) {
-      params.set('kw', JSON.stringify(userKeywords));
-      return params;
+      try { await loadKeywords(); } catch {}
     }
 
     // "롯데, 한진" → ['롯데','한진']
@@ -4073,7 +4138,7 @@
     //   이제 기사 화면은 뒤에 그대로 있고, 팝업이 떠 있는 동안 키·끌기를 막는 건
     //   다른 팝업과 같은 규칙([id$="-modal"] 이 떠 있나)이 맡는다.
     // ---------------------------------------------------------------
-    let settingsTab = 'prefs';   // 지금 보이는 탭 : 'prefs'(화면 설정) | 'admin'(관리자 Setting)
+    let settingsTab = 'prefs';   // 지금 보이는 탭 : 'prefs'(화면 설정) | 'mine'(내 키워드) | 'admin'(관리자 Setting)
 
     function isPrefsOpen() {
       const el = document.getElementById('prefs-modal');
@@ -4105,8 +4170,9 @@
     }
 
     function showSettingsTab(tab) {
+      if (kwDrafts && settingsTab !== tab) commitKwInputs();   // 탭을 옮기기 전에 적다 만 키워드를 담아 둔다
       settingsTab = tab;
-      ['prefs', 'admin'].forEach((k) => {
+      ['prefs', 'mine', 'admin'].forEach((k) => {
         const on = k === tab;
         const t = document.getElementById(`st-tab-${k}`);
         t.classList.toggle('is-on', on);
@@ -4115,6 +4181,7 @@
         document.getElementById(`st-foot-${k}`).hidden = !on;
       });
       if (tab === 'admin') loadAdminUsers();
+      renderKeywordSettings();   // 키워드 편집기는 하나라 보이는 탭(내 키워드 / 공용 기본 키워드) 칸에 다시 그린다
       renderSettingToggle();
     }
 
@@ -4197,7 +4264,7 @@
     function showAuthGate(state, opts = {}) {
       authBlocked = true;
       if (['none', 'pending', 'rejected'].includes(state)) rememberAuthState(state);
-      else if (state === 'login') { rememberAuthState(''); clearVoteCache(); }
+      else if (state === 'login') { rememberAuthState(''); clearVoteCache(); clearKeywordCache(); }
       document.documentElement.classList.add('auth-locked');
       renderAuthGate(state, opts);
     }
@@ -4259,6 +4326,7 @@
     async function signOut() {
       rememberAuthState('');
       clearVoteCache();   // 공용 기기에서 다음 사람에게 내 투표가 보이지 않게
+      clearKeywordCache();   // [P5] 내 키워드도 마찬가지
       try {
         const c = authClient();
         if (c) await c.auth.signOut({ scope: 'local' });
@@ -4645,9 +4713,10 @@
     //   화면 설정(테마 · 본문 크기 · 기본 노출 건수 · 화면 옵션)은 이 기기에만 저장되는
     //   개인 취향이라 로그인한 사람 누구나 바꿀 수 있다.
     // ---------------------------------------------------------------
-    // 창을 열 때의 키워드 사본. 저장하지 않고 닫으면 이 값으로 되돌린다.
-    //   (고친 값은 곧바로 userKeywords 에 들어가므로, 되돌리지 않으면 저장 안 한 키워드로 기사를 불러오게 된다)
-    let keywordsAtOpen = null;
+    // [P5] 설정 창의 키워드 편집 사본. mine = 내 키워드 탭(실제 사용값에서 시작), common = 관리자 탭(공용 기본값).
+    //   저장하기 전까지는 사본만 고치므로, 저장하지 않고 닫으면 그대로 버려진다.
+    let kwDrafts = null;
+    let kwRerunOnClose = false;   // 창 안에서 바로 저장한 경우(기본값 · 모두 공용값으로) 닫을 때 다시 불러온다
 
     //   withAdmin : 모바일 하단 '설정' 탭. 화면 설정으로 열되 관리자 탭도 보여 둔다(관리자 계정일 때만).
     function openPrefsModal(tab = 'prefs', withAdmin = false) {
@@ -4657,7 +4726,7 @@
       // [P2] 관리자 탭은 관리자 계정(ADMIN_EMAILS)에게만 보인다. 헤더 ⋮ (유저용)는 관리자 탭을 숨긴다.
       const admin = isAdminUser();
       const asAdmin = tab === 'admin' && admin;
-      if (!asAdmin) tab = 'prefs';
+      if (!asAdmin && tab !== 'mine') tab = 'prefs';
       document.getElementById('st-tab-admin').style.display = admin && (asAdmin || withAdmin) ? '' : 'none';
       applyAuthUi();                     // 로그인 계정 표시
       renderThemeButtons();              // 현재 선택 상태로 갱신
@@ -4665,8 +4734,9 @@
       renderCountSetting();
       renderPrefToggles();
       renderRecoSetting();               // [P4] 추천 켜기 · 반영 중인 투표 수
-      if (!isPrefsOpen()) keywordsAtOpen = cloneKeywords(userKeywords);
-      renderKeywordSettings();           // 지금 들고 있는 userKeywords 로 다시 그린다 (서버를 다시 부르지는 않는다)
+      // 지금 들고 있는 값으로 사본을 만든다 (서버를 다시 부르지는 않는다)
+      if (!isPrefsOpen()) kwDrafts = { mine: cloneKeywords(userKeywords), common: cloneKeywords(commonKeywords) };
+      setMyKwMsg('');
       showSettingsTab('prefs');
       el.classList.remove('hidden');
       bringModalToFront(el);
@@ -4679,13 +4749,14 @@
       const el = document.getElementById('prefs-modal');
       if (!el || el.classList.contains('hidden')) return;
       el.classList.add('hidden');
-      // 저장(저장 후 새로고침 · 기본값)하면 사본도 새 값이 되므로, 여기서 되돌려지는 건 저장 안 한 수정뿐이다.
-      if (keywordsAtOpen) { userKeywords = keywordsAtOpen; keywordsAtOpen = null; }
+      // 저장 안 한 수정은 사본째 버린다 (저장한 값은 이미 commonKeywords · myKeywords 에 들어가 있다)
+      kwDrafts = null;
       settingSubOpen = '';
-      renderKeywordSettings();
+      renderKeywordSettings();           // 사본이 없으면 두 칸을 비운다
       renderSettingToggle();
       renderTabBar();
       if (countDefaultsDirty) { rerun = true; countDefaultsDirty = false; }
+      if (kwRerunOnClose) { rerun = true; kwRerunOnClose = false; }
       if (rerun) runSearch();
     }
     function closePrefsOnBackdrop(e) { if (e.target.id === 'prefs-modal') closePrefsModal(); }
@@ -4693,8 +4764,9 @@
     // ---------------------------------------------------------------
     // [수정] v3 Phase 8 · 시안 1e 키워드 설정 : 섹션 줄을 눌러 펼친다 (상위·하위 각각 한 번에 하나)
     //   펼친 섹션 = [포함 | 제외] 칩 상자 + 하위 섹션 줄. 키워드는 조각(칩)이라 하나씩 지울 수 있다.
-    //   고친 값은 곧바로 userKeywords 에 들어가고(그래서 섹션을 옮겨도 안 사라진다),
-    //   서버·로컬에 진짜로 저장되는 건 '저장 후 새로고침' 을 눌렀을 때다.
+    //   고친 값은 곧바로 편집 사본(kwDrafts)에 들어가고(그래서 섹션을 옮겨도 안 사라진다),
+    //   서버에 진짜로 저장되는 건 '저장 후 새로고침' 을 눌렀을 때다.
+    //   [P5] 편집기는 하나다. 보이는 탭에 따라 대상만 바뀐다 : 내 키워드 탭 = mine, 관리자 탭 = common(공용 기본값).
     // ---------------------------------------------------------------
     let settingSelected = null;   // 펼친 상위 섹션 키. null = 아직 안 고름(첫 섹션을 펼쳐 둔다), '' = 모두 접음
     let settingSubOpen = '';      // 펼친 하위 섹션 키
@@ -4709,13 +4781,45 @@
       return groups;
     }
 
+    function kwTarget() { return settingsTab === 'admin' ? 'common' : 'mine'; }
+    // 편집기를 그릴 칸. 화면 설정 탭이면 없다.
+    function kwWrap() {
+      const id = settingsTab === 'admin' ? 'keyword-settings' : settingsTab === 'mine' ? 'my-keyword-settings' : '';
+      return id ? document.getElementById(id) : null;
+    }
+
     // 이 섹션의 키워드 묶음을 꺼낸다. (없으면 빈 값을 만들어 준다)
     function kwOf(key) {
-      if (!userKeywords[key]) userKeywords[key] = { include: [], exclude: [] };
-      const v = userKeywords[key];
+      if (!kwDrafts) return { include: [], exclude: [] };
+      const d = kwDrafts[kwTarget()];
+      if (!d[key]) d[key] = { include: [], exclude: [] };
+      const v = d[key];
       if (!Array.isArray(v.include)) v.include = [];
       if (!Array.isArray(v.exclude)) v.exclude = [];
       return v;
+    }
+
+    // [P5] 내 키워드 탭에서 공용값과 다른 섹션인가 (= 저장하면 '내 설정'으로 남는다)
+    function isMineSection(key) {
+      if (!kwDrafts || kwTarget() !== 'mine') return false;
+      return !sameKwSection(kwDrafts.mine[key], commonKeywords[key] || { include: [], exclude: [] });
+    }
+    function mineBadge(keys) {
+      return keys.some(isMineSection) ? '<span class="kw-mine">내 설정</span>' : '';
+    }
+    function kwRevertHtml(key) {
+      return isMineSection(key)
+        ? `<div class="kw-revert"><button type="button" class="st-link" onclick="kwRevertSection('${key}')">이 섹션 공용값으로</button></div>` : '';
+    }
+    function kwRevertSection(key) {
+      commitKwInputs();
+      kwDrafts.mine[key] = cloneSection(commonKeywords[key] || { include: [], exclude: [] });
+      setMyKwMsg('');
+      renderKeywordSettings();
+    }
+    function setMyKwMsg(msg) {
+      const el = document.getElementById('my-kw-msg');
+      if (el) el.textContent = msg || '';
     }
 
     // 섹션 줄에 붙는 숫자 (시안 1e : '포함 4 · 제외 2 · 하위 7')
@@ -4760,6 +4864,7 @@
           <button type="button" class="kw-sub-btn" aria-expanded="${open}" onclick="toggleSettingSub('${key}')">
             <span class="nm">${esc(categoryLabels[sec] || sec)}</span>
             <span class="cnt">우선 ${v.include.length} · 제외 ${v.exclude.length}</span>
+            ${mineBadge([key])}
             ${KW_CHEV}
           </button>
           ${open ? `<div class="kw-sub-body">${kwPairHtml(key, `우선 키워드 (최대 ${BRIEF_KW_PER_SECTION}개 · 제목에 들어간 기사)${over}`, '제외 키워드 (이 섹션 Brief 기사에만)')}</div>` : ''}
@@ -4779,6 +4884,7 @@
       return `
         <div class="kw-field"><span>보여줄 섹션 — 하나도 고르지 않으면 기본(속보·경제·증시·물류·정치/사회·글로벌)</span>
           <div class="kw-picks">${picks}</div>
+          ${kwRevertHtml('briefing')}
         </div>
         <p class="kw-note">고른 섹션 기사를 먼저 보여주고, 섹션별 우선 키워드 기사는 최소 ${BRIEF_KW_MIN}건 자리를 지켜 줍니다.
           모자라면 나머지 기본 섹션 기사로 채웁니다. 비슷한 내용은 1건만, 속보는 2건까지만 보여줍니다.
@@ -4808,12 +4914,16 @@
     }
 
     // [포함 | 제외] 두 칸
+    //   [P5] 내 키워드 탭이면 '이 섹션 공용값으로' 를 붙인다. 공용값이 상한보다 많으면 저장 때 잘린다고 미리 알린다.
     function kwPairHtml(key, incLabel = '포함 키워드', excLabel = '제외 키워드') {
+      const v = kwOf(key);
+      const over = kwTarget() === 'mine' && (v.include.length > MY_KW_MAX_TERMS || v.exclude.length > MY_KW_MAX_TERMS)
+        ? `<p class="kw-note"><b class="kw-warn">이 섹션을 내 설정으로 저장하면 포함·제외 각각 앞의 ${MY_KW_MAX_TERMS}개만 남습니다.</b></p>` : '';
       return `
         <div class="kw-pair">
           <div class="kw-field"><span>${incLabel}</span>${kwBoxHtml(key, 'include')}</div>
           <div class="kw-field"><span>${excLabel}</span>${kwBoxHtml(key, 'exclude')}</div>
-        </div>`;
+        </div>${over}${kwRevertHtml(key)}`;
     }
 
     // 하위 섹션 한 줄 (왼쪽 2px 선). 누르면 그 아래에 [포함 | 제외] 가 펼쳐진다.
@@ -4824,6 +4934,7 @@
           <button type="button" class="kw-sub-btn" aria-expanded="${open}" onclick="toggleSettingSub('${key}')">
             <span class="nm">${esc(categoryLabels[key] || key)}</span>
             <span class="cnt">${kwCountText(key)}</span>
+            ${mineBadge([key])}
             ${KW_CHEV}
           </button>
           ${open ? `<div class="kw-sub-body">${kwPairHtml(key)}</div>` : ''}
@@ -4838,12 +4949,20 @@
     }
 
     // 콤마로 여러 개를 한 번에 넣을 수 있다. 이미 있는 말은 다시 담지 않는다.
+    //   [P5] 내 키워드는 섹션당 개수 · 길이 상한이 있다(키워드마다 네이버를 부르므로). 공용 기본값은 묶지 않는다.
     function kwChipAdd(key, type, text) {
       const list = kwOf(key)[type];
+      const capped = kwTarget() === 'mine';
       let added = false;
+      let refused = '';
       parseKwText(text).forEach((w) => {
-        if (!list.includes(w)) { list.push(w); added = true; }
+        if (list.includes(w)) return;
+        if (capped && w.length > MY_KW_MAX_LEN) { refused = `키워드 하나는 ${MY_KW_MAX_LEN}자까지입니다. (${w.slice(0, 12)}…)`; return; }
+        if (capped && list.length >= MY_KW_MAX_TERMS) { refused = `한 섹션에 포함·제외 각각 ${MY_KW_MAX_TERMS}개까지 넣을 수 있습니다.`; return; }
+        list.push(w);
+        added = true;
       });
+      if (capped) setMyKwMsg(refused);
       return added;
     }
 
@@ -4855,14 +4974,17 @@
     // 다시 그리면 입력칸이 새로 만들어져 커서가 사라진다 → 같은 자리로 되돌려 준다.
     function renderKwKeepFocus(key, type) {
       renderKeywordSettings();
-      const el = document.querySelector(`#keyword-settings .kw-input[data-kw-key="${key}"][data-kw-type="${type}"]`);
+      const wrap = kwWrap();
+      const el = wrap && wrap.querySelector(`.kw-input[data-kw-key="${key}"][data-kw-type="${type}"]`);
       if (el) el.focus();
     }
 
     // 입력칸에 남아 있는 글자를 칩으로 담는다. (섹션을 바꾸거나 저장할 때)
     function commitKwInputs() {
       let added = false;
-      document.querySelectorAll('#keyword-settings .kw-input').forEach((el) => {
+      const wrap = kwWrap();
+      if (!wrap || !kwDrafts) return false;
+      wrap.querySelectorAll('.kw-input').forEach((el) => {
         if (el.value.trim() && kwChipAdd(el.dataset.kwKey, el.dataset.kwType, el.value)) added = true;
         el.value = '';
       });
@@ -4895,7 +5017,7 @@
       const added = kwChipAdd(el.dataset.kwKey, el.dataset.kwType, text);
       // 섹션 줄·× 를 눌러 떠난 것이면 그 버튼이 곧 다시 그린다. 여기서 먼저 그리면
       //   누르던 버튼이 새것으로 바뀌어 클릭이 사라진다(섹션이 안 펼쳐짐).
-      if (e.relatedTarget instanceof Element && e.relatedTarget.closest('#keyword-settings button')) return;
+      if (e.relatedTarget instanceof Element && e.relatedTarget.closest('.kw-acc button')) return;
       if (added) renderKeywordSettings();
     }
 
@@ -4914,8 +5036,13 @@
     }
 
     // 섹션 줄 목록을 그린다. 펼친 섹션만 칩 상자와 하위 섹션 줄을 품는다.
+    //   [P5] 보이는 탭의 칸에만 그리고 다른 칸은 비운다(입력칸이 두 벌 생기지 않게). 창이 닫혔으면 둘 다 비운다.
     function renderKeywordSettings() {
-      const wrap = document.getElementById('keyword-settings');
+      const wrap = kwDrafts ? kwWrap() : null;
+      ['keyword-settings', 'my-keyword-settings'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el && el !== wrap) el.innerHTML = '';
+      });
       if (!wrap) return;
 
       const groups = kwGroups();
@@ -4932,6 +5059,7 @@
             <button type="button" class="kw-sec-btn" aria-expanded="${open}" onclick="selectSettingSection('${g.key}')">
               <span class="nm">${esc(TAB_LABELS[g.key] || categoryLabels[g.key] || g.key)}</span>
               <span class="cnt">${kwCountText(g.key, g.children)}</span>
+              ${mineBadge([g.key, ...g.children, ...(g.key === 'briefing' ? BRIEF_PICKABLE.map((k) => `brief_${k}`) : [])])}
               ${KW_CHEV}
             </button>
             ${open ? `<div class="kw-sec-body">${g.key === 'briefing' ? briefSettingHtml() : kwPairHtml(g.key)}${g.children.map(kwSubHtml).join('')}</div>` : ''}
@@ -4939,25 +5067,62 @@
       }).join('');
     }
 
-    // 입력한 키워드를 저장하고, 설정 창을 닫은 뒤 새 기준으로 기사를 다시 불러온다.
+    // [관리자] 공용 기본 키워드를 저장하고, 설정 창을 닫은 뒤 새 기준으로 기사를 다시 불러온다.
+    //   저장하지 못하면 창을 닫지 않는다(고친 내용이 그대로 남아 다시 누를 수 있게).
     async function saveKeywordSettings() {
       commitKwInputs();          // 적다 만 글자까지 담고 저장한다
-      // 토큰이 거절되면 창을 닫지 않는다. 닫으면서 다시 불러오면 저장되지 않은 키워드로 기사를 그리게 된다.
-      if (await persistKeywords() === 'auth') return;
-      keywordsAtOpen = cloneKeywords(userKeywords);
+      const r = await sendKeywords('/api/settings/keywords', 'POST', kwDrafts.common);
+      if (!r.ok) return;
+      const common = r.data.keywords || kwDrafts.common;
+      writeLocalKeywords(common, myKeywords);
+      setKeywordState(common, myKeywords);
       closePrefsModal(true);
     }
 
-    // 모든 키워드를 기본값으로 되돌린다. (설정 창에는 그대로 머무름)
+    // [관리자] 공용 기본 키워드를 처음 기본값(DEFAULT_KEYWORDS)으로 되돌린다. (설정 창에는 그대로 머무름)
     //  [수정] 실수 방지를 위해 한 번 더 확인한 뒤 실행한다.
     async function resetKeywordSettings() {
-      const ok = window.confirm('모든 섹션의 포함/제외 키워드를 기본값으로 되돌립니다.\n지금 입력한 내용은 사라집니다.\n(모든 기기에 함께 적용됩니다.) 계속할까요?');
+      const ok = window.confirm('공용 기본 키워드를 처음 기본값으로 되돌립니다.\n지금 입력한 내용은 사라집니다.\n(모든 사용자에게 적용됩니다. 각자 \'내 키워드\'에서 바꾼 섹션은 그대로입니다.) 계속할까요?');
       if (!ok) return;   // '취소'를 누르면 아무것도 하지 않음
-      const before = userKeywords;
-      userKeywords = cloneKeywords(DEFAULT_KEYWORDS);
-      if (await persistKeywords() === 'auth') { userKeywords = before; return; }   // 저장 못 했으면 화면도 그대로
-      keywordsAtOpen = cloneKeywords(userKeywords);   // 기본값은 이미 저장됐다 → 닫아도 되돌리지 않는다
+      const next = cloneKeywords(DEFAULT_KEYWORDS);
+      const r = await sendKeywords('/api/settings/keywords', 'POST', next);
+      if (!r.ok) return;         // 저장 못 했으면 화면도 그대로
+      const common = r.data.keywords || next;
+      writeLocalKeywords(common, myKeywords);
+      setKeywordState(common, myKeywords);
+      kwDrafts.common = cloneKeywords(commonKeywords);
+      kwRerunOnClose = true;     // 이미 저장됐다 → 닫을 때 새 기준으로 다시 불러온다
       renderKeywordSettings();   // 입력칸을 기본값으로 다시 그려줌
+    }
+
+    // [P5] 내 키워드 저장. 공용값과 다른 섹션만 보낸다(같은 섹션은 서버도 한 번 더 걸러 낸다).
+    async function saveMyKeywords() {
+      commitKwInputs();
+      const d = kwDrafts.mine;
+      const changed = {};
+      Object.keys(d).forEach((k) => {
+        if (!sameKwSection(d[k], commonKeywords[k] || { include: [], exclude: [] })) changed[k] = d[k];
+      });
+      const r = await sendKeywords('/api/settings/my-keywords', 'PUT', changed);
+      if (!r.ok) return;
+      const mine = r.data.mine || {};
+      writeLocalKeywords(commonKeywords, mine);
+      setKeywordState(commonKeywords, mine);
+      closePrefsModal(true);
+    }
+
+    // [P5] 모두 공용값으로 = 내가 바꾼 섹션을 서버에서 지운다. (설정 창에는 그대로 머무름)
+    async function resetMyKeywords() {
+      const ok = window.confirm('내가 바꾼 섹션을 모두 지우고 공용 기본 키워드를 따릅니다.\n지금 입력한 내용은 사라집니다.\n(내 계정의 모든 기기에 적용됩니다.) 계속할까요?');
+      if (!ok) return;
+      const r = await sendKeywords('/api/settings/my-keywords', 'DELETE', null);
+      if (!r.ok) return;
+      writeLocalKeywords(commonKeywords, {});
+      setKeywordState(commonKeywords, {});
+      kwDrafts.mine = cloneKeywords(userKeywords);
+      kwRerunOnClose = true;
+      setMyKwMsg('');
+      renderKeywordSettings();
     }
 
     // 좌측 Filter를 바꾸면 검색을 다시 실행 (제목 바 필터는 updateCatHeader에서 자동 동기화)
@@ -5292,7 +5457,6 @@
       const params = new URLSearchParams({ limit: String(getCount()), hours: String(getHours()) });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
-      setKwParam(params);   // [추가] 키워드 설정 반영
       const data = await apiGet(`/api/briefing?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
@@ -5303,7 +5467,6 @@
       const params = new URLSearchParams({ perSection: '30', hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
-      setKwParam(params);   // [추가] 키워드 설정 반영
       const data = await apiGet(`${endpoint}?${params.toString()}`);
       if (!Array.isArray(data.sections)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.sections;
@@ -5313,7 +5476,6 @@
       const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
-      setKwParam(params);   // [추가] 키워드 설정 반영
       const data = await apiGet(`/api/${base}/section/${key}?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
@@ -5326,7 +5488,6 @@
       const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
-      setKwParam(params);   // 키워드 설정 반영
       const data = await apiGet(`/api/${base}/digest?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
@@ -5337,7 +5498,6 @@
       const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
-      setKwParam(params);
       const data = await apiGet(`/api/topic/${key}?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
@@ -6324,7 +6484,6 @@
 
         } else if (currentCategory === 'breaking') {
           const bp = new URLSearchParams({ display: String(getCount()) });
-          setKwParam(bp);   // [추가] 키워드 설정 반영
           const data = await apiGet(`/api/breaking?${bp.toString()}`);
           const list = sortItemsByCurrent(decorateItems(data.items || [], 'breaking'));
           currentResults = list;
@@ -6921,7 +7080,6 @@
     //  - 물류/증시 화면  : 하위 섹션        → /api/{base}/section/{key}
     async function fetchOneSection(key, count, hours, sort) {
       const params = new URLSearchParams({ display: String(count), hours: String(hours), sort: String(sort) });
-      setKwParam(params);   // 현재 키워드 설정 반영
       let endpoint;
       if (currentCategory === 'all') {
         endpoint = `/api/topic/${key}`;
@@ -7196,7 +7354,6 @@
       try {
         // [수정] 레일(5개)보다 많이 받아 둔다. 모바일 화면이 같은 응답으로 10위까지 그린다.
         const params = new URLSearchParams({ limit: String(KEYWORD_RANK_VIEW_TOP) });
-        setKwParam(params);   // 서버가 섹션 캐시를 찾으려면 화면과 같은 키워드 설정이 필요하다
         const data = await apiGet(`/api/keyword-rank?${params.toString()}`);
         const items = Array.isArray(data.items) ? data.items : [];
         lastKeywordItems = items;
