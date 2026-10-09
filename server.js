@@ -1175,6 +1175,65 @@ app.delete('/api/ai-key', async (req, res) => {
   }
 });
 
+// -----------------------------------------------------------------
+// [P10] 내 데이터 지우기 (PERSONALIZATION.md 2-10)
+//   - 본문 { confirm: '삭제' }. 되돌릴 수 없다.
+//   - 순서 : 내 줄 지우기 → 허용 기록 → 로그인 계정. 계정을 마지막에 지우므로,
+//     계정이 지워지는 순간 아직 안 지운 줄과 늦게 도착한 동기화 쓰기는 외래키(on delete cascade)가 함께 막는다.
+//   - 관리자는 지울 수 없다. ADMIN_EMAILS 에서 먼저 빼야 한다(계정이 지워져도 환경변수로 다시 관리자가 되는 것을 막기 위해).
+// -----------------------------------------------------------------
+const USER_DATA_TABLES = [VOTES_TABLE, SAVED_TABLE, READ_TABLE, USER_SETTINGS_TABLE, AI_KEYS_TABLE];
+const DELETE_CONFIRM_WORD = '삭제';
+
+async function restDelete(pathAndQuery) {
+  const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${pathAndQuery}`, {
+    method: 'DELETE', headers: { ...supabaseHeaders(), Prefer: 'return=minimal' },
+  }, 8000);
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
+}
+
+async function deleteAuthUser(userId) {
+  const r = await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'DELETE', headers: supabaseHeaders(),
+  }, 8000);
+  // 404 = 이미 없음(앞선 시도에서 지워짐) → 성공으로 본다
+  if (!r.ok && r.status !== 404) throw new Error(`HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
+}
+
+// 이 사람의 토큰 · 허용 상태 · 풀어 둔 키를 메모리에서 뺀다(안 빼면 최대 1시간 · 10분 더 통한다).
+function forgetUserInMemory(user) {
+  for (const [k, v] of tokenCache) if (v.user && v.user.id === user.id) tokenCache.delete(k);
+  accessCache.delete(user.email);
+  aiKeyCache.delete(user.id);
+}
+
+app.delete('/api/me/data', async (req, res) => {
+  if (!SUPABASE_ENABLED) return res.status(503).json({ error: '계정 저장소가 설정되지 않았습니다.' });
+  const u = req.user;
+  if (ADMIN_EMAILS.has(u.email)) {
+    return res.status(400).json({ error: '관리자 계정은 여기서 지울 수 없습니다. 서버의 ADMIN_EMAILS 에서 먼저 빼 주세요.', code: 'admin_protected' });
+  }
+  if (!req.body || req.body.confirm !== DELETE_CONFIRM_WORD) {
+    return res.status(400).json({ error: `확인 단어(${DELETE_CONFIRM_WORD})가 맞지 않습니다.` });
+  }
+  const uid = u.id;
+  try {
+    // 같은 사람의 prefs · 키 저장이 진행 중이면 끝난 뒤에 지운다(끝난 뒤 낡은 값이 되살아나지 않게)
+    await runAfter(prefsLocks, uid, () => runAfter(aiKeyLocks, uid, async () => {
+      const q = `user_id=eq.${encodeURIComponent(uid)}`;
+      await Promise.all(USER_DATA_TABLES.map((t) => restDelete(`${t}?${q}`)));
+      await restDelete(`${ALLOWED_TABLE}?email=eq.${encodeURIComponent(u.email)}`);
+      await deleteAuthUser(uid);
+    }));
+    forgetUserInMemory(u);
+    console.log('[내 데이터 지우기 완료]', uid);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[내 데이터 지우기 실패]', e.message);
+    res.status(500).json({ error: '지우지 못했습니다. 잠시 뒤 다시 시도하세요. 계속 안 되면 관리자에게 알려 주세요. (일부만 지워졌을 수 있습니다)' });
+  }
+});
+
 // 공용 설정이라 관리자만 덮어쓴다. 읽기(GET)는 허용 사용자 모두에게 열어 둔다.
 app.post('/api/settings/keywords', requireAdminUser, async (req, res) => {
   const kw = req.body && req.body.keywords;
