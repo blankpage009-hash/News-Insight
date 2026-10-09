@@ -2222,6 +2222,21 @@
             <div class="st-name"><b>화면 옵션</b><span class="st-hint">이 기기에만 적용</span></div>
             <div id="pref-toggles" class="st-list"></div>
           </div>
+          <!-- [P4] 추천 : 전체 화면에서 좋아요/싫어요로 상자 건수 · 순서를 조정한다 -->
+          <div class="st-row">
+            <div class="st-name"><b>추천</b><span class="st-hint">전체 화면 · 좋아요가 많은 섹션은 더 많이, 싫어요 쪽은 덜 보여 줍니다</span></div>
+            <div class="st-list min-w-0">
+              <div class="st-item">
+                <span class="st-item-name"><span>추천 켜기</span><span id="reco-status"></span></span>
+                <button type="button" id="reco-switch" role="switch" aria-checked="true" aria-label="추천 켜기" title="추천 켜기"
+                  onclick="toggleReco()" class="pref-switch"></button>
+              </div>
+              <div class="st-item">
+                <span class="st-item-name"><span>취향 초기화</span><span>지금까지의 투표를 추천에서 뺍니다 · 버튼 표시와 숨긴 기사는 그대로</span></span>
+                <button type="button" class="pv-btn" onclick="resetTaste()">초기화</button>
+              </div>
+            </div>
+          </div>
           <!-- [P2] 로그인 계정 · 로그아웃 -->
           <div class="st-row">
             <div class="st-name"><b>로그인 계정</b><span class="st-hint">구글 계정으로 로그인돼 있습니다</span></div>
@@ -2870,7 +2885,10 @@
       } catch (e) { console.error('투표 사본을 기록하지 못했습니다.', e); }
     }
 
-    function clearVoteCache() { try { localStorage.removeItem(VOTE_STORAGE_KEY); } catch {} }
+    // [P4] 취향 초기화 시각도 이 사람의 것이라 같이 지운다.
+    function clearVoteCache() {
+      try { localStorage.removeItem(VOTE_STORAGE_KEY); localStorage.removeItem(RECO_RESET_KEY); } catch {}
+    }
 
     function voteOf(key) { const e = key && votes.get(key); return e ? e.v : 0; }
     function isDislikedKey(key) { return voteOf(key) === -1; }
@@ -2909,12 +2927,16 @@
       if (!key) return;
       const prev = votes.get(key) || null;
       const next = prev && prev.v === want ? 0 : want;
-      const meta = { section: (item.cats && item.cats[0]) || item.category || '', title: plainText(item.title || '').slice(0, 300) };
+      // [P4] 전체 화면 상자에서 누른 투표는 그 상자의 섹션으로 기록한다.
+      //   cats[0] 은 같은 기사가 걸린 첫 섹션(주로 '속보')이라, 경제 상자에서 누른 좋아요가 속보 점수로 들어갔다.
+      const inBox = sectionState.some((s) => s.items.includes(item));
+      const section = inBox ? item.category : ((item.cats && item.cats[0]) || item.category || '');
+      const meta = { section, title: plainText(item.title || '').slice(0, 300) };
       setVoteLocal(key, next, meta);
       if (next === -1 && currentCategory !== 'saved') {
         const spots = hideFromLists(key);
         if (spots.length) {
-          lastHidden = { key, spots };
+          lastHidden = { key, spots, prev };
           rerenderListIfShown();
           showToast('싫어요를 눌러 이 기사를 숨겼습니다.', '되돌리기', undoHide);
         }
@@ -2966,14 +2988,16 @@
       const h = lastHidden;
       lastHidden = null;
       if (!h) return;
-      const meta = { section: '', title: '' };
-      setVoteLocal(h.key, 0, meta);
+      // [P4] 좋아요였던 기사에 싫어요를 눌렀다가 되돌리면 좋아요로 돌아간다(예전엔 투표가 지워져 취향 기록이 사라졌다).
+      const back = h.prev ? h.prev.v : 0;
+      const meta = h.prev ? { section: h.prev.section, title: h.prev.title } : { section: '', title: '' };
+      setVoteLocal(h.key, back, meta);
       h.spots.forEach(({ sec, index, item }) => {
         const arr = sec ? (sectionState.find((s) => s.key === sec) || {}).items : currentResults;
         if (arr) arr.splice(Math.min(index, arr.length), 0, item);
       });
       rerenderListIfShown();
-      sendVote(h.key, 0, meta, null);
+      sendVote(h.key, back, meta, null);
     }
 
     // 서버 값이 늦게 도착했을 때 : 이미 그려 둔 목록에서 싫어요 기사를 걷어 낸다.
@@ -2988,6 +3012,189 @@
       sectionState.forEach((s) => sweep(s.items));
       sweep(currentResults);
       if (removed) rerenderListIfShown();
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] P4 추천 (전체 화면만)
+    //   서버는 모두에게 같은 후보(섹션당 30건)를 준다. 줄 세우기는 여기서 한다 → 캐시 키에 사용자가 섞이지 않는다.
+    //   - 섹션 점수 : 그 섹션 투표의 합(좋아요 +1 · 싫어요 −1, 14일마다 절반) → 상자 건수 ±1~2 (최소 2건)
+    //   - 키워드 점수 : 투표한 제목에 들어 있던 그 섹션의 포함 키워드에 같은 방식으로 → 상자 안 순서
+    //   - 같은 사건 싫어요 : 최근 싫어요 기사와 제목이 많이 겹치면 순서를 내린다
+    //   - 5칸마다 1칸(20%)은 원래 순서의 기사를 둔다(한쪽으로 쏠리지 않게)
+    //   줄 세우기는 기사를 받을 때 한 번만 한다. 그릴 때마다 하면 접기·필터만 눌러도 순서가 바뀐다.
+    //   투표를 눌러도 다시 줄 세우지 않는다(누르는 손 밑에서 목록이 움직이지 않게). 다음에 불러올 때 반영된다.
+    // ---------------------------------------------------------------
+    // 강도 조절 손잡이 : 며칠 써 보며 여기 숫자만 바꾼다.
+    const RECO = {
+      MIN_VOTES: 5,            // 이보다 적으면 개인화하지 않는다
+      HALF_LIFE_DAYS: 14,      // 이만큼 지나면 투표 무게가 절반
+      KW_CAP: 3,               // 기사 하나의 키워드 점수 상한(±)
+      SECTION_CAP: 5,          // 섹션 점수 상한(±)
+      COUNT_STEP: [1.5, 3.5],  // 섹션 점수가 이 값을 넘으면 건수 ±1, ±2
+      MIN_SHOWN: 2,            // 싫어요가 많은 섹션도 이만큼은 보여 준다
+      POS_PER_POINT: 3,        // 점수 1점 = 몇 칸 올리고 내리는지
+      EXPLORE_EVERY: 5,        // 이 칸마다 1칸은 원래 순서 (5 → 20%)
+      EVENT_DAYS: 28,          // 같은 사건 비교에 쓰는 싫어요 기간
+      EVENT_MAX: 200,          // 같은 사건 비교에 쓰는 싫어요 최대 건수(최근 것부터)
+      EVENT_SIM: 0.3,          // 제목 낱말 겹침이 이 이상이면 같은 사건 (서버 DUP_TITLE_THRESHOLD 와 같은 값)
+      EVENT_PENALTY: 2,        // 같은 사건 싫어요 감점
+    };
+    const RECO_SECTIONS = ['breaking', 'logistics', 'economy', 'society', 'global', 'ai', 'stock'];   // 전체 화면 상자들
+    const RECO_RESET_KEY = 'newsinsight:reco-reset:v1';   // 취향 초기화 시각. P7 에서 계정 설정으로 옮긴다
+
+    function readRecoReset() {
+      try { return Number(localStorage.getItem(RECO_RESET_KEY)) || 0; } catch { return 0; }
+    }
+
+    // 하위 섹션·다른 화면에서 누른 투표도 전체 화면 상자로 모은다 (logistics_lotte → logistics). 상자에 없는 섹션은 버린다.
+    function recoSectionOf(section) {
+      const s = parentCategoryOf(section) || section;
+      return RECO_SECTIONS.includes(s) ? s : '';
+    }
+
+    function recoTitle(t) { return String(t || '').replace(/<[^>]*>/g, ' ').toLowerCase(); }
+    function recoTokens(t) {
+      return recoTitle(t).replace(/[^가-힣a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length >= 2);
+    }
+    // '경제 금리' 같은 여러 낱말 키워드는 낱말이 모두 제목에 있으면 걸린 것으로 본다.
+    function termInTitle(term, lowTitle) {
+      const words = String(term || '').toLowerCase().split(/\s+/).filter(Boolean);
+      return words.length > 0 && words.every((w) => lowTitle.includes(w));
+    }
+    function jaccardSets(A, B) {
+      if (!A.size || !B.size) return 0;
+      let inter = 0;
+      A.forEach((t) => { if (B.has(t)) inter++; });
+      return inter / (A.size + B.size - inter);
+    }
+    const clampAbs = (v, cap) => Math.max(-cap, Math.min(cap, v));
+    // 키워드는 화면에서 고치는 중일 수도 있으니 kwOf(값을 만들어 넣음) 대신 읽기만 한다.
+    const recoIncludes = (s) => (userKeywords[s] && Array.isArray(userKeywords[s].include)) ? userKeywords[s].include : [];
+
+    // 취향 점수. 반영할 투표가 MIN_VOTES 보다 적거나 추천이 꺼져 있으면 null.
+    function tasteProfile() {
+      const used = recoVoteCount();
+      if (!screenPrefs.reco || used < RECO.MIN_VOTES) return null;
+      const now = Date.now();
+      const reset = readRecoReset();
+      const halfLife = RECO.HALF_LIFE_DAYS * 864e5;
+      const section = {}, kw = {}, dislikes = [];
+      votes.forEach((e) => {
+        if (!e.t || e.t < reset) return;
+        const decay = Math.pow(0.5, (now - e.t) / halfLife);
+        const w = e.v * decay;
+        const s = recoSectionOf(e.section);
+        if (s) {
+          section[s] = (section[s] || 0) + w;
+          const low = recoTitle(e.title);
+          recoIncludes(s).forEach((term) => {
+            if (termInTitle(term, low)) kw[s + '\n' + term] = (kw[s + '\n' + term] || 0) + w;
+          });
+        }
+        if (e.v === -1 && now - e.t < RECO.EVENT_DAYS * 864e5) dislikes.push({ t: e.t, decay, tokens: new Set(recoTokens(e.title)) });
+      });
+      Object.keys(section).forEach((s) => { section[s] = clampAbs(section[s], RECO.SECTION_CAP); });
+      dislikes.sort((a, b) => b.t - a.t);
+      return { section, kw, dislikes: dislikes.slice(0, RECO.EVENT_MAX), used };
+    }
+
+    // 추천에 들어가는 투표 수 (초기화 이후 · 시각이 있는 것)
+    function recoVoteCount() {
+      const reset = readRecoReset();
+      let n = 0;
+      votes.forEach((e) => { if (e.t && e.t >= reset) n++; });
+      return n;
+    }
+
+    function itemTasteScore(item, secKey, p) {
+      const low = recoTitle(item.title);
+      let kwScore = 0;
+      recoIncludes(secKey).forEach((term) => {
+        const v = p.kw[secKey + '\n' + term];
+        if (v && termInTitle(term, low)) kwScore += v;
+      });
+      let score = clampAbs(kwScore, RECO.KW_CAP);
+      if (p.dislikes.length) {
+        const toks = new Set(recoTokens(item.title));
+        let worst = 0;
+        p.dislikes.forEach((d) => { if (d.decay > worst && jaccardSets(toks, d.tokens) >= RECO.EVENT_SIM) worst = d.decay; });
+        score -= RECO.EVENT_PENALTY * worst;
+      }
+      return score;
+    }
+
+    function sectionCountDelta(secKey, p) {
+      const s = (p && p.section[secKey]) || 0;
+      const [one, two] = RECO.COUNT_STEP;
+      if (s >= two) return 2;
+      if (s >= one) return 1;
+      if (s <= -two) return -2;
+      if (s <= -one) return -1;
+      return 0;
+    }
+
+    // 점수로 자리를 옮긴다(점수 1점 = POS_PER_POINT 칸). EXPLORE_EVERY 번째 칸마다는 원래 순서에서 아직 안 나온 첫 기사를 둔다.
+    //   무작위를 쓰지 않는다 → 같은 투표 · 같은 후보면 언제 열어도 같은 순서.
+    function rerankForTaste(items, secKey, p) {
+      if (!p || items.length < 2) return items;
+      const scored = items.map((it, i) => ({ it, i, pos: i - itemTasteScore(it, secKey, p) * RECO.POS_PER_POINT }));
+      const byTaste = [...scored].sort((a, b) => a.pos - b.pos || a.i - b.i);
+      const used = new Set();
+      const out = [];
+      let ti = 0, oi = 0;
+      for (let k = 0; k < items.length; k++) {
+        const explore = (k + 1) % RECO.EXPLORE_EVERY === 0;
+        let pick;
+        if (explore) { while (used.has(scored[oi])) oi++; pick = scored[oi]; }
+        else { while (used.has(byTaste[ti])) ti++; pick = byTaste[ti]; }
+        used.add(pick);
+        out.push(pick.it);
+      }
+      return out;
+    }
+
+    // 상자에 실제로 보여 줄 건수. sec.count 는 사용자가 고른 값 그대로 둔다(필터 드롭다운이 그 값을 보여 준다).
+    function shownCountOf(sec) {
+      const base = sec.count;
+      const want = sec.recoDelta ? Math.max(RECO.MIN_SHOWN, base + sec.recoDelta) : base;
+      return Math.min(want, sec.items.length);
+    }
+
+    // 상자에 보일 기사. 최신순 상자는 추천으로 '고른' 기사들을 다시 시간순으로 놓는다(사용자 결정 2026-10-09).
+    function shownItemsOf(sec) {
+      const picked = sec.items.slice(0, shownCountOf(sec));
+      return sortItemsBy(picked, sec.sort);
+    }
+
+    // 설정 → 추천 줄
+    function renderRecoSetting() {
+      const sw = document.getElementById('reco-switch');
+      const st = document.getElementById('reco-status');
+      if (!sw || !st) return;
+      sw.setAttribute('aria-checked', screenPrefs.reco ? 'true' : 'false');
+      const n = recoVoteCount();
+      st.textContent = !screenPrefs.reco ? '꺼져 있습니다. 원래 순서와 건수로 보여 줍니다.'
+        : n < RECO.MIN_VOTES ? `반영할 투표 ${n}건 · ${RECO.MIN_VOTES}건부터 추천이 시작됩니다.`
+        : `투표 ${n}건을 반영하고 있습니다.`;
+    }
+
+    function rerunIfAllView() {
+      if (currentCategory === 'all' && !isKeywordMode()) runSearch();
+    }
+
+    function toggleReco() {
+      screenPrefs.reco = !screenPrefs.reco;
+      saveScreenPrefs();
+      renderRecoSetting();
+      rerunIfAllView();   // 서버 캐시에서 바로 오므로 다시 불러 원래 순서/추천 순서로 그린다
+    }
+
+    // 투표 기록과 👍/👎 표시 · 숨긴 기사는 그대로 두고, 지금까지의 투표를 추천 계산에서만 뺀다(사용자 결정 2026-10-09).
+    function resetTaste() {
+      if (!confirm('지금까지 누른 좋아요/싫어요를 추천에서 뺍니다.\n버튼 표시와 숨긴 기사는 그대로입니다.\n\n초기화할까요?')) return;
+      try { localStorage.setItem(RECO_RESET_KEY, String(Date.now())); } catch {}
+      renderRecoSetting();
+      rerunIfAllView();
     }
 
     // 알림 한 줄. 새 알림이 오면 이전 것을 대신한다.
@@ -4376,7 +4583,7 @@
     //   나머지 하나만 여기에 모아 둔다.
     // ---------------------------------------------------------------
     const SCREEN_PREFS_KEY = 'newsinsight:prefs:v1';
-    const SCREEN_PREFS_DEFAULT = { dimRead: true };
+    const SCREEN_PREFS_DEFAULT = { dimRead: true, reco: true };   // reco : [P4] 전체 화면 추천
     let screenPrefs = { ...SCREEN_PREFS_DEFAULT };
 
     function loadScreenPrefs() {
@@ -4457,6 +4664,7 @@
       renderFontSizeSetting();
       renderCountSetting();
       renderPrefToggles();
+      renderRecoSetting();               // [P4] 추천 켜기 · 반영 중인 투표 수
       if (!isPrefsOpen()) keywordsAtOpen = cloneKeywords(userKeywords);
       renderKeywordSettings();           // 지금 들고 있는 userKeywords 로 다시 그린다 (서버를 다시 부르지는 않는다)
       showSettingsTab('prefs');
@@ -6078,10 +6286,12 @@
         } else if (currentCategory === 'all') {
           // 섹션 박스를 여러 개 늘어놓는 '전체보기'는 이제 이 화면 하나뿐이다.
           const sections = await fetchSectionsData('/api/all/sections', { dateFrom, dateTo });
+          const taste = tasteProfile();   // [P4] 받을 때 한 번만 줄 세운다 (null = 개인화 안 함)
           sectionState = sections.map((sec) => ({
             key: sec.key,
             label: sec.label,
-            items: sortItemsByCurrent(decorateItems(sec.items, sec.key)),
+            items: rerankForTaste(sortItemsByCurrent(decorateItems(sec.items, sec.key)), sec.key, taste),
+            recoDelta: sectionCountDelta(sec.key, taste),   // [P4] 보여 줄 건수 ±. 상자 필터에서 건수를 직접 고르면 0
             count: getCount(),
             hours: getHours(),   // [추가] 섹션별 게재 기간 (제목 바에서 개별 조정 가능)
             sort: getSort(),     // [추가] 섹션별 정렬 (제목 바에서 개별 조정 가능)
@@ -6656,7 +6866,8 @@
       try {
         const fresh = await fetchOneSection(key, s.count, s.hours, s.sort);
         if (fresh) {
-          s.items = sortItemsBy(decorateItems(fresh, key), s.sort);   // 이 섹션만의 정렬값 적용
+          // 이 섹션만의 정렬값 적용 + [P4] 추천. 받은 건수가 count 뿐이라 건수 늘리기는 있는 만큼만 된다(shownCountOf).
+          s.items = rerankForTaste(sortItemsBy(decorateItems(fresh, key), s.sort), key, currentCategory === 'all' ? tasteProfile() : null);
           mergeCatsAcrossSections(sectionState);                 // 섹션 겹침 태그 다시 계산
           currentResults = sectionState.flatMap((x) => x.items); // 요약/원문 링크가 새 기사를 찾도록 갱신
         }
@@ -6676,6 +6887,7 @@
       if (!s) return;
       const newCount = Number(v) || 5;
       s.count = newCount;
+      s.recoDelta = 0;   // [P4] 직접 고른 건수는 추천이 늘리거나 줄이지 않는다
       s.collapsed = false;
 
       // 받아둔 기사로 충분 → 재요청 없이 그 섹션만 즉시 다시 그림
@@ -6722,7 +6934,7 @@
     }
 
     function visibleCount() {
-      if (sectionState.length) return sectionState.reduce((s, x) => s + Math.min(x.count, x.items.length), 0);
+      if (sectionState.length) return sectionState.reduce((s, x) => s + shownCountOf(x), 0);
       return currentResults.length;
     }
 
@@ -6740,7 +6952,7 @@
       const wrap = document.getElementById('news-list');
       const selCls = 'bg-ink border border-line px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold';
       wrap.innerHTML = sectionState.map((sec) => {
-        const shown = sec.items.slice(0, sec.count);
+        const shown = shownItemsOf(sec);
         const filtersOpen = openSectionFilters.has(sec.key);
         return `
         <section class="sec-box">
@@ -6779,7 +6991,7 @@
       }).join('');
       // 접기·필터·불러오는 중 표시마다 다시 그려 사진 칸이 비므로, 아는 사진은 바로 다시 채운다
       fillThumbSlots();
-      loadBriefThumbs(sectionState.flatMap((sec) => sec.collapsed ? [] : sec.items.slice(0, sec.count)));
+      loadBriefThumbs(sectionState.flatMap((sec) => sec.collapsed ? [] : shownItemsOf(sec)));
     }
 
     function formatDate(iso) {
