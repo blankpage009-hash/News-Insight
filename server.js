@@ -686,8 +686,10 @@ const PREF_COUNT_KEYS = ['section', 'subsection', 'briefing', 'search'];
 const PREF_COUNT_CHOICES = [3, 5, 10, 15, 20, 30];
 
 const isPlainObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+// [P9] 사용자가 고른 AI 모델 이름. 구글 주소(models/<이름>:generateContent)에 그대로 들어가므로 글자 종류를 좁게 막는다.
+const AI_MODEL_RE = /^gemini-[a-z0-9][a-z0-9.-]{0,60}$/;
 
-// 허용한 칸 · 모양이 맞는 값만 남긴다. 모르는 칸은 버린다(P9 의 aiModel 은 그때 더한다).
+// 허용한 칸 · 모양이 맞는 값만 남긴다. 모르는 칸은 버린다.
 function cleanPrefsPatch(p) {
   const out = {};
   if (!isPlainObj(p)) return out;
@@ -709,6 +711,7 @@ function cleanPrefsPatch(p) {
   }
   ['railCollapsed', 'dimRead', 'reco'].forEach((k) => { if (typeof p[k] === 'boolean') out[k] = p[k]; });
   if (Number.isFinite(p.recoReset) && p.recoReset >= 0) out.recoReset = Math.floor(p.recoReset);
+  if (p.aiModel === 'auto' || (typeof p.aiModel === 'string' && AI_MODEL_RE.test(p.aiModel))) out.aiModel = p.aiModel;
   return out;
 }
 
@@ -1012,26 +1015,116 @@ function aiErrorBody(err) {
   return { error: err.message };
 }
 
-// 저장 전에 구글에 한 번 물어 쓸 수 있는 키인지 본다. 모델 목록 조회라 글 생성 한도를 쓰지 않는다.
-//   문제가 없으면 null, 있으면 { status, code?, error }.
-async function checkGeminiKey(key) {
-  let r;
-  try {
-    r = await fetchWithTimeout('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1',
-      { headers: geminiHeaders(key) }, 8000);
-  } catch {
-    return { status: 502, error: '구글에 키를 확인하지 못했습니다. 잠시 뒤 다시 저장하세요.' };
+// 구글에 그 키로 쓸 수 있는 모델 목록을 묻는다. 키 확인(P8)과 모델 드롭다운(P9)이 같이 쓴다 — 글 생성 한도를 쓰지 않는다.
+//   [P9] 예전에는 확인만 하려고 pageSize=1 로 물었다. 이제 한 번에 목록까지 받아 둔다(키 저장 때 받아 하루 보관).
+//   돌려주는 것 : 성공이면 { models: [구글 모델 정보] }, 실패면 { bad: { status, code?, error } }.
+async function listGeminiModels(key) {
+  const models = [];
+  let pageToken = '';
+  for (let page = 0; page < 5; page++) {   // 지금은 60여 개라 한 쪽이면 끝난다. 쪽 수가 늘어도 끝없이 돌지 않게 상한
+    let r;
+    try {
+      r = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''}`,
+        { headers: geminiHeaders(key) }, 8000);
+    } catch {
+      return { bad: { status: 502, error: '구글에 키를 확인하지 못했습니다. 잠시 뒤 다시 시도하세요.' } };
+    }
+    if (!r.ok) {
+      if (r.status === 400 || r.status === 401) {
+        return { bad: { status: 400, code: 'ai_key_invalid', error: '구글이 이 키를 받지 않았습니다. AI Studio 에서 복사한 키가 맞는지 확인하세요.' } };
+      }
+      if (r.status === 403) {
+        return { bad: { status: 400, code: 'ai_key_invalid', error: '이 키로는 Gemini API 를 쓸 수 없습니다. AI Studio 에서 만든 키인지, 키 사용 제한을 확인하세요.' } };
+      }
+      if (r.status === 429) return { bad: { status: 429, error: '구글이 잠시 확인을 막았습니다. 1분쯤 뒤 다시 시도하세요.' } };
+      return { bad: { status: 502, error: `구글에 키를 확인하지 못했습니다(HTTP ${r.status}). 잠시 뒤 다시 시도하세요.` } };
+    }
+    const data = await r.json().catch(() => ({}));
+    if (Array.isArray(data.models)) models.push(...data.models);
+    pageToken = typeof data.nextPageToken === 'string' ? data.nextPageToken : '';
+    if (!pageToken) break;
   }
-  if (r.ok) return null;
-  if (r.status === 400 || r.status === 401) {
-    return { status: 400, code: 'ai_key_invalid', error: '구글이 이 키를 받지 않았습니다. AI Studio 에서 복사한 키가 맞는지 확인하세요.' };
-  }
-  if (r.status === 403) {
-    return { status: 400, code: 'ai_key_invalid', error: '이 키로는 Gemini API 를 쓸 수 없습니다. AI Studio 에서 만든 키인지, 키 사용 제한을 확인하세요.' };
-  }
-  if (r.status === 429) return { status: 429, error: '구글이 잠시 확인을 막았습니다. 1분쯤 뒤 다시 저장하세요.' };
-  return { status: 502, error: `구글에 키를 확인하지 못했습니다(HTTP ${r.status}). 잠시 뒤 다시 저장하세요.` };
+  return { models };
 }
+
+// -----------------------------------------------------------------
+// [P9] AI 모델 선택 (PERSONALIZATION.md 2-7)
+//   - 드롭다운에는 '그 사람의 키로 실제 쓸 수 있는' 글 생성 모델만 보여 준다.
+//   - 목록은 키(의 해시)마다 하루 담아 둔다. 드롭다운을 열 때마다 구글을 부르지 않는다. 키가 바뀌면 해시가 달라져 자연히 새로 받는다.
+//   - 메모리의 열쇠는 키 원문이 아니라 해시다(키별 모델 상태 geminiKeyStates 도 같은 해시를 쓴다).
+// -----------------------------------------------------------------
+const AI_MODELS_TTL = 1000 * 60 * 60 * 24;
+const AI_MODELS_CACHE_MAX = 500;
+const aiModelsCache = new Map();   // 키 해시 -> { ts, ids: [모델 이름] }
+
+function geminiKeyId(apiKey) {
+  return crypto.createHash('sha256').update(`newsinsight:gemini-key-id|${apiKey}`).digest('hex').slice(0, 32);
+}
+
+// 글 생성(generateContent)이 되는 gemini-* 만. 임베딩 · 이미지 · 음성 · 실시간 · 받아쓰기 · 로봇 · 화면 조작 모델은 뺀다.
+//   (2026-10-09 실제 목록 62개 → 17개. 이미지 모델도 generateContent 를 내세우므로 이름으로 거른다)
+const AI_MODEL_EXCLUDE_RE = /(embedding|image|banana|tts|live|audio|transcribe|robotics|computer-use|customtools)/i;
+function textModelIds(models) {
+  const ids = (models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map((m) => String(m.name || '').replace(/^models\//, ''))
+    .filter((id) => AI_MODEL_RE.test(id) && !AI_MODEL_EXCLUDE_RE.test(id));
+  return [...new Set(ids)];
+}
+
+function setAiModelsCache(keyId, ids) {
+  aiModelsCache.delete(keyId);
+  const entry = { ts: Date.now(), ids };
+  aiModelsCache.set(keyId, entry);
+  if (aiModelsCache.size > AI_MODELS_CACHE_MAX) aiModelsCache.delete(aiModelsCache.keys().next().value);
+  return entry;
+}
+
+// 추천 모델 설명. PERFORMANCE.md 의 실측(2026-07-27, 실제 크기 프롬프트)을 근거로 적는다.
+//   구글 목록의 thinking 칸은 3.1-flash-lite(실측 생각토큰 0)에도 true 라서 '느림' 판단에 못 쓴다.
+const AI_MODEL_NOTES = {
+  'gemini-3.1-flash-lite': '자동 1순위 · 생각 안 함 · 보통 3~10초',
+  'gemini-3.6-flash': '생각 모델 · 느림(약 13초) · 하루 20회 한도',
+  'gemini-3.1-flash-lite-preview': '1순위의 미리보기판 · 비슷한 속도',
+  'gemini-3.5-flash-lite': '가장 빠름(2초대) · 이 서버에서 응답이 없을 때가 있음',
+  'gemini-flash-lite-latest': '최신 flash-lite 별칭(지금은 3.5-flash-lite)',
+  'gemini-flash-latest': '최신 flash 별칭 · 생각 모델 · 느림',
+  'gemini-2.5-flash-lite': '구형 · 새 키에서는 막혀 있을 수 있음',
+  'gemini-2.5-flash': '구형 · 생각 모델 · 새 키에서는 막혀 있을 수 있음',
+};
+// 실측이 없는 모델 : lite 가 아니면 3.x · 2.5 는 생각이 기본으로 켜져 있어 느리다(PERFORMANCE.md '주요 내용 / Insight 응답').
+function otherModelNote(id) {
+  return /lite/.test(id) ? '속도 · 한도 미확인' : '생각 모델일 수 있음 · 느릴 수 있음 · 한도 미확인';
+}
+
+// 화면에 내려보내는 모양 : 자동 1순위 이름 · 추천(자동 후보 순서) · 기타(이름순)
+function aiModelsPublic(entry) {
+  const ids = new Set(entry.ids);
+  const rec = MODEL_CANDIDATES.filter((id) => ids.has(id));
+  const recSet = new Set(rec);
+  return {
+    autoFirst: MODEL_CANDIDATES[0],
+    fetchedAt: entry.ts,
+    recommended: rec.map((id) => ({ id, note: AI_MODEL_NOTES[id] || '' })),
+    other: entry.ids.filter((id) => !recSet.has(id)).sort().map((id) => ({ id, note: otherModelNote(id) })),
+  };
+}
+
+// refresh=1 이면 담아 둔 목록을 버리고 구글에 다시 묻는다(설정의 '목록 새로고침').
+//   오류는 AI 라우트와 같이 200 + code — 화면이 401 을 '로그인 만료'로 읽기 때문이다.
+app.get('/api/ai-models', async (req, res) => {
+  const ai = await aiKeyForRequest(req, res);
+  if (!ai) return;
+  const keyId = geminiKeyId(ai.key);
+  let entry = aiModelsCache.get(keyId);
+  if (!entry || Date.now() - entry.ts > AI_MODELS_TTL || req.query.refresh) {
+    const got = await listGeminiModels(ai.key);
+    if (got.bad) return res.json({ error: got.bad.error, ...(got.bad.code ? { code: got.bad.code } : {}) });
+    entry = setAiModelsCache(keyId, textModelIds(got.models));
+  }
+  res.set('Cache-Control', 'no-store');
+  res.json(aiModelsPublic(entry));
+});
 
 // 본문 { key }. 구글에 확인한 뒤 암호화해 저장한다. 응답에는 끝 4자리만.
 app.put('/api/ai-key', async (req, res) => {
@@ -1041,8 +1134,10 @@ app.put('/api/ai-key', async (req, res) => {
   if (!/^[A-Za-z0-9._-]{20,200}$/.test(key)) {
     return res.status(400).json({ error: '구글 AI 키 모양이 아닙니다. AI Studio 에서 복사한 키를 그대로 붙여 넣으세요.', code: 'ai_key_invalid' });
   }
-  const bad = await checkGeminiKey(key);
+  const { bad, models } = await listGeminiModels(key);
   if (bad) return res.status(bad.status).json({ error: bad.error, code: bad.code });
+  // [P9] 확인하며 받은 목록을 그대로 담아 둔다 → 저장 직후 드롭다운이 구글을 다시 부르지 않는다
+  const modelsEntry = setAiModelsCache(geminiKeyId(key), textModelIds(models));
   const uid = req.user.id;
   try {
     const entry = await runAfter(aiKeyLocks, uid, async () => {
@@ -1055,7 +1150,7 @@ app.put('/api/ai-key', async (req, res) => {
       if (!r.ok) throw new Error(`HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
       return setAiKeyCache(uid, { ts: Date.now(), key, last4: key.slice(-4), updatedAt, broken: false });
     });
-    res.json({ ok: true, aiKey: aiKeyPublic(entry) });
+    res.json({ ok: true, aiKey: aiKeyPublic(entry), models: aiModelsPublic(modelsEntry) });
   } catch (e) {
     console.error('[AI 키 저장 실패]', e.message);
     res.status(500).json({ error: '키를 저장하지 못했습니다. 잠시 뒤 다시 시도하세요.' });
@@ -3834,7 +3929,21 @@ const MODEL_CANDIDATES = [
   'gemini-2.5-flash',
 ].filter(Boolean);
 
-let ACTIVE_MODEL = null; // 실제로 성공한 모델 이름
+// [P9] '자동'에서 성공한 모델(active) · 쉬는 모델(cooling) · 분당 호출 줄(chain · callTimes)을 키마다 따로 둔다.
+//   예전에는 서버 전체에 하나여서, A 의 무료 한도가 떨어져(429) 모델이 10분 쉬면 B 도 그 모델을 건너뛰었고,
+//   한도가 키마다 따로인데도 모두가 같은 '분당 13회' 줄에 섰다(한 사람의 20초 호출 뒤에 모두가 기다렸다).
+//   열쇠는 키 원문이 아니라 해시(geminiKeyId)다.
+const GEMINI_KEY_STATE_MAX = 500;
+const geminiKeyStates = new Map();   // 키 해시 -> { active, cooling: Map(model -> 언제까지), callTimes: [], chain }
+
+function geminiStateFor(apiKey) {
+  const id = geminiKeyId(apiKey);
+  const s = geminiKeyStates.get(id) || { active: null, cooling: new Map(), callTimes: [], chain: Promise.resolve() };
+  geminiKeyStates.delete(id);   // 최근에 쓴 것이 뒤로 가게 (넘치면 가장 오래 안 쓴 것부터 버린다)
+  geminiKeyStates.set(id, s);
+  if (geminiKeyStates.size > GEMINI_KEY_STATE_MAX) geminiKeyStates.delete(geminiKeyStates.keys().next().value);
+  return s;
+}
 
 // [P8] 서버 공용 키는 관리자 진단(/api/gemini-models) 전용이다. 주요 내용 · Insight 는 사용자 각자의 키로 돈다.
 if (!GEMINI_API_KEY) {
@@ -3964,13 +4073,61 @@ const GEMINI_TOTAL_BUDGET_MS = 36000;
 //   다음 후보를 시도해 볼 가치가 있는 최소 남은 시간. 이보다 적게 남았으면 깔끔하게 포기한다
 //   (2초쯤 남겨 두고 부르면 어차피 끊겨서 한도만 축낸다)
 const GEMINI_MIN_TRY_MS = 6000;
-const geminiCooldown = new Map();            // model -> 언제까지 쉴지(ms 시각)
 
-function isGeminiCooling(model) {
-  const until = geminiCooldown.get(model);
+// ks = 이 키의 상태(geminiStateFor). [P9] 쉬는 시간도 키마다 따로다 — 무료 한도가 키(프로젝트)마다 따로이기 때문이다.
+function isGeminiCooling(ks, model) {
+  const until = ks.cooling.get(model);
   if (!until) return false;
-  if (Date.now() >= until) { geminiCooldown.delete(model); return false; }
+  if (Date.now() >= until) { ks.cooling.delete(model); return false; }
   return true;
+}
+
+// 한도 초과(429) · 응답 없음이면 그 모델을 이 키에서 잠시 쉬게 하고, 로그에 붙일 말을 돌려준다(쉬게 하지 않으면 '').
+function coolGeminiModel(ks, model, e) {
+  if (e.status === 429) {
+    // 구글이 알려준 대기 시간이 있으면 그만큼, 없으면 10분간 이 모델을 쉬게 한다.
+    //   (하루 한도가 떨어진 경우라면 어차피 다음 후보로 계속 넘어가게 된다)
+    const cool = Math.max(e.retryAfterMs || 0, GEMINI_COOLDOWN_MS);
+    ks.cooling.set(model, Date.now() + cool);
+    return `${Math.round(cool / 60000)}분간 쉼`;
+  }
+  if (e.noAnswer) {
+    ks.cooling.set(model, Date.now() + GEMINI_NOANSWER_COOLDOWN_MS);
+    return `${GEMINI_NOANSWER_COOLDOWN_MS / 60000}분간 쉼`;
+  }
+  return '';
+}
+
+// 키 자체를 거절한 것 : 다른 모델로 바꿔도 똑같이 거절된다. (403 은 여기 넣지 않는다 — 아래 [P9] 403 참고)
+function isGeminiKeyHardRejected(e) {
+  return e?.status === 401 || (e?.status === 400 && /api[_ ]key/i.test(e.message || ''));
+}
+
+// [P9] 사용자가 고른 모델(pick)을 먼저 해 보고, 안 되면 자동 순서로 대신 만든다. 그때 결과에 fellBackFrom 을 단다.
+//   pick 이 없으면(자동) 예전과 같다. 결과는 { text, model, fellBackFrom? }.
+//   [P8] apiKey = 요청한 사용자의 키. 만든 모델은 결과로 돌려준다 — 공유 상태에서 읽으면 동시에 돈 다른 요청이 바꿔 놓을 수 있다.
+async function callGeminiModels(prompt, apiKey, ks, pick) {
+  const deadline = Date.now() + GEMINI_TOTAL_BUDGET_MS;
+  const fails = [];   // [{ model, e }] — 모델별로 '왜 실패했는지'를 모아 둔다 (아래 원인 고르기에 쓴다)
+  if (!pick) return callGeminiAuto(prompt, apiKey, ks, deadline, new Set(), fails);
+  if (isGeminiCooling(ks, pick)) {
+    console.warn(`[Gemini] 고른 모델(${pick})이 이 키에서 쉬는 중 → 자동 순서로`);
+  } else {
+    try {
+      const text = await callGeminiOnce(pick, prompt, geminiTimeoutFor(pick), apiKey);
+      ks.cooling.delete(pick);
+      // 고른 모델의 성공은 ks.active(자동의 확정 모델)에 넣지 않는다. 넣으면 자동으로 되돌린 뒤에도 그 모델부터 쓴다.
+      return { text, model: pick };
+    } catch (e) {
+      if (isGeminiKeyHardRejected(e)) throw e;
+      // 404(이 키에 없음) · 403(이 모델만 막힘) · 400(이 모델이 요청 모양을 못 받음) · 429 · 503 · 무응답 → 자동 순서로
+      fails.push({ model: pick, e });
+      const cool = coolGeminiModel(ks, pick, e);
+      console.warn(`[Gemini] 고른 모델 ${pick} 실패(${geminiFailReason(e)})${cool ? ` · ${cool}` : ''} → 자동 순서로`);
+    }
+  }
+  const out = await callGeminiAuto(prompt, apiKey, ks, deadline, new Set([pick]), fails);
+  return { ...out, fellBackFrom: pick };
 }
 
 // 후보 목록을 돌면서 '되는 모델'을 찾아 한 번 호출한다
@@ -3978,16 +4135,22 @@ function isGeminiCooling(model) {
 //  - 503 등 일시 장애    → 그 모델이 붐비는 것이므로 역시 다음 후보로 우회
 //  - 429(한도 초과)     → 그 모델을 쿨다운에 넣고 다음 후보로 우회
 //  - 응답 없음/연결 실패 → 역시 쿨다운에 넣고 다음 후보로 우회 (deadline 안에서만)
-//   [P8] apiKey = 요청한 사용자의 키. 결과는 { text, model } — 만든 모델을 전역 ACTIVE_MODEL 로 읽으면
-//   동시에 돈 다른 사람의 요청이 값을 바꿔 놓을 수 있다.
-async function callGeminiModels(prompt, apiKey, deadline = Date.now() + GEMINI_TOTAL_BUDGET_MS) {
-  const base = ACTIVE_MODEL ? [ACTIVE_MODEL] : MODEL_CANDIDATES;
+//  - [P9] 403            → 다음 후보로. 예전에는 곧바로 '키 거절'로 올렸는데, 구글이 특정 모델만 403 을 주면
+//                          '다시 등록 → 저장은 성공(목록 조회) → 또 실패'에 갇힌다. 모든 후보가 403 일 때만 키 문제로 본다.
+//   skip = 이미 해 본 모델(고른 모델 · 확정을 풀고 다시 훑을 때 방금 실패한 모델). 같은 요청에서 두 번 부르지 않는다.
+async function callGeminiAuto(prompt, apiKey, ks, deadline, skip, fails) {
+  fails.forEach(({ model }) => skip.add(model));
+  const base = ks.active && !skip.has(ks.active) ? [ks.active] : MODEL_CANDIDATES.filter((m) => !skip.has(m));
   // 쉬고 있는 모델은 건너뛴다. 다만 전부 쉬는 중이면 그냥 원래 목록대로 부딪쳐 본다
   //   (쿨다운이 실제보다 길게 잡혔을 수 있으므로 아예 못 부르는 상태는 만들지 않는다)
-  const awake = base.filter((m) => !isGeminiCooling(m));
+  const awake = base.filter((m) => !isGeminiCooling(ks, m));
   const list = awake.length ? awake : base;
-  let lastErr;
-  const fails = [];   // [{ model, e }] — 모델별로 '왜 실패했는지'를 모아 둔다 (아래 원인 고르기에 쓴다)
+  // 확정 모델이 막히면 확정을 풀고 나머지 후보들을 훑는다
+  const releaseActive = (model) => {
+    if (ks.active !== model) return false;
+    ks.active = null;
+    return true;
+  };
 
   for (const model of list) {
     // 남은 시간이 '해 볼 가치가 있는 최소치'보다 적으면 여기서 멈춘다.
@@ -3996,46 +4159,37 @@ async function callGeminiModels(prompt, apiKey, deadline = Date.now() + GEMINI_T
     //   1순위 14초 + 2순위 20초 = 34초라 전체 상한 30초 안에서 2순위를 아예 못 해 보게 됐다.
     //   그래서 남은 시간만큼만 잘라서라도 다음 후보를 시도한다.
     const remain = deadline - Date.now();
-    if (lastErr && remain < GEMINI_MIN_TRY_MS) {
+    if (fails.length && remain < GEMINI_MIN_TRY_MS) {
       console.warn(`[Gemini] 전체 대기 상한(${GEMINI_TOTAL_BUDGET_MS / 1000}초) 도달 → 남은 후보는 다음 요청에서 시도`);
       break;
     }
     try {
       const out = await callGeminiOnce(model, prompt, Math.min(geminiTimeoutFor(model), remain), apiKey);
-      if (ACTIVE_MODEL !== model) console.log(`[Gemini] 사용 모델 확정: ${model}`);
-      ACTIVE_MODEL = model;
-      geminiCooldown.delete(model);   // 성공했으면 쿨다운 해제
+      if (ks.active !== model) console.log(`[Gemini] 사용 모델 확정: ${model}`);
+      ks.active = model;
+      ks.cooling.delete(model);   // 성공했으면 쿨다운 해제
       return { text: out, model };
     } catch (e) {
-      lastErr = e;
       fails.push({ model, e });
       if (e.status === 404) {
         console.warn(`[Gemini] ${model} 사용 불가(404) → 다음 후보 시도`);
-        // 확정돼 있던 모델이 갑자기 막혔다면 확정을 풀고 전체 후보를 다시 시도
-        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, apiKey, deadline); }
+        if (releaseActive(model)) return callGeminiAuto(prompt, apiKey, ks, deadline, skip, fails);
         continue; // 모델이 없는 경우만 다음 후보로
       }
       if (isTransientGeminiError(e)) {
         console.warn(`[Gemini] ${model} 일시 장애(${e.status}) → 다른 모델로 우회 시도`);
-        // 확정 모델이 붐비는 중 → 확정을 풀고 나머지 후보들을 훑는다
-        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, apiKey, deadline); }
+        if (releaseActive(model)) return callGeminiAuto(prompt, apiKey, ks, deadline, skip, fails);
         continue;
       }
-      if (e.status === 429) {
-        // 구글이 알려준 대기 시간이 있으면 그만큼, 없으면 10분간 이 모델을 쉬게 한다.
-        //   (하루 한도가 떨어진 경우라면 어차피 다음 후보로 계속 넘어가게 된다)
-        const cool = Math.max(e.retryAfterMs || 0, GEMINI_COOLDOWN_MS);
-        geminiCooldown.set(model, Date.now() + cool);
-        console.warn(`[Gemini] ${model} 한도 초과(429) → ${Math.round(cool / 60000)}분간 쉬고 다음 후보 시도`);
-        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, apiKey, deadline); }
+      if (e.status === 429 || e.noAnswer) {
+        const cool = coolGeminiModel(ks, model, e);
+        console.warn(`[Gemini] ${e.noAnswer ? e.message : `${model} 한도 초과(429)`} → ${cool}, 다음 후보 시도`);
+        if (releaseActive(model)) return callGeminiAuto(prompt, apiKey, ks, deadline, skip, fails);
         continue;
       }
-      if (e.noAnswer) {
-        // 구글이 대답 자체를 안 준 경우(상한 초과·연결 실패).
-        //   이 모델만 잠시 쉬게 하고 다음 후보로 넘어간다.
-        geminiCooldown.set(model, Date.now() + GEMINI_NOANSWER_COOLDOWN_MS);
-        console.warn(`[Gemini] ${e.message} → ${GEMINI_NOANSWER_COOLDOWN_MS / 60000}분간 쉬고 다음 후보 시도`);
-        if (ACTIVE_MODEL === model) { ACTIVE_MODEL = null; return callGeminiModels(prompt, apiKey, deadline); }
+      if (e.status === 403) {
+        console.warn(`[Gemini] ${model} 거절(403) → 다음 후보 시도`);
+        if (releaseActive(model)) return callGeminiAuto(prompt, apiKey, ks, deadline, skip, fails);
         continue;
       }
       throw e; // 400 등은 모델을 바꿔도 소용없으므로 위로 던진다
@@ -4054,6 +4208,7 @@ async function callGeminiModels(prompt, apiKey, deadline = Date.now() + GEMINI_T
   const transient = pick(isTransientGeminiError);
   const quota = pick((e) => e?.status === 429);
   const noAnswer = pick((e) => e?.noAnswer);
+  const denied = pick((e) => e?.status === 403);
   // 일시 장애·한도 초과는 그대로 위로 올려 callGemini 의 재시도·안내문 처리가 받게 한다
   if (transient) throw transient;
   if (quota) throw quota;
@@ -4063,7 +4218,9 @@ async function callGeminiModels(prompt, apiKey, deadline = Date.now() + GEMINI_T
     friendly.noAnswer = true;
     throw friendly;
   }
-  throw new Error(`쓸 수 있는 Gemini 모델을 찾지 못했습니다. /api/gemini-models?test=1 로 확인해 보세요. (${summary || lastErr?.message || ''})`);
+  if (denied) throw denied;   // [P9] 해 본 모델이 모두 403(나머지는 404) → 모델이 아니라 키 문제다 → '다시 등록하세요'
+  // 모델별 사유는 위 로그에 남겼다. 사용자에게는 할 수 있는 일만 알린다(진단 주소는 관리자 전용이라 안내하지 않는다).
+  throw new Error('이 키로 쓸 수 있는 Gemini 모델을 찾지 못했습니다. 설정에서 다른 AI 모델을 골라 보거나 잠시 뒤 다시 시도해 주세요.');
 }
 
 // 실패 사유를 사람이 읽기 쉬운 한 마디로 (로그·에러 메시지에 쓴다)
@@ -4089,29 +4246,28 @@ function geminiFailReason(e) {
 // -----------------------------------------------------------------
 const GEMINI_RPM_LIMIT = 13;      // 분당 허용 횟수. 실측 한도 15보다 2회 낮게 잡아 여유를 둔다
 const GEMINI_WINDOW_MS = 60000;   // '분당'을 재는 창 = 60초
-let geminiChain = Promise.resolve();
-let geminiCallTimes = [];         // 최근 1분간의 호출 시각들
+//   [P9] 줄(chain)과 최근 1분간의 호출 시각(callTimes)은 키마다 따로다(ks). 다른 사람의 호출 뒤에 서지 않는다.
 
 // 지금 바로 불러도 되는지 확인해서, 기다려야 하면 그 시간(ms)을 돌려준다
-function geminiWaitMs() {
+function geminiWaitMs(ks) {
   const now = Date.now();
-  geminiCallTimes = geminiCallTimes.filter((t) => now - t < GEMINI_WINDOW_MS);
-  if (geminiCallTimes.length < GEMINI_RPM_LIMIT) return 0;   // 여유 있음 → 즉시
+  ks.callTimes = ks.callTimes.filter((t) => now - t < GEMINI_WINDOW_MS);
+  if (ks.callTimes.length < GEMINI_RPM_LIMIT) return 0;   // 여유 있음 → 즉시
   // 꽉 찼다면 가장 오래된 호출이 1분 창을 벗어날 때까지만 기다리면 된다
-  return GEMINI_WINDOW_MS - (now - geminiCallTimes[0]) + 50;
+  return GEMINI_WINDOW_MS - (now - ks.callTimes[0]) + 50;
 }
 
-function enqueueGemini(task) {
-  const run = geminiChain.then(async () => {
+function enqueueGemini(ks, task) {
+  const run = ks.chain.then(async () => {
     // 기다린 뒤에도 다른 호출이 자리를 채웠을 수 있으니 다시 확인한다
-    for (let wait = geminiWaitMs(); wait > 0; wait = geminiWaitMs()) {
+    for (let wait = geminiWaitMs(ks); wait > 0; wait = geminiWaitMs(ks)) {
       console.log(`[Gemini] 분당 한도(${GEMINI_RPM_LIMIT}회)에 도달 → ${Math.ceil(wait / 1000)}초 대기`);
       await sleep(wait);
     }
-    geminiCallTimes.push(Date.now());
+    ks.callTimes.push(Date.now());
     return task();
   });
-  geminiChain = run.then(() => {}, () => {}); // 에러가 나도 대기열이 끊기지 않게
+  ks.chain = run.then(() => {}, () => {}); // 에러가 나도 대기열이 끊기지 않게
   return run;
 }
 
@@ -4120,11 +4276,13 @@ function enqueueGemini(task) {
 //   ② 429면 잠깐 기다렸다 자동 재시도(backoff). 구글이 알려준 대기 시간을 우선 사용.
 //   ③ 끝내 실패하면 사용자에게 '친절한 안내 메시지'를 던진다.
 // -----------------------------------------------------------------
-async function callGemini(prompt, apiKey) {
+//   [P9] pick = 사용자가 고른 모델(없으면 자동). 결과는 { text, model, fellBackFrom? }.
+async function callGemini(prompt, apiKey, pick) {
   const MAX_RETRY = 2; // 429 / 503 등일 때 최대 2번 더 시도
+  const ks = geminiStateFor(apiKey);
   for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
     try {
-      return await enqueueGemini(() => callGeminiModels(prompt, apiKey));
+      return await enqueueGemini(ks, () => callGeminiModels(prompt, apiKey, ks, pick));
     } catch (e) {
       // [추가] 503(모델 과부하) 등 일시 장애 : 짧게 기다렸다 다시 시도
       //   한도 초과(429)와 달리 금방 풀리는 경우가 많아 대기 시간을 더 짧게 잡는다.
@@ -4150,7 +4308,8 @@ async function callGemini(prompt, apiKey) {
       }
       if (e.status === 429) {
         // 재시도까지 실패 → 당황하지 않도록 친절히 안내
-        const friendly = new Error('무료 사용량 한도에 도달했어요. 잠시 후(약 1분 뒤) 다시 시도해 주세요.');
+        //   [P9] 내 키의 한도다. 분당 한도면 1분쯤 뒤 풀리지만, 하루 한도(예: 3.6-flash 하루 20회)면 내일까지 안 풀린다.
+        const friendly = new Error('내 AI 키의 무료 사용량 한도에 도달했어요. 1분쯤 뒤 다시 시도해 주세요. 계속 안 되면 하루 한도일 수 있으니 설정에서 다른 AI 모델을 골라 보세요.');
         friendly.status = 429;
         throw friendly;
       }
@@ -4242,13 +4401,16 @@ async function probeGeminiModel(model, long = false, ver = 'v1beta') {
 app.get('/api/gemini-models', requireAdminUser, async (req, res) => {
   if (!GEMINI_API_KEY) return res.json({ error: '.env 에 GEMINI_API_KEY 가 없습니다.' });
   try {
-    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models', { headers: geminiHeaders(GEMINI_API_KEY) });
-    const data = await r.json();
-    const usable = (data.models || [])
+    // [P9] 기본 쪽 크기(50개)로는 목록이 잘린다(2026-10 기준 62개) → 사용자 목록과 같은 함수로 쪽을 넘겨 가며 받는다
+    const got = await listGeminiModels(GEMINI_API_KEY);
+    const usable = (got.models || [])   // 목록을 못 받아도 예전처럼 탐침(test=1)은 돌린다
       .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
-      .map((m) => m.name.replace('models/', ''));
+      .map((m) => String(m.name || '').replace('models/', ''));
+    // [P9] 확정 모델은 이제 키마다 따로다 → 모델별로 몇 개의 키가 그 모델을 쓰고 있는지만 보여 준다(키는 드러내지 않는다)
+    const active = {};
+    geminiKeyStates.forEach((s) => { if (s.active) active[s.active] = (active[s.active] || 0) + 1; });
 
-    if (!req.query.test) return res.json({ active: ACTIVE_MODEL, candidates: MODEL_CANDIDATES, usable });
+    if (!req.query.test) return res.json({ active, candidates: MODEL_CANDIDATES, usable });
 
     if (probeRunning) return res.status(429).json({ error: '진단이 이미 돌고 있습니다. 잠시 뒤 다시 열어 주세요.' });
     probeRunning = true;
@@ -4276,7 +4438,7 @@ app.get('/api/gemini-models', requireAdminUser, async (req, res) => {
       res.json({
         note: `이 서버에서 각 모델에 ${long ? '실제 크기(본문 3,500자)' : '짧은'} 요청을 보내 본 결과입니다. ok:true 중 ms가 작은 것이 1순위 후보입니다.`,
         mode: `${long ? 'long(실제 크기 프롬프트)' : 'short(짧은 인사)'} · ${ver}`,
-        active: ACTIVE_MODEL,
+        active,
         candidates: MODEL_CANDIDATES,
         tookMs: Date.now() - t0,
         results,
@@ -4288,6 +4450,18 @@ app.get('/api/gemini-models', requireAdminUser, async (req, res) => {
     res.json({ error: e.message });
   }
 });
+
+// [P9] 화면이 보낸 '내가 고른 모델'(model=). 모양이 틀리거나 auto 면 자동. 결과 캐시 열쇠에는 넣지 않는다(결과는 기사 기준으로 공유).
+function aiModelPick(req) {
+  const m = typeof req.query.model === 'string' ? req.query.model : '';
+  return AI_MODEL_RE.test(m) ? m : null;
+}
+
+// '고른 모델이 응답하지 않아 ○○로 만들었다'는 이번 요청한 사람에게만 붙인다.
+//   캐시에 넣으면 같은 기사를 연 다른 사람에게 남의 선택에 대한 안내가 보이기 때문에, 캐시에 넣은 다음 응답에만 더한다.
+function withFallbackNote(result, fellBackFrom) {
+  return fellBackFrom ? { ...result, fellBackFrom } : result;
+}
 
 app.get('/api/deep-brief', async (req, res) => {
   const url = req.query.url;
@@ -4323,7 +4497,7 @@ app.get('/api/deep-brief', async (req, res) => {
     //   품질은 크게 안 떨어지면서 토큰(=사용량)을 아낄 수 있다.
     const bodyForAI = body.slice(0, 3500);
 
-    const { text: raw, model } = await callGemini(`${BRIEF_PROMPT}\n\n[기사 제목]\n${title}\n\n[기사 본문]\n${bodyForAI}`, ai.key);
+    const { text: raw, model, fellBackFrom } = await callGemini(`${BRIEF_PROMPT}\n\n[기사 제목]\n${title}\n\n[기사 본문]\n${bodyForAI}`, ai.key, aiModelPick(req));
 
     let brief;
     try {
@@ -4335,7 +4509,7 @@ app.get('/api/deep-brief', async (req, res) => {
     brief.model = model || 'Gemini';
     if (partial) brief.partial = true;   // 요약문만으로 정리한 경우
     briefCache.set(url, { ts: Date.now(), brief });
-    res.json(brief);
+    res.json(withFallbackNote(brief, fellBackFrom));
   } catch (err) {
     console.error('[deep-brief]', err.message);
     res.json(aiErrorBody(err));
@@ -4440,7 +4614,7 @@ app.get('/api/insight', async (req, res) => {
 
     const bodyForAI = body.slice(0, 3500);   // 토큰 절약 (deep-brief와 동일)
 
-    const { text: raw, model } = await callGemini(`${INSIGHT_PROMPT}\n\n[기사 제목]\n${title}\n\n[기사 본문]\n${bodyForAI}`, ai.key);
+    const { text: raw, model, fellBackFrom } = await callGemini(`${INSIGHT_PROMPT}\n\n[기사 제목]\n${title}\n\n[기사 본문]\n${bodyForAI}`, ai.key, aiModelPick(req));
 
     let insight;
     try {
@@ -4452,7 +4626,7 @@ app.get('/api/insight', async (req, res) => {
     insight.model = model || 'Gemini';
     if (partial) insight.partial = true;
     insightCache.set(insightKey(url), { ts: Date.now(), insight });
-    res.json(insight);
+    res.json(withFallbackNote(insight, fellBackFrom));
   } catch (err) {
     console.error('[insight]', err.message);
     res.json(aiErrorBody(err));
