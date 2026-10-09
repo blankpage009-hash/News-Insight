@@ -1005,6 +1005,26 @@
     accent-color: rgb(var(--c-gold));   /* 손잡이·채워진 구간 색 (브라우저 기본 모양을 그대로 쓴다) */
   }
   .pref-range:focus-visible { outline: 1px solid rgb(var(--c-gold) / .6); outline-offset: 2px; }
+  /* 막대를 얇게 하려고 기본 모양을 걷고 직접 그린다. 채워진 구간 색은 JS 가 --fill 로 넣는다(없으면 전부 회색) */
+  .pref-range { -webkit-appearance: none; appearance: none; background: transparent; touch-action: pan-y; }
+  .pref-range::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 2px;
+    /* 채워진 구간(위, 4px)과 비어 있는 구간(아래, 2px)의 두께를 따로 준다 */
+    background:
+      linear-gradient(rgb(var(--c-gold)), rgb(var(--c-gold))) left center / var(--fill, 0%) 100% no-repeat,
+      linear-gradient(rgb(var(--c-muted2)), rgb(var(--c-muted2))) center / 100% 2px no-repeat;
+  }
+  .pref-range::-moz-range-track {
+    height: 4px; background: linear-gradient(rgb(var(--c-muted2)), rgb(var(--c-muted2))) center / 100% 2px no-repeat;
+  }
+  .pref-range::-moz-range-progress { height: 4px; border-radius: 2px; background: rgb(var(--c-gold)); }
+  .pref-range::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px;
+    border: 0; border-radius: 50%; background: rgb(var(--c-gold));
+  }
+  .pref-range::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: rgb(var(--c-gold)); }
+  /* 아이폰에서 설정 창을 건드릴 때 화면이 좌우로 출렁이지 않게, 가로 스크롤·튕김을 막는다 */
+  .st-pane { overflow-x: hidden; overscroll-behavior-x: none; touch-action: pan-y; }
 
   /* [추가] Phase 7 A4 : 켜고 끄는 스위치. v3 : 켜지면 검정 채움(시안의 '켜진 탭'과 같은 말투) */
   .pref-switch {
@@ -5137,7 +5157,10 @@
       const cur = readRootFontSize();
       const r = document.getElementById('fontsize-range');
       const v = document.getElementById('fontsize-value');
-      if (r) r.value = String(cur);
+      if (r) {
+        r.value = String(cur);
+        r.style.setProperty('--fill', `${((cur - FONT_SIZE_MIN) / (FONT_SIZE_MAX - FONT_SIZE_MIN)) * 100}%`);
+      }
       if (v) v.textContent = cur === FONT_SIZE_DEFAULT ? `${cur}px · 기본` : `${cur}px`;
     }
 
