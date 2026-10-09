@@ -4837,7 +4837,13 @@ async function warmCache() {
   }
 }
 
-app.listen(PORT, () => {
+// [P2] 머리말 한도를 Node 기본 16KB 에서 32KB 로 올린다.
+//   화면은 키워드 설정 전체를 주소(kw=)에 실어 보내는데, 한글이 인코딩되면 이미 약 13.8KB 다(2026-10-09 운영 키워드).
+//   여기에 로그인 토큰(Authorization, 1~2KB)이 붙자 16KB 를 넘어 431 로 거절됐다.
+//   주의 : Render 앞단(Cloudflare)은 주소 자체를 16KB 까지만 받는다. 키워드가 더 늘면 이 조치로는 못 막는다
+//   → kw 를 주소에 싣는 방식은 P5·P6(계정별 키워드 · 섹션 단위 캐시)에서 바꾼다.
+const server = http.createServer({ maxHeaderSize: 32 * 1024 }, app);
+server.listen(PORT, () => {
   console.log(`네이버 뉴스 프록시 서버 실행 중: http://localhost:${PORT}`);
   setTimeout(warmCache, WARM_START_DELAY).unref();
   setInterval(warmCache, WARM_INTERVAL).unref();
