@@ -2174,7 +2174,7 @@
   </main>
 
   <!-- [수정] v3 Phase 8 : 설정 한 창 (시안 1e · 880px). 왼쪽 탭 = 화면 설정 / 관리자 Setting.
-       화면 설정(테마 · 본문 크기 · 노출 건수 · 화면 옵션)은 이 기기에만 저장되는 개인 취향이라 잠그지 않는다.
+       화면 설정(테마 · 본문 크기 · 노출 건수 · 화면 옵션)은 내 계정에 저장되는([P7]) 개인 취향이라 잠그지 않는다.
        관리자 Setting(키워드 · 허용 사용자)은 관리자 계정(ADMIN_EMAILS)에게만 보인다. 헤더 ⋮ 는 화면 설정, 탭 줄 아이콘·드로어 버튼은 관리자 탭으로 연다. -->
   <div id="prefs-modal" class="hidden fixed inset-0 z-[85] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onclick="closePrefsOnBackdrop(event)">
     <div class="modal-pop pv-shell st-shell max-w-[880px]" role="dialog" aria-modal="true" aria-labelledby="st-title" onclick="event.stopPropagation()">
@@ -2198,15 +2198,15 @@
           </button>
         </nav>
 
-        <!-- 화면 설정 : 누르는 즉시 적용되고 이 기기에 저장된다 -->
+        <!-- 화면 설정 : 누르는 즉시 적용되고 내 계정에 저장된다([P7]) -->
         <div id="st-pane-prefs" class="st-pane" role="tabpanel" aria-labelledby="st-tab-prefs">
           <div class="st-row">
-            <div class="st-name"><b>테마</b><span class="st-hint">화면 밝기 · 이 기기에만 적용<br>다크 · 시스템은 준비 중</span></div>
+            <div class="st-name"><b>테마</b><span class="st-hint">화면 밝기 · 내 계정에 저장<br>다크 · 시스템은 준비 중</span></div>
             <div class="st-seg" id="theme-buttons" role="radiogroup" aria-label="테마"></div>
           </div>
           <!-- [추가] 본문 크기 (Phase 7 A3) : 화면 전체가 rem 이라 기준 크기 하나로 같이 커진다 -->
           <div class="st-row">
-            <div class="st-name"><b>본문 크기</b><span class="st-hint">글자 크기 · 이 기기에만 적용</span></div>
+            <div class="st-name"><b>본문 크기</b><span class="st-hint">글자 크기 · 내 계정에 저장</span></div>
             <div class="min-w-0">
               <div class="flex items-center justify-between gap-2 text-[12px] text-muted">
                 <span id="fontsize-value" class="font-semibold text-paper"></span>
@@ -2220,12 +2220,12 @@
             </div>
           </div>
           <div class="st-row">
-            <div class="st-name"><b>기본 노출 건수</b><span class="st-hint">처음 열 때 보여줄 기사 수 · 이 기기에만 적용</span></div>
+            <div class="st-name"><b>기본 노출 건수</b><span class="st-hint">처음 열 때 보여줄 기사 수 · 내 계정에 저장</span></div>
             <div id="count-setting-selects" class="st-list"></div>
           </div>
           <!-- [추가] 화면 옵션 (Phase 7 A4) : 읽음 흐리게 · 오른쪽 패널 -->
           <div class="st-row">
-            <div class="st-name"><b>화면 옵션</b><span class="st-hint">이 기기에만 적용</span></div>
+            <div class="st-name"><b>화면 옵션</b><span class="st-hint">내 계정에 저장</span></div>
             <div id="pref-toggles" class="st-list"></div>
           </div>
           <!-- [P4] 추천 : 전체 화면에서 좋아요/싫어요로 상자 건수 · 순서를 조정한다 -->
@@ -2298,7 +2298,7 @@
       </div>
 
       <div id="st-foot-prefs" class="pv-foot">
-        <span class="pv-note">테마와 노출 건수는 누르는 즉시 이 기기에 저장됩니다.</span>
+        <span class="pv-note">화면 설정은 누르는 즉시 내 계정에 저장되어 다른 기기에서도 같게 보입니다.</span>
         <div class="pv-actions">
           <button type="button" class="pv-btn" onclick="closePrefsModal()">닫기</button>
         </div>
@@ -2352,7 +2352,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             관련 기사
           </button>
-          <!-- 저장(북마크) : 이 브라우저의 보관함에 담는다 -->
+          <!-- 저장(북마크) : 내 계정의 보관함에 담는다([P7]) -->
           <button id="brief-save-btn" onclick="toggleSave(currentBriefId)" data-save-style="pop" data-save-key=""
             aria-pressed="false" aria-label="기사 저장" title="기사 저장" class="save-btn pv-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>
@@ -2643,11 +2643,13 @@
 
     // ---------------------------------------------------------------
     // [추가] 기사 저장(북마크) — Phase 7 A1
-    //   서버에 올리지 않고 이 브라우저에만 담는다(localStorage).
+    //   [P7] 내 계정에 저장한다(서버 saved_articles). 이 기기 저장소(localStorage)는 빠른 첫 화면용 사본이고,
+    //   접속하면 서버 값으로 통째로 바뀐다. 동기화는 아래 '계정 동기화' 절 참고.
     //   기사 id(nextId)는 새로고침하면 다시 0부터 매겨지므로 열쇠로 쓸 수 없다.
     //   → '원문 보기'와 같은 주소(articleLink)를 열쇠로 삼는다. 같은 기사는 늘 같은 주소다.
     // ---------------------------------------------------------------
-    const SAVED_STORAGE_KEY = 'newsinsight:saved:v1';
+    const SAVED_STORAGE_KEY = 'newsinsight:saved:v2';
+    const LEGACY_SAVED_KEY = 'newsinsight:saved:v1';   // P7 이전 : 이 기기에만 있던 목록. 첫 접속 때 계정으로 올리고 지운다
     const SAVED_MAX = 300;          // 이보다 많이 담기면 오래된 것부터 버린다
     let savedArticles = [];         // 최신순. { key, title, source, url, naverUrl, datetime, summary, cats, savedAt }
 
@@ -2658,7 +2660,8 @@
 
     function loadSavedArticles() {
       try {
-        const raw = JSON.parse(localStorage.getItem(SAVED_STORAGE_KEY) || '[]');
+        // 서버 값을 받기 전 첫 화면 : 새 사본이 없으면 P7 이전 목록으로 그린다(옮겨 오기 전에도 비어 보이지 않게)
+        const raw = JSON.parse(localStorage.getItem(SAVED_STORAGE_KEY) ?? localStorage.getItem(LEGACY_SAVED_KEY) ?? '[]');
         savedArticles = Array.isArray(raw) ? raw.filter((x) => x && x.key) : [];
       } catch { savedArticles = []; }
     }
@@ -2695,6 +2698,7 @@
         savedArticles = savedArticles.slice(0, SAVED_MAX);
       }
       persistSavedArticles();
+      queueSaved(key, isSavedKey(key) ? savedArticles.find((x) => x.key === key) : null);
       syncSaveButtons(key);
       renderSavedNav();
       // 저장 화면을 보는 중에는 건수만 고쳐 준다. 줄을 바로 지우면 되돌릴 수가 없다.
@@ -2804,6 +2808,7 @@
       if (!isSavedKey(key)) return;
       savedArticles = savedArticles.filter((x) => x.key !== key);
       persistSavedArticles();
+      queueSaved(key, null);
       syncSaveButtons(key);
       renderSavedNav();
       if (currentCategory === 'saved') updateSavedCount();
@@ -2833,7 +2838,7 @@
       const list = decorateItems(savedArticles, 'saved');
       currentResults = list;
       document.getElementById('status-line').textContent = list.length
-        ? `이 브라우저에 저장한 기사 ${list.length}건입니다.`
+        ? `내 계정에 저장한 기사 ${list.length}건입니다.`
         : '저장한 기사가 없습니다.';
       if (!list.length) {
         document.getElementById('news-list').innerHTML =
@@ -2846,18 +2851,19 @@
 
     // ---------------------------------------------------------------
     // [추가] 읽음 표시 — Phase 7 A2
-    //   '주요 내용' · 'Insight' · '원문 보기' 로 한 번이라도 연 기사를 이 브라우저에 적어 두고
-    //   목록에서 흐리게 보여 준다. 서버에는 올리지 않는다.
+    //   '주요 내용' · 'Insight' · '원문 보기' 로 한 번이라도 연 기사를 적어 두고
+    //   목록에서 흐리게 보여 준다. [P7] 내 계정에 저장한다(서버 read_marks, 몇 초씩 모아서 보냄).
     //   열쇠(key)는 저장(북마크)과 같은 기사 주소를 쓴다 → 새로고침해도 같은 기사는 같은 열쇠다.
     // ---------------------------------------------------------------
-    const READ_STORAGE_KEY = 'newsinsight:read:v1';
+    const READ_STORAGE_KEY = 'newsinsight:read:v2';
+    const LEGACY_READ_KEY = 'newsinsight:read:v1';   // P7 이전 : 이 기기에만 있던 목록. 첫 접속 때 계정으로 올리고 지운다
     const READ_MAX = 1000;          // 넘치면 오래 전에 읽은 것부터 버린다
     let readKeys = [];              // 최근에 읽은 순서
     let readKeySet = new Set();     // 목록을 그릴 때마다 찾아야 하므로 Set 을 따로 둔다
 
     function loadReadArticles() {
       try {
-        const raw = JSON.parse(localStorage.getItem(READ_STORAGE_KEY) || '[]');
+        const raw = JSON.parse(localStorage.getItem(READ_STORAGE_KEY) ?? localStorage.getItem(LEGACY_READ_KEY) ?? '[]');
         readKeys = Array.isArray(raw) ? raw.filter((x) => typeof x === 'string' && x) : [];
       } catch { readKeys = []; }
       readKeySet = new Set(readKeys);
@@ -2874,6 +2880,7 @@
       readKeySet = new Set(readKeys);
       try { localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(readKeys)); }
       catch (e) { console.error('읽음 표시를 기록하지 못했습니다.', e); }
+      queueRead(key);
       markReadRows(key);
     }
 
@@ -2883,6 +2890,404 @@
       document.querySelectorAll('[data-read-key]').forEach((el) => {
         if (el.dataset.readKey === key) el.classList.add('is-read');
       });
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] P7 계정 동기화 : 저장한 기사 · 읽음 표시 · 화면 설정 (PERSONALIZATION.md 2-5)
+    //   - 이 기기 저장소(localStorage)는 '빠른 첫 화면용 사본'이다. 접속하면 /api/sync 한 번으로 서버 값을 받아
+    //     사본을 통째로 바꾼다 = 서버가 기준. 합치기를 매번 하면 다른 기기에서 지운 저장 기사가 되살아난다.
+    //   - 바꿀 때는 화면부터 바꾸고, 서버로 보낼 변경은 '대기열'에 쌓는다. 대기열은 이 기기에도 적어 둔다 →
+    //     창을 닫거나 네트워크가 끊겨도(아이폰 홈 화면 앱은 닫을 때 신호를 안 준다) 다음 접속 때 다시 보낸다.
+    //     서버는 같은 변경을 두 번 받아도 결과가 같다.
+    //   - P7 이전 목록(저장 기사 · 읽음 v1)은 첫 접속 때 한 번 대기열로 옮겨 계정에 올리고 지운다.
+    //   - 로그아웃 · 로그인 만료 때 개인 사본을 지운다(공용 기기에서 다음 사람 계정으로 옮겨 가지 않게).
+    // ---------------------------------------------------------------
+    const SYNC_PENDING_KEY = 'newsinsight:sync:pending:v1';   // 아직 서버에 못 보낸 변경
+    const SYNC_OWNER_KEY = 'newsinsight:sync:owner:v1';       // 이 기기 사본의 주인(서버가 알려 준 계정 id)
+    const SYNC_SAVED_BATCH = 50;     // 서버 한 요청 상한과 같은 값
+    const SYNC_READ_BATCH = 200;
+    const SYNC_RETRY_MS = 15000;
+
+    function syncLsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+    function syncLsSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
+    function syncLsDel(k) { try { localStorage.removeItem(k); } catch {} }
+    function syncLsJson(k) { try { return JSON.parse(syncLsGet(k)); } catch { return null; } }
+    function syncIsObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+
+    // prefs : 바뀐 칸 / saved : 기사 주소 -> { op: 'put', article } | { op: 'del' } (주소마다 마지막 동작만) / read : [{ k, t }]
+    function emptySyncPending() { return { uid: '', prefs: {}, saved: {}, read: [] }; }
+    let syncPending = emptySyncPending();
+    let syncUid = '';             // 서버가 알려 준 내 계정 id
+    let syncTouch = null;         // 서버 값을 받는 동안 내가 바꾼 것 { saved: Map(주소 -> 기사 | null), read: Set }
+    let syncTimer = 0;
+    let syncDue = 0;
+    let syncFlushPromise = null;
+
+    function loadSyncPending() {
+      const v = syncLsJson(SYNC_PENDING_KEY);
+      if (!syncIsObj(v)) return;
+      syncPending = {
+        uid: typeof v.uid === 'string' ? v.uid : '',
+        prefs: syncIsObj(v.prefs) ? v.prefs : {},
+        saved: syncIsObj(v.saved) ? v.saved : {},
+        read: Array.isArray(v.read) ? v.read.filter((e) => e && typeof e.k === 'string' && e.k) : [],
+      };
+    }
+
+    function hasSyncPending() {
+      return Object.keys(syncPending.prefs).length > 0 || Object.keys(syncPending.saved).length > 0 || syncPending.read.length > 0;
+    }
+
+    function persistSyncPending() {
+      if (!hasSyncPending()) { syncLsDel(SYNC_PENDING_KEY); return; }
+      syncLsSet(SYNC_PENDING_KEY, JSON.stringify({ ...syncPending, uid: syncUid }));
+    }
+
+    // 객체 값(건수 · 보기 방식)은 칸 단위로 합쳐 쌓는다.
+    function queuePref(key, value) {
+      const cur = syncPending.prefs[key];
+      syncPending.prefs[key] = syncIsObj(value) && syncIsObj(cur) ? { ...cur, ...value } : value;
+      persistSyncPending();
+      scheduleSyncFlush(800);
+    }
+
+    function queueSaved(key, article) {   // article 이 null 이면 저장 해제
+      if (syncTouch) syncTouch.saved.set(key, article ? { ...article } : null);
+      syncPending.saved[key] = article ? { op: 'put', article: { ...article } } : { op: 'del' };
+      persistSyncPending();
+      scheduleSyncFlush(800);
+    }
+
+    // 읽음은 기사를 열 때마다 생긴다 → 몇 초씩 모아서 보낸다.
+    function queueRead(key) {
+      if (syncTouch) syncTouch.read.add(key);
+      syncPending.read.push({ k: key, t: Date.now() });
+      persistSyncPending();
+      scheduleSyncFlush(3000);
+    }
+
+    // 이미 예약돼 있고 더 이르면 그대로 둔다.
+    function scheduleSyncFlush(delay) {
+      const due = Date.now() + delay;
+      if (syncTimer && syncDue <= due) return;
+      clearTimeout(syncTimer);
+      syncDue = due;
+      syncTimer = setTimeout(() => { syncTimer = 0; syncDue = 0; flushSync(); }, delay);
+    }
+
+    function flushSync(keepalive = false) {
+      if (syncFlushPromise) return syncFlushPromise;
+      syncFlushPromise = doSyncFlush(keepalive).finally(() => { syncFlushPromise = null; });
+      return syncFlushPromise;
+    }
+
+    // 대기열을 서버 상한에 맞춰 나눈다. done() 은 '보낸 것과 똑같은 항목'만 대기열에서 뺀다
+    //   (보내는 사이 같은 칸을 또 바꿨다면 그 변경은 남는다).
+    function buildSyncRequests() {
+      const prefs = { ...syncPending.prefs };
+      const ops = Object.entries(syncPending.saved);
+      const puts = ops.filter(([, o]) => o.op === 'put');
+      const dels = ops.filter(([, o]) => o.op === 'del');
+      const reads = syncPending.read.slice();
+      const reqs = [];
+      let first = true;
+      while (first || puts.length || dels.length || reads.length) {
+        const p = puts.splice(0, SYNC_SAVED_BATCH);
+        const d = dels.splice(0, SYNC_SAVED_BATCH);
+        const r = reads.splice(0, SYNC_READ_BATCH);
+        const sentPrefs = first ? prefs : {};
+        first = false;
+        const body = {};
+        if (Object.keys(sentPrefs).length) body.prefs = sentPrefs;
+        if (p.length) body.savedPut = p.map(([, o]) => o.article);
+        if (d.length) body.savedDel = d.map(([k]) => k);
+        if (r.length) body.read = r;
+        if (!Object.keys(body).length) continue;
+        reqs.push({
+          body,
+          done() {
+            Object.keys(sentPrefs).forEach((k) => {
+              if (JSON.stringify(syncPending.prefs[k]) === JSON.stringify(sentPrefs[k])) delete syncPending.prefs[k];
+            });
+            [...p, ...d].forEach(([k, o]) => { if (syncPending.saved[k] === o) delete syncPending.saved[k]; });
+            const sent = new Set(r);
+            syncPending.read = syncPending.read.filter((e) => !sent.has(e));
+          },
+        });
+      }
+      return reqs;
+    }
+
+    async function doSyncFlush(keepalive) {
+      // syncUid 가 없으면 서버가 이 사본의 주인을 아직 확인해 주지 않았다 → 다른 계정이 남긴 대기열을 지금 계정으로
+      //   보낼 수 있으므로 기다린다. 확인이 끝나면(syncAccountInBackground) 거기서 보낸다.
+      if (authBlocked || !syncUid || !hasSyncPending()) return true;
+      for (const req of buildSyncRequests()) {
+        const body = JSON.stringify(req.body);
+        let res = null;
+        try {
+          // keepalive : 탭을 닫는 중에도 요청이 끝까지 가게 한다(본문 64KB 이하만 허용됨)
+          res = await apiFetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: keepalive && body.length < 60000 });
+        } catch (e) {
+          console.error('계정 동기화 전송에 실패했습니다. 나중에 다시 보냅니다.', e);
+          scheduleSyncFlush(SYNC_RETRY_MS);
+          return false;
+        }
+        if (res.ok || res.status === 400) {   // 400 = 서버가 거절한 내용 : 다시 보내도 같으므로 버린다
+          if (!res.ok) console.error('서버가 동기화 내용을 받아들이지 않았습니다.', body.slice(0, 200));
+          req.done();
+          persistSyncPending();
+          continue;
+        }
+        scheduleSyncFlush(SYNC_RETRY_MS);     // 401 · 403 · 5xx : 대기열을 그대로 두고 나중에 다시
+        return false;
+      }
+      if (hasSyncPending()) scheduleSyncFlush(300);   // 보내는 사이 새 변경이 쌓였다
+      return true;
+    }
+
+    // 탭을 숨기거나 닫을 때 남은 것을 서둘러 보낸다. 못 보내도 대기열이 이 기기에 남아 있다.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSync(true); });
+    window.addEventListener('pagehide', () => { flushSync(true); });
+
+    // 로그아웃 · 로그인 만료 때. 공용 기기에서 다음 사람에게 내 기록이 보이거나, 그 사람 계정으로 옮겨 가지 않게 한다.
+    //   P7 이전 목록(v1)은 아직 계정에 못 올렸을 수 있어 지우지 않는다.
+    //   fromGate : 로그인 화면으로 가는 길. 이 기기가 어느 계정과도 동기화된 적이 없으면(owner 없음) 화면 설정 사본은
+    //   P7 이전에 이 사람이 정해 둔 '유일한 사본'이다 → 첫 로그인 때 계정으로 올릴 수 있게 남긴다.
+    //   (기존 사용자는 모두 세션 없이 로그인 화면을 먼저 거치므로, 여기서 지우면 배포 날 모두의 설정이 초기화된다)
+    function clearPersonalCache({ fromGate = false } = {}) {
+      const neverSynced = syncLsGet(SYNC_OWNER_KEY) === null;
+      clearVoteCache();
+      clearKeywordCache();
+      const keys = [SAVED_STORAGE_KEY, READ_STORAGE_KEY, SYNC_PENDING_KEY, SYNC_OWNER_KEY];
+      if (!(fromGate && neverSynced)) {
+        keys.push(THEME_STORAGE_KEY, FONT_SIZE_KEY, COUNT_STORAGE_KEY, VIEW_MODE_KEY, RAIL_STORAGE_KEY, SCREEN_PREFS_KEY);
+      }
+      keys.forEach((k) => syncLsDel(k));
+      syncPending = emptySyncPending();
+      clearTimeout(syncTimer);
+      syncTimer = 0;
+      syncDue = 0;
+    }
+
+    // 화면 설정 한 칸마다 : local() = 이 기기에 '사람이 정해 둔 값'(없으면 undefined), apply(v) = 서버 값을 사본 · 화면에 반영.
+    //   apply 는 값을 서버로 되돌려 보내지 않는다(되울림 방지). true 를 돌려주면 기사를 다시 불러와야 하는 변화다.
+    const PREF_SYNC = {
+      theme: {
+        local: () => syncLsGet(THEME_STORAGE_KEY) || undefined,
+        apply(v) {
+          if (!['light', 'dark', 'system'].includes(v)) return false;
+          syncLsSet(THEME_STORAGE_KEY, v);
+          applyTheme(v);
+          renderThemeButtons();
+          return false;
+        },
+      },
+      fontSize: {
+        local() {
+          const n = Number(syncLsGet(FONT_SIZE_KEY));
+          return Number.isInteger(n) && n >= FONT_SIZE_MIN && n <= FONT_SIZE_MAX ? n : undefined;
+        },
+        apply(v) {
+          if (!Number.isInteger(v) || v < FONT_SIZE_MIN || v > FONT_SIZE_MAX) return false;
+          syncLsSet(FONT_SIZE_KEY, String(v));
+          applyRootFontSize(v);
+          renderFontSizeSetting();
+          updateStickTop();
+          return false;
+        },
+      },
+      counts: {
+        local() {
+          const s = syncLsJson(COUNT_STORAGE_KEY);
+          if (!syncIsObj(s)) return undefined;
+          const out = {};
+          Object.keys(BUILTIN_DEFAULT_COUNTS).forEach((k) => { if (COUNT_CHOICES.includes(Number(s[k]))) out[k] = String(Number(s[k])); });
+          return Object.keys(out).length ? out : undefined;
+        },
+        apply(v) {
+          if (!syncIsObj(v)) return false;
+          const next = { ...defaultCounts };
+          Object.keys(BUILTIN_DEFAULT_COUNTS).forEach((k) => { if (COUNT_CHOICES.includes(Number(v[k]))) next[k] = String(Number(v[k])); });
+          const changed = JSON.stringify(next) !== JSON.stringify(defaultCounts);
+          if (changed) {
+            Object.assign(defaultCounts, next);
+            Object.keys(sectionFilterMemory).forEach((k) => delete sectionFilterMemory[k]);   // setDefaultCount 와 같은 이유
+            applyDefaultCounts();
+          }
+          syncLsSet(COUNT_STORAGE_KEY, JSON.stringify(defaultCounts));
+          renderCountSetting();
+          return changed;
+        },
+      },
+      viewMode: {
+        local() {
+          const out = {};
+          Object.entries(readViewModes()).forEach(([k, m]) => { if (m === 'card' || m === 'list') out[k] = m; });
+          return Object.keys(out).length ? out : undefined;
+        },
+        apply(v) {
+          if (!syncIsObj(v)) return false;
+          const before = viewModes.common;
+          syncLsSet(VIEW_MODE_KEY, JSON.stringify({ ...readViewModes(), ...v }));
+          viewModes.common = getViewMode('common');
+          return viewModes.common !== before;
+        },
+      },
+      railCollapsed: {
+        local() { const v = syncLsGet(RAIL_STORAGE_KEY); return v === null ? undefined : v === '1'; },
+        apply(v) {
+          if (typeof v !== 'boolean') return false;
+          syncLsSet(RAIL_STORAGE_KEY, v ? '1' : '0');
+          if (document.body.classList.contains('rail-collapsed') !== v) {
+            setRailCollapsed(v, false);
+            requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));   // 폭을 재서 그리는 것들이 다시 맞추도록
+          }
+          renderPrefToggles();
+          return false;
+        },
+      },
+      dimRead: screenPrefSync('dimRead'),
+      reco: screenPrefSync('reco'),
+      recoReset: {
+        local: () => readRecoReset() || undefined,
+        apply(v) {
+          if (!Number.isFinite(v) || v < 0) return false;
+          const changed = readRecoReset() !== v;
+          syncLsSet(RECO_RESET_KEY, String(v));
+          renderRecoSetting();
+          return changed && currentCategory === 'all' && !isKeywordMode();   // 추천은 전체 화면에만 쓰인다
+        },
+      },
+    };
+
+    // 화면 옵션(screenPrefs)은 두 칸이 한 저장 항목을 나눠 쓴다.
+    function screenPrefSync(name) {
+      return {
+        local() { const s = syncLsJson(SCREEN_PREFS_KEY); return syncIsObj(s) && typeof s[name] === 'boolean' ? s[name] : undefined; },
+        apply(v) {
+          if (typeof v !== 'boolean') return false;
+          const changed = screenPrefs[name] !== v;
+          screenPrefs[name] = v;
+          writeScreenPrefsLocal();
+          applyDimRead();
+          renderPrefToggles();
+          renderRecoSetting();
+          return changed && name === 'reco' && currentCategory === 'all' && !isKeywordMode();
+        },
+      };
+    }
+
+    // 서버 값을 받아 saved · read · prefs 사본을 맞춘다. 서버에 아직 없는 값(첫 동기화)은 이 기기 값을 올린다.
+    async function syncAccountInBackground() {
+      syncTouch = { saved: new Map(), read: new Set() };
+      let data = null;
+      try {
+        const res = await apiFetch('/api/sync');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        data = await res.json();
+      } catch (e) {
+        console.error('계정 정보를 불러오지 못했습니다. 이 기기 사본으로 계속합니다.', e);
+      }
+      const touch = syncTouch;
+      syncTouch = null;
+      if (!data || !data.uid) return;   // 주인을 확인하지 못했다 : 대기열은 이 기기에 남아 있다가 다음 접속에 보낸다
+
+      // 이 아래는 await 가 없다 : 맞추는 도중에 사용자가 저장 · 읽음을 바꿀 틈이 없다.
+      syncUid = data.uid;
+      const owner = syncLsGet(SYNC_OWNER_KEY);
+      if ((owner && owner !== syncUid) || (syncPending.uid && syncPending.uid !== syncUid)) {
+        // 다른 계정이 남긴 사본이다(로그아웃을 거치지 않고 계정이 바뀐 드문 경우). 이 계정으로 올리지 않고 버린다.
+        //   화면에 이미 반영된 값(글자 크기 · 건수 · 패널 상태)까지 깨끗이 하려고 지운 뒤 한 번 다시 불러온다.
+        clearPersonalCache();
+        syncLsSet(SYNC_OWNER_KEY, syncUid);   // 다시 불러온 뒤에는 이 계정의 사본으로 시작한다(되풀이 방지)
+        location.reload();
+        return;
+      }
+      syncLsSet(SYNC_OWNER_KEY, syncUid);
+      migrateLegacyToPending(data);
+      applyServerSaved(data, touch);
+      applyServerRead(data, touch);
+      const rerun = applyServerPrefs(data);
+      persistSyncPending();
+      if (hasSyncPending()) flushSync();
+      if (rerun) {
+        try { await searchDone; } catch {}
+        runSearch();   // 건수 · 보기 방식 · 추천 설정이 바뀐 경우만 (서버 캐시에서 바로 온다)
+      }
+    }
+
+    // P7 이전에 이 기기에만 있던 목록을 대기열로 옮긴다. 서버에 이미 있는 것은 서버 값을 그대로 둔다.
+    function migrateLegacyToPending(data) {
+      const legacySaved = syncLsJson(LEGACY_SAVED_KEY);
+      const legacyRead = syncLsJson(LEGACY_READ_KEY);
+      if (!Array.isArray(legacySaved) && !Array.isArray(legacyRead)) return;
+      const serverSaved = new Set((data.saved || []).map((x) => x.key));
+      const serverRead = new Set(data.read || []);
+      if (Array.isArray(legacySaved)) {
+        legacySaved.forEach((x) => {
+          if (x && x.key && !serverSaved.has(x.key) && !syncPending.saved[x.key]) syncPending.saved[x.key] = { op: 'put', article: x };
+        });
+      }
+      if (Array.isArray(legacyRead)) {
+        const now = Date.now();
+        // 목록은 최근에 읽은 순이다 → 앞쪽일수록 늦은 시각을 준다(서버가 오래된 것부터 버리므로 순서가 중요)
+        legacyRead.forEach((k, i) => {
+          if (typeof k === 'string' && k && !serverRead.has(k)) syncPending.read.push({ k, t: now - (i + 1) * 1000 });
+        });
+      }
+      persistSyncPending();
+      // 대기열에 적힌 것을 확인한 뒤에만 예전 목록을 지운다(그 사이 창이 닫혀도 잃지 않게)
+      if (!hasSyncPending() || syncLsGet(SYNC_PENDING_KEY) !== null) {
+        syncLsDel(LEGACY_SAVED_KEY);
+        syncLsDel(LEGACY_READ_KEY);
+      }
+    }
+
+    function applyServerSaved(data, touch) {
+      const merged = new Map();
+      (data.saved || []).forEach((x) => { if (x && x.key) merged.set(x.key, x); });
+      // 아직 못 보낸 변경 → 방금 사이에 내가 바꾼 것 순으로 서버 값 위에 덧씌운다
+      Object.entries(syncPending.saved).forEach(([k, o]) => { if (o.op === 'del') merged.delete(k); else if (o.article) merged.set(k, o.article); });
+      touch.saved.forEach((art, k) => { if (art) merged.set(k, art); else merged.delete(k); });
+      const next = [...merged.values()].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)).slice(0, SAVED_MAX);
+      const changed = next.length !== savedArticles.length || next.some((x, i) => x.key !== savedArticles[i].key);
+      savedArticles = next;
+      persistSavedArticles();
+      if (!changed) return;
+      renderSavedNav();
+      document.querySelectorAll('.save-btn').forEach((btn) => applySaveBtn(btn, isSavedKey(btn.dataset.saveKey)));
+      if (currentCategory === 'saved' && !isKeywordMode()) renderSavedView();
+    }
+
+    function applyServerRead(data, touch) {
+      const pending = [...syncPending.read].sort((a, b) => b.t - a.t).map((e) => e.k);
+      const seen = new Set();
+      // 최근에 읽은 순 : 방금 내가 연 것 → 못 보낸 것 → 서버
+      readKeys = [...[...touch.read].reverse(), ...pending, ...(data.read || [])]
+        .filter((k) => k && !seen.has(k) && seen.add(k)).slice(0, READ_MAX);
+      readKeySet = new Set(readKeys);
+      syncLsSet(READ_STORAGE_KEY, JSON.stringify(readKeys));
+      document.querySelectorAll('[data-read-key]').forEach((el) => el.classList.toggle('is-read', readKeySet.has(el.dataset.readKey)));
+    }
+
+    function applyServerPrefs(data) {
+      const server = syncIsObj(data.prefs) ? data.prefs : {};
+      // 이 기기 값은 서버 값을 적용하기 '전에' 먼저 읽는다. 적용하다 보면 같은 저장 항목에 기본값이 같이 적혀(화면 옵션 두 칸),
+      //   사람이 정하지 않은 값이 정한 값처럼 보여 서버로 올라가기 때문이다.
+      const mine = {};
+      Object.keys(PREF_SYNC).forEach((k) => {
+        if (server[k] !== undefined || syncPending.prefs[k] !== undefined) return;
+        const v = PREF_SYNC[k].local();
+        if (v !== undefined) mine[k] = v;
+      });
+      let rerun = false;
+      Object.keys(PREF_SYNC).forEach((k) => {
+        if (syncPending.prefs[k] !== undefined) return;    // 아직 못 보낸 내 변경이 우선
+        if (server[k] !== undefined && PREF_SYNC[k].apply(server[k])) rerun = true;
+      });
+      Object.assign(syncPending.prefs, mine);   // 서버에 아직 없는 값은 이 기기 값을 올린다(첫 동기화)
+      return rerun;
     }
 
     // ---------------------------------------------------------------
@@ -3219,7 +3624,9 @@
     // 투표 기록과 👍/👎 표시 · 숨긴 기사는 그대로 두고, 지금까지의 투표를 추천 계산에서만 뺀다(사용자 결정 2026-10-09).
     function resetTaste() {
       if (!confirm('지금까지 누른 좋아요/싫어요를 추천에서 뺍니다.\n버튼 표시와 숨긴 기사는 그대로입니다.\n\n초기화할까요?')) return;
-      try { localStorage.setItem(RECO_RESET_KEY, String(Date.now())); } catch {}
+      const now = Date.now();
+      try { localStorage.setItem(RECO_RESET_KEY, String(now)); } catch {}
+      queuePref('recoReset', now);
       renderRecoSetting();
       rerunIfAllView();
     }
@@ -3538,6 +3945,8 @@
       loadVotesFromCache();         // [추가] P3 : 싫어요 기사를 처음부터 빼고 그리려고 이 기기의 사본을 먼저 읽는다
       syncVotesInBackground();      // 서버의 내 투표로 바꾸고, 그 사이 그려진 목록에서 싫어요 기사를 걷어 낸다
       loadScreenPrefs();            // [추가] 화면 옵션 (읽음 흐리게) — 첫 렌더 전에 적용
+      loadSyncPending();            // [추가] P7 : 지난번에 서버로 못 보낸 변경
+      syncAccountInBackground();    // [추가] P7 : 서버의 설정 · 저장 기사 · 읽음으로 사본을 맞춘다 (기사 요청과 동시에, 기다리지 않는다)
       renderCategoryButtons();
       renderSearchToggle();
       renderSettingToggle();        // [추가]
@@ -3702,7 +4111,10 @@
 
     function setRailCollapsed(collapsed, persist = true) {
       document.body.classList.toggle('rail-collapsed', collapsed);
-      if (persist) { try { localStorage.setItem(RAIL_STORAGE_KEY, collapsed ? '1' : '0'); } catch {} }
+      if (persist) {
+        try { localStorage.setItem(RAIL_STORAGE_KEY, collapsed ? '1' : '0'); } catch {}
+        queuePref('railCollapsed', collapsed);
+      }
       syncRailToggle();
       updateStickTop();
       // 본문 폭이 300px 바뀌므로 폭을 재서 그리는 것(차트 · 칩 줄)이 다시 맞추도록 알려 준다
@@ -4264,7 +4676,7 @@
     function showAuthGate(state, opts = {}) {
       authBlocked = true;
       if (['none', 'pending', 'rejected'].includes(state)) rememberAuthState(state);
-      else if (state === 'login') { rememberAuthState(''); clearVoteCache(); clearKeywordCache(); }
+      else if (state === 'login') { rememberAuthState(''); clearPersonalCache({ fromGate: true }); }
       document.documentElement.classList.add('auth-locked');
       renderAuthGate(state, opts);
     }
@@ -4325,8 +4737,9 @@
     // 이 기기에서만 로그아웃한다. 기본값(global)은 다른 기기(아이폰 · 아이패드)의 로그인까지 끊는다.
     async function signOut() {
       rememberAuthState('');
-      clearVoteCache();   // 공용 기기에서 다음 사람에게 내 투표가 보이지 않게
-      clearKeywordCache();   // [P5] 내 키워드도 마찬가지
+      // [P7] 아직 못 보낸 저장 · 읽음 · 설정 변경을 먼저 보낸다(오래 걸리면 1.5초 뒤 포기 — 못 보낸 것은 사라진다)
+      try { await Promise.race([flushSync(), new Promise((r) => setTimeout(r, 1500))]); } catch {}
+      clearPersonalCache();   // 공용 기기에서 다음 사람에게 내 투표 · 키워드 · 저장 기사 · 읽음 · 설정이 보이지 않게
       try {
         const c = authClient();
         if (c) await c.auth.signOut({ scope: 'local' });
@@ -4537,6 +4950,7 @@
 
     function setTheme(pref) {
       try { localStorage.setItem(THEME_STORAGE_KEY, pref); } catch {}
+      queuePref('theme', pref);
       applyTheme(pref);
       renderThemeButtons();
     }
@@ -4545,7 +4959,7 @@
     // [추가] 기본 노출 건수 설정
     //   섹션을 '처음 열 때' 몇 건을 보여줄지 정한다.
     //   제목 바에서 그때그때 바꾸는 값은 예전처럼 그 섹션에만 적용되고,
-    //   여기서 정한 값이 그 섹션의 '처음 상태'가 된다. (이 기기에만 저장)
+    //   여기서 정한 값이 그 섹션의 '처음 상태'가 된다. ([P7] 내 계정에 저장 — 기기마다 따로가 아니다)
     // ---------------------------------------------------------------
     const COUNT_STORAGE_KEY = 'newsInsightDefaultCount_v1';
     const COUNT_CHOICES = [3, 5, 10, 15, 20, 30];
@@ -4597,6 +5011,7 @@
       if (!COUNT_CHOICES.includes(n)) return;
       defaultCounts[target] = String(n);
       try { localStorage.setItem(COUNT_STORAGE_KEY, JSON.stringify(defaultCounts)); } catch {}
+      queuePref('counts', { ...defaultCounts });
       // 섹션별로 기억해 둔 예전 건수를 지워야 새 기본값이 모든 섹션에 바로 적용된다.
       Object.keys(sectionFilterMemory).forEach((k) => delete sectionFilterMemory[k]);
       applyDefaultCounts();
@@ -4630,6 +5045,7 @@
       applyRootFontSize(n);
       try { localStorage.setItem(FONT_SIZE_KEY, String(n)); }
       catch (e) { console.error('본문 크기를 저장하지 못했습니다.', e); }
+      queuePref('fontSize', n);   // 슬라이더를 끄는 동안 값이 계속 바뀌지만 보내는 쪽이 0.8초 모아서 마지막 값만 보낸다
       renderFontSizeSetting();
       // 글자가 커지면 상단바도 같이 높아진다 → 틀고정(sticky) 기준값을 다시 재야
       // 아래 제목 바가 상단바에 파묻히지 않는다.
@@ -4664,9 +5080,16 @@
       applyDimRead();
     }
 
-    function saveScreenPrefs() {
+    // 서버 값을 사본에 반영할 때(되울림 방지)는 이쪽만 부른다.
+    function writeScreenPrefsLocal() {
       try { localStorage.setItem(SCREEN_PREFS_KEY, JSON.stringify(screenPrefs)); }
       catch (e) { console.error('화면 옵션을 저장하지 못했습니다.', e); }
+    }
+
+    function saveScreenPrefs() {
+      writeScreenPrefsLocal();
+      queuePref('dimRead', screenPrefs.dimRead);
+      queuePref('reco', screenPrefs.reco);
     }
 
     // 읽음 기록(is-read)은 건드리지 않고 '흐리게 보이기'만 끈다 → 다시 켜면 그대로 되살아난다.
@@ -4710,7 +5133,7 @@
 
     // ---------------------------------------------------------------
     // [수정] v3 Phase 8 : 설정 창 열기·닫기 (헤더 ⋮ = 화면 설정 탭, 관리자 아이콘 = 관리자 탭)
-    //   화면 설정(테마 · 본문 크기 · 기본 노출 건수 · 화면 옵션)은 이 기기에만 저장되는
+    //   화면 설정(테마 · 본문 크기 · 기본 노출 건수 · 화면 옵션)은 내 계정에 저장되는([P7])
     //   개인 취향이라 로그인한 사람 누구나 바꿀 수 있다.
     // ---------------------------------------------------------------
     // [P5] 설정 창의 키워드 편집 사본. mine = 내 키워드 탭(실제 사용값에서 시작), common = 관리자 탭(공용 기본값).
@@ -6421,7 +6844,7 @@
           }
 
         } else if (currentCategory === 'saved') {
-          // [추가] 서버를 부르지 않는 유일한 기사 화면. 이 브라우저의 보관함을 그대로 그린다.
+          // [추가] 서버에 기사를 묻지 않는 유일한 기사 화면. 내 보관함(이 기기 사본)을 그대로 그린다.
           renderSavedView();
 
         } else if (currentCategory === 'briefing') {
@@ -6635,6 +7058,7 @@
     function persistViewMode(scope, mode) {
       try { localStorage.setItem(VIEW_MODE_KEY, JSON.stringify({ ...readViewModes(), [scope]: mode })); }
       catch (e) { console.error('보기 방식을 기록하지 못했습니다.', e); }
+      queuePref('viewMode', { [scope]: mode });
     }
 
     // 저장소를 못 써도 이번 방문 동안은 이 값으로 동작한다. section = 단일 목록 섹션 화면 전체가 한 값을 쓴다 (v3 Phase 6)

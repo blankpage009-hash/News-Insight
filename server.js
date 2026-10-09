@@ -667,6 +667,210 @@ app.delete('/api/settings/my-keywords', async (req, res) => {
   }
 });
 
+// -----------------------------------------------------------------
+// [P7] 계정 동기화 : 화면 설정(prefs) · 저장한 기사 · 읽음 표시 (PERSONALIZATION.md 2-5)
+//   - 화면은 이 기기 저장소를 '빠른 첫 화면용 사본'으로만 쓰고, 접속하면 GET /api/sync 한 번으로 서버 값을 받아 맞춘다.
+//   - 쓰기도 POST /api/sync 하나로 받는다(화면이 몇 초씩 모아서 보냄). 같은 요청이 두 번 와도 결과가 같다(멱등) —
+//     화면이 못 보낸 변경을 다음 접속 때 다시 보내기 때문이다.
+//   - user_id 는 토큰에서 나온 req.user.id 로만 정한다. 캐시 키에 사용자 정보는 들어가지 않는다.
+//   - prefs 는 user_settings 의 prefs 칸만 쓴다(keywords 칸은 P5 가 따로 관리 — 보내지 않으면 PostgREST 가 건드리지 않는다).
+// -----------------------------------------------------------------
+const SAVED_TABLE = 'saved_articles';
+const READ_TABLE = 'read_marks';
+const SAVED_MAX = 300;            // 화면 SAVED_MAX 와 같은 값
+const READ_MAX = 1000;            // 화면 READ_MAX 와 같은 값
+const SYNC_SAVED_PUT_MAX = 50;    // 한 요청에 담는 상한 (본문 1mb 제한 + 요청 시간)
+const SYNC_SAVED_DEL_MAX = 50;
+const SYNC_READ_MAX = 200;
+const PREF_COUNT_KEYS = ['section', 'subsection', 'briefing', 'search'];
+const PREF_COUNT_CHOICES = [3, 5, 10, 15, 20, 30];
+
+const isPlainObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+
+// 허용한 칸 · 모양이 맞는 값만 남긴다. 모르는 칸은 버린다(P9 의 aiModel 은 그때 더한다).
+function cleanPrefsPatch(p) {
+  const out = {};
+  if (!isPlainObj(p)) return out;
+  if (['light', 'dark', 'system'].includes(p.theme)) out.theme = p.theme;
+  if (Number.isInteger(p.fontSize) && p.fontSize >= 13 && p.fontSize <= 19) out.fontSize = p.fontSize;
+  if (isPlainObj(p.counts)) {
+    const c = {};
+    PREF_COUNT_KEYS.forEach((k) => {
+      if (PREF_COUNT_CHOICES.includes(Number(p.counts[k]))) c[k] = String(Number(p.counts[k]));   // 화면은 문자열로 들고 있다
+    });
+    if (Object.keys(c).length) out.counts = c;
+  }
+  if (isPlainObj(p.viewMode)) {
+    const v = {};
+    Object.keys(p.viewMode).slice(0, 10).forEach((k) => {
+      if (/^[a-z]{1,20}$/.test(k) && ['card', 'list'].includes(p.viewMode[k])) v[k] = p.viewMode[k];
+    });
+    if (Object.keys(v).length) out.viewMode = v;
+  }
+  ['railCollapsed', 'dimRead', 'reco'].forEach((k) => { if (typeof p[k] === 'boolean') out[k] = p[k]; });
+  if (Number.isFinite(p.recoReset) && p.recoReset >= 0) out.recoReset = Math.floor(p.recoReset);
+  return out;
+}
+
+// 같은 사람의 prefs 쓰기를 한 줄로 세운다. 읽고-합치고-쓰는 사이에 다른 쓰기가 끼면 먼저 쓴 값이 지워지기 때문이다.
+const prefsLocks = new Map();     // user id -> 줄의 마지막 약속
+function runAfter(locks, userId, fn) {
+  const prev = locks.get(userId) || Promise.resolve();
+  const next = prev.catch(() => {}).then(fn);
+  const tail = next.catch(() => {}).then(() => { if (locks.get(userId) === tail) locks.delete(userId); });
+  locks.set(userId, tail);
+  return next;
+}
+
+async function restGet(pathAndQuery) {
+  const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${pathAndQuery}`, { headers: supabaseHeaders() }, 5000);
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+  const rows = await r.json();
+  return Array.isArray(rows) ? rows : [];
+}
+
+async function readUserPrefs(userId) {
+  const rows = await restGet(`${USER_SETTINGS_TABLE}?user_id=eq.${encodeURIComponent(userId)}&select=prefs`);
+  const v = rows.length ? rows[0].prefs : null;
+  return isPlainObj(v) ? v : {};
+}
+
+// 보낸 칸만 바꾼다. counts · viewMode 처럼 안에 칸이 여러 개인 값은 칸 단위로 합친다(건수 하나만 바꿔도 나머지가 지워지지 않게).
+function mergeUserPrefs(userId, patch) {
+  return runAfter(prefsLocks, userId, async () => {
+    const cur = await readUserPrefs(userId);
+    const next = { ...cur };
+    Object.keys(patch).forEach((k) => {
+      next[k] = isPlainObj(patch[k]) && isPlainObj(cur[k]) ? { ...cur[k], ...patch[k] } : patch[k];
+    });
+    const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${USER_SETTINGS_TABLE}?on_conflict=user_id`, {
+      method: 'POST',
+      headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify([{ user_id: userId, prefs: next, updated_at: new Date().toISOString() }]),
+    }, 5000);
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+  });
+}
+
+// 화면이 보낸 저장 기사를 table 모양으로 정리한다. 길이를 막아 두지 않으면 한 줄이 아주 커질 수 있다.
+function cleanSavedArticle(a) {
+  if (!isPlainObj(a)) return null;
+  const key = typeof a.key === 'string' ? a.key.trim() : '';
+  if (!key || key.length > 2000) return null;
+  const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
+  const strs = (v, n, len) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, n).map((x) => x.slice(0, len)) : []);
+  const t = Number(a.savedAt);
+  return {
+    key,
+    article: {
+      title: str(a.title, 500), source: str(a.source, 100), url: str(a.url, 2000), naverUrl: str(a.naverUrl, 2000),
+      datetime: str(a.datetime, 64), summary: strs(a.summary, 10, 1000), cats: strs(a.cats, 10, 40),
+    },
+    savedAt: new Date(Number.isFinite(t) && t > 0 && t <= Date.now() ? t : Date.now()).toISOString(),
+  };
+}
+
+// ignore-duplicates : 이미 있는 줄은 그대로 둔다 → 같은 요청을 다시 받아도 결과가 같고, 옛 기기가 서버 값을 덮지 못한다.
+async function insertIgnoringDuplicates(table, rows) {
+  const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=user_id,url_key`, {
+    method: 'POST',
+    headers: { ...supabaseHeaders(), Prefer: 'resolution=ignore-duplicates,return=minimal' },
+    body: JSON.stringify(rows),
+  }, 8000);
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+}
+
+async function deleteUserRows(table, userId, keys) {
+  await Promise.all(keys.map(async (key) => {
+    const url = `${SUPABASE_URL}/rest/v1/${table}?user_id=eq.${encodeURIComponent(userId)}&url_key=eq.${encodeURIComponent(key)}`;
+    const r = await fetchWithTimeout(url, { method: 'DELETE', headers: { ...supabaseHeaders(), Prefer: 'return=minimal' } }, 5000);
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+  }));
+}
+
+// 사용자당 최근 max 건만 남긴다. max 번째 줄의 시각을 물어 그보다 오래된 줄을 지운다.
+//   기사 주소 목록(in.(...))은 주소가 길어 요청 주소 길이 제한에 걸리므로 쓰지 않는다.
+//   시각은 PostgREST 가 준 글자 그대로 되돌려 보낸다(마이크로초와 '+' 를 Date 로 바꾸면 틀어진다).
+async function trimUserRows(table, col, userId, max) {
+  const base = `${SUPABASE_URL}/rest/v1/${table}?user_id=eq.${encodeURIComponent(userId)}`;
+  const rows = await restGet(`${table}?user_id=eq.${encodeURIComponent(userId)}&select=${col}&order=${col}.desc&offset=${max - 1}&limit=1`);
+  if (!rows.length) return;
+  const r = await fetchWithTimeout(`${base}&${col}=lt.${encodeURIComponent(rows[0][col])}`, {
+    method: 'DELETE', headers: { ...supabaseHeaders(), Prefer: 'return=minimal' },
+  }, 5000);
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+}
+
+// 첫 화면과 함께 한 번 부른다 : 설정 · 저장한 기사 · 읽음 표시를 한꺼번에 준다. uid 는 화면이 사본의 주인을 확인하는 데 쓴다.
+app.get('/api/sync', async (req, res) => {
+  if (!SUPABASE_ENABLED) return res.status(503).json({ error: '계정 저장소가 설정되지 않았습니다.' });
+  const uid = req.user.id;
+  const q = `user_id=eq.${encodeURIComponent(uid)}`;
+  try {
+    const [prefs, savedRows, readRows] = await Promise.all([
+      readUserPrefs(uid),
+      restGet(`${SAVED_TABLE}?${q}&select=url_key,article,saved_at&order=saved_at.desc&limit=${SAVED_MAX}`),
+      restGet(`${READ_TABLE}?${q}&select=url_key&order=read_at.desc&limit=${READ_MAX}`),
+    ]);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      uid,
+      prefs,
+      saved: savedRows.map((x) => ({
+        ...(isPlainObj(x.article) ? x.article : {}), key: x.url_key, savedAt: Date.parse(x.saved_at) || 0,
+      })),
+      read: readRows.map((x) => x.url_key),
+    });
+  } catch (e) {
+    console.error('[동기화 조회 실패]', e.message);
+    res.status(500).json({ error: '계정 정보를 불러오지 못했습니다.' });
+  }
+});
+
+// 본문 { prefs?, savedPut?: [기사], savedDel?: [주소], read?: [{ k, t }] }. 비어 있는 칸은 건너뛴다.
+app.post('/api/sync', async (req, res) => {
+  if (!SUPABASE_ENABLED) return res.status(503).json({ error: '계정 저장소가 설정되지 않았습니다.' });
+  const b = req.body || {};
+  const list = (v) => (Array.isArray(v) ? v : []);
+  if (list(b.savedPut).length > SYNC_SAVED_PUT_MAX || list(b.savedDel).length > SYNC_SAVED_DEL_MAX || list(b.read).length > SYNC_READ_MAX) {
+    return res.status(400).json({ error: '한 번에 보낼 수 있는 양을 넘었습니다.' });
+  }
+  const uid = req.user.id;
+  const prefs = cleanPrefsPatch(b.prefs);
+  const putMap = new Map();
+  list(b.savedPut).map(cleanSavedArticle).filter(Boolean).forEach((c) => putMap.set(c.key, c));
+  const dels = [...new Set(list(b.savedDel).filter((k) => typeof k === 'string' && k && k.length <= 2000))];
+  const readMap = new Map();
+  list(b.read).forEach((e) => {
+    const k = e && typeof e.k === 'string' ? e.k.trim() : '';
+    if (!k || k.length > 2000) return;
+    const t = Number(e.t);
+    readMap.set(k, new Date(Number.isFinite(t) && t > 0 && t <= Date.now() ? t : Date.now()).toISOString());
+  });
+  try {
+    await Promise.all([
+      Object.keys(prefs).length ? mergeUserPrefs(uid, prefs) : null,
+      // 저장은 넣은 다음 지운다(한 요청 안에서 순서가 정해지도록 이어서 실행)
+      (async () => {
+        if (putMap.size) {
+          await insertIgnoringDuplicates(SAVED_TABLE, [...putMap.values()].map((c) => ({
+            user_id: uid, url_key: c.key, article: c.article, saved_at: c.savedAt,
+          })));
+        }
+        if (dels.length) await deleteUserRows(SAVED_TABLE, uid, dels);
+      })(),
+      readMap.size ? insertIgnoringDuplicates(READ_TABLE, [...readMap].map(([k, t]) => ({ user_id: uid, url_key: k, read_at: t }))) : null,
+    ]);
+    res.json({ ok: true });
+    // 응답을 늦추지 않도록 상한 정리는 뒤에서 한다. 실패해도 다음에 다시 시도된다.
+    if (putMap.size) trimUserRows(SAVED_TABLE, 'saved_at', uid, SAVED_MAX).catch((e) => console.error('[저장 기사 정리 실패]', e.message));
+    if (readMap.size) trimUserRows(READ_TABLE, 'read_at', uid, READ_MAX).catch((e) => console.error('[읽음 표시 정리 실패]', e.message));
+  } catch (e) {
+    console.error('[동기화 저장 실패]', e.message);
+    res.status(500).json({ error: '저장하지 못했습니다.' });
+  }
+});
+
 // 공용 설정이라 관리자만 덮어쓴다. 읽기(GET)는 허용 사용자 모두에게 열어 둔다.
 app.post('/api/settings/keywords', requireAdminUser, async (req, res) => {
   const kw = req.body && req.body.keywords;
