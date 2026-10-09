@@ -1333,7 +1333,12 @@
       min-height: 40px; padding: 6px 4px; font-size: 12px; font-weight: 600;
     }
     .bc-actions .bc-act svg { width: 15px; height: 15px; }
-    .bc-actions .bc-vbtn { width: 32px; }
+    /* 좋아요/싫어요 : 버튼 줄에서 빼서 카드 오른쪽 아래에 아이콘만 띄운다 (네 칸이 더 넓어진다).
+       .bc-actions 를 static 으로 두어, 카드(.bc-card, absolute) 기준으로 자리를 잡는다. 52px = 버튼 줄 높이(2+40) + 여백 */
+    .bc-actions { position: static; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .bc-actions .bc-vote { position: absolute; right: 10px; bottom: 52px; border-left: 0; gap: 0; }
+    .bc-actions .bc-vbtn { width: 32px; height: 36px; }
+    .bc-actions .bc-vbtn svg { width: 16px; height: 16px; }
     #ni-toast { bottom: 84px; }   /* 하단 탭 바 위로 */
 
     /* 아래 : [01 / 10] [진행 막대] — 이전/다음 화살표는 손가락으로 밀면 되므로 감춘다 */
