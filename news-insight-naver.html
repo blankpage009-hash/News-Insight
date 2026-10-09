@@ -134,7 +134,7 @@
 <script>
   // 앱 버전 표시 (헤더 · 모바일 헤더 · 로그인 화면). 버전을 올릴 때는 이 값 하나만 바꾼다.
   //   data-app-version 이 붙은 자리에 DOMContentLoaded 때 채운다. 자리 안의 글자는 스크립트가 돌기 전 기본값이다.
-  const APP_VERSION = 'v3.0';
+  const APP_VERSION = 'v3.1';
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-app-version]').forEach((el) => { el.textContent = APP_VERSION; });
   });
@@ -1748,7 +1748,7 @@
     <div class="ag-box">
       <div class="ag-head">
         <div id="ag-title" class="ag-brand">Beyond News</div>
-        <div class="ag-sub">Real-Time Wire Desk <span class="ag-ver" data-app-version>v3.0</span></div>
+        <div class="ag-sub">Real-Time Wire Desk <span class="ag-ver" data-app-version>v3.1</span></div>
       </div>
       <div id="ag-body" class="ag-body" aria-live="polite">
         <p class="ag-msg">로그인 정보를 확인하는 중입니다…</p>
@@ -1773,10 +1773,10 @@
             </svg>
             <span class="logo-word">Beyond News</span>          </span>
         </h1>
-        <p id="app-subtitle" class="font-sans text-muted uppercase tracking-[0.08em] leading-none text-[0.75rem] lg:text-[0.87rem] pb-[2px] whitespace-nowrap hidden sm:block">Real-Time Wire Desk <span class="text-[calc(0.7125rem+1px)] tracking-normal normal-case ml-1.5" data-app-version>v3.0</span></p>
+        <p id="app-subtitle" class="font-sans text-muted uppercase tracking-[0.08em] leading-none text-[0.75rem] lg:text-[0.87rem] pb-[2px] whitespace-nowrap hidden sm:block">Real-Time Wire Desk <span class="text-[calc(0.7125rem+1px)] tracking-normal normal-case ml-1.5" data-app-version>v3.1</span></p>
       </div>
       <!-- 부제가 숨는 좁은 화면(sm 미만)에서는 로고 글자 아래(글자 시작선에 맞춤)에 작게 보인다 -->
-      <p class="sm:hidden ml-[35px] mt-2 text-[calc(0.65rem+1px)] font-normal leading-none text-muted whitespace-nowrap">Real-Time Wire Desk&ensp;<span data-app-version>v3.0</span></p>
+      <p class="sm:hidden ml-[35px] mt-2 text-[calc(0.65rem+1px)] font-normal leading-none text-muted whitespace-nowrap">Real-Time Wire Desk&ensp;<span data-app-version>v3.1</span></p>
     </div>
 
     <!-- [추가] Phase 7 D1 · 시안 01번 : 헤더 가운데 검색창 (데스크톱 전용)
