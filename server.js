@@ -1762,9 +1762,11 @@ async function fetchBreaking(limit = 10, terms = ['속보'], exclude = null) {
 //
 //   같은 키로 요청이 동시에 여러 개 들어와도 실제 계산은 한 번만 한다(중복 제거).
 // -----------------------------------------------------------------
-// 응답 1건이 큰 편이라(전체 화면 = 80KB 남짓) 개수를 넉넉하되 과하지 않게 잡는다.
+// 응답 1건이 큰 편이라 개수를 넉넉하되 과하지 않게 잡는다.
 // 실제로 쓰이는 조합은 '화면 종류 × 필터 조합'이라 수십 개 수준이다.
-const RESP_CACHE_MAX = 120;
+// [P6] 전체 화면이 섹션 7칸으로 나뉘어 필터 조합 하나에 7칸을 쓴다 → 120 에서 240 으로 늘렸다.
+//   대신 칸 하나가 예전 화면 통째 칸(운영 80KB 남짓)의 1/7 이라, 메모리 상한은 예전(120 × 80KB)보다 작다.
+const RESP_CACHE_MAX = 240;
 const respCache = new Map();      // key -> { ts, value }   (Map = 삽입순 유지 → LRU)
 const respInflight = new Map();   // key -> Promise         (진행 중인 계산)
 // 기동 직후 Supabase에서 캐시를 되살리는 동안 잠깐 걸어두는 빗장.
@@ -2466,22 +2468,31 @@ app.get('/api/briefing', async (req, res) => {
 
 // -----------------------------------------------------------------
 // /api/all/sections : 전체 카테고리 그룹 조회
+//   [P6] 응답 캐시를 화면 통째 1칸이 아니라 '섹션마다 1칸'으로 둔다 (PERSONALIZATION.md 2-9).
+//   예전엔 7개 섹션 검색어를 모두 합친 해시가 열쇠라, 섹션 하나만 바꾼 사용자도 7개 섹션을
+//   전부 새로 불렀다(AI 만 바꿔도 네이버 10회). 이제 바꾼 섹션만 새로 부르고 나머지는 프리워밍 칸을 같이 쓴다.
+//   화면 통째 칸을 겉에 하나 더 두지 않는다. 겉 칸을 다시 만들 때 낡은(stale) 섹션 칸을 받아
+//   '지금' 시각으로 찍게 되어, 기사가 최대 60분이 아니라 120분까지 낡을 수 있다.
 // -----------------------------------------------------------------
 function buildSectionsKey(name, SECTIONS, { limit, dateFrom, dateTo, hours, sort }, kwMap) {
   return `${name}|${limit}|${dateFrom || ''}|${dateTo || ''}|${hours || ''}|${sort || ''}|${kwSig(SECTIONS, kwMap)}`;
 }
 
-async function buildAllSections({ limit, dateFrom, dateTo, hours, sort }, kwMap) {
-  const sections = await Promise.all(
-    ALL_SECTIONS.map(async (sec) => {
-      const { terms, exclude } = resolveSectionKw(kwMap, sec);
-      const items = sec.breaking
-        ? await fetchBreaking(limit, terms, exclude)
-        : collapseEvents(await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain, exclude }), sort).slice(0, limit);
-      return { key: sec.key, label: sec.label, items };
-    })
-  );
-  return { sections };
+async function buildOneOfAllSections(sec, { limit, dateFrom, dateTo, hours, sort }, kwMap) {
+  const { terms, exclude } = resolveSectionKw(kwMap, sec);
+  const items = sec.breaking
+    ? await fetchBreaking(limit, terms, exclude)
+    : collapseEvents(await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain, exclude }), sort).slice(0, limit);
+  return { key: sec.key, label: sec.label, items };
+}
+
+// 섹션 칸마다 { key, run }. 화면 요청 · 프리워밍 · 키워드 순위가 모두 이것으로 열쇠를 만들어야 칸이 맞는다.
+//   'allsec/' 은 예전 화면 통째 칸('all|…')과 겹치지 않게 붙인 새 이름이다.
+function allSectionParts(opts, kwMap) {
+  return ALL_SECTIONS.map((sec) => ({
+    key: buildSectionsKey(`allsec/${sec.key}`, [sec], opts, kwMap),
+    run: () => buildOneOfAllSections(sec, opts, kwMap),
+  }));
 }
 
 app.get('/api/all/sections', async (req, res) => {
@@ -2489,11 +2500,10 @@ app.get('/api/all/sections', async (req, res) => {
   const kwMap = await kwMapFor(req);
   const opts = { limit: Math.min(Number(perSection) || 5, 30), dateFrom, dateTo, hours, sort };
   try {
-    res.json(await cachedResponse(
-      buildSectionsKey('all', ALL_SECTIONS, opts, kwMap),
-      TTL_SECTION,
-      () => buildAllSections(opts, kwMap),
-    ));
+    const sections = await Promise.all(
+      allSectionParts(opts, kwMap).map((p) => cachedResponse(p.key, TTL_SECTION, p.run))
+    );
+    res.json({ sections });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
@@ -2503,8 +2513,8 @@ app.get('/api/all/sections', async (req, res) => {
 // -----------------------------------------------------------------
 // [Phase 7 C1] /api/keyword-rank : 지금 기사에 많이 나오는 낱말 Top N
 //
-//   네이버를 새로 부르지 않는다. '전체' 화면이 쓰는 /api/all/sections 캐시
-//   (프리워밍이 30분마다 데워 두는 그 칸)를 그대로 읽어 제목의 낱말만 센다.
+//   네이버를 새로 부르지 않는다. '전체' 화면이 쓰는 /api/all/sections 섹션 칸들
+//   (프리워밍이 30분마다 데워 두는 그 칸)을 그대로 읽어 제목의 낱말만 센다.
 //   캐시가 비어 있으면 빈 목록을 주고 끝낸다 — 여기서 새로 만들면 화면 한구석의
 //   장식 때문에 섹션 전체(네이버 수십 호출)를 짓게 되어 첫 손님이 느려진다.
 // -----------------------------------------------------------------
@@ -2614,12 +2624,17 @@ app.get('/api/keyword-rank', async (req, res) => {
   // 기간·정렬·건수는 프리워밍과 똑같이 고정한다. 화면의 설정을 따라가면
   //   캐시 키가 갈라져 적중하지 않고, 그러면 랭킹이 영영 비어 보인다.
   const opts = { limit: WARM_PER_SECTION, hours: WARM_HOURS, sort: WARM_SORT };
+  // [P6] 섹션 칸 중 있는 것만으로 센다. 섹션 하나를 바꾼 사용자는 그 섹션 칸이 아직 없어도
+  //   나머지 6칸(프리워밍)으로 순위가 나온다. 예전엔 전체 화면을 한 번 열기 전까지 비어 있었다.
+  const sections = allSectionParts(opts, kwMap)
+    .map((p) => peekResponse(p.key, TTL_SECTION))
+    .filter(Boolean);
+  if (!sections.length) return res.json({ items: [], ready: false });
+  const complete = sections.length === ALL_SECTIONS.length;
+  // 등락 스냅샷은 키워드 설정마다 따로 둔다 (7개 섹션 검색어 전체의 해시)
   const key = buildSectionsKey('all', ALL_SECTIONS, opts, kwMap);
 
-  const cached = peekResponse(key, TTL_SECTION);
-  if (!cached) return res.json({ items: [], ready: false });
-
-  const ranked = countTitleWords(cached.sections || [], kwMap);
+  const ranked = countTitleWords(sections, kwMap);
   const snap = rankSnaps.get(key);
 
   // 등락 비교는 표기(word)가 아니라 묶음 이름(key)으로 한다.
@@ -2632,7 +2647,8 @@ app.get('/api/keyword-rank', async (req, res) => {
 
   // 등락은 '한 시간 전 순위'와 비교한다. 서버가 다시 뜨면 비교 대상이 없어져
   //   한 시간 동안은 전부 '—' 로 나온다. (메모리에만 두는 값이다)
-  if (!snap || Date.now() - snap.ts > RANK_SNAP_GAP) {
+  //   섹션 칸이 덜 모였을 때는 기준으로 남기지 않는다 → 빠진 섹션 낱말이 한 시간 내내 NEW 로 뜨는 것을 막는다.
+  if (complete && (!snap || Date.now() - snap.ts > RANK_SNAP_GAP)) {
     rankSnaps.set(key, {
       ts: Date.now(),
       order: ranked.slice(0, RANK_SNAP_KEEP).map((r) => r.key),
@@ -2656,8 +2672,8 @@ app.get('/api/keyword-rank', async (req, res) => {
 //     2. 씨앗 하나당 결과를 따로 캐시한다 → 둘러볼 때마다 다시 부르지 않는다
 //
 //   캐시를 respCache 에 넣지 않는 이유 : 열쇠가 '사람마다 다른 저장 기사'라
-//   종류가 끝없이 늘어난다. RESP_CACHE_MAX(120칸)를 저 값들이 채우면
-//   프리워밍이 만들어 둔 섹션 응답(80KB짜리)이 밀려나 첫 손님이 느려진다.
+//   종류가 끝없이 늘어난다. RESP_CACHE_MAX 를 저 값들이 채우면
+//   프리워밍이 만들어 둔 섹션 응답이 밀려나 첫 손님이 느려진다.
 //   지수 차트(indexChartCache)를 따로 뺀 것과 같은 이유다.
 // -----------------------------------------------------------------
 const FOLLOWUP_MAX_SEEDS = 5;                                  // 한 번에 재검색할 저장 기사 수
@@ -4915,9 +4931,12 @@ let lastWarmKeys = [];
 // 프리워밍은 '완성된 응답'을 미리 만들어 캐시에 넣어 둔다.
 //   중요 : 화면이 실제로 보내는 요청과 조건이 완전히 같아야 캐시 키가 맞아떨어진다.
 //   하나라도 다르면 다른 칸에 저장돼 데워봐야 헛일이 된다.
-//   (화면 기본값 : 게재기간 1일=24, 정렬 정확도순=sim, 섹션당 30건, 브리핑 10건)
+//   (화면 기본값 : 게재기간 1일=24, 섹션당 30건, 브리핑 10건)
+//   [P6] 정렬은 최신순=date. v3.0(2026-10-06)부터 화면은 Daily Brief 만 정확도순이고 '전체' 화면은 최신순인데
+//   (html SECTION_FILTER_DEFAULTS), 여기는 sim 으로 남아 전체 화면이 프리워밍 칸을 한 번도 못 썼다.
+//   정렬은 네이버 호출에 들어가지 않고(buildOneOfAllSections) 순서만 바꾸므로 sim 까지 같이 데우지는 않는다.
 const WARM_HOURS = '24';
-const WARM_SORT = 'sim';
+const WARM_SORT = 'date';
 const WARM_PER_SECTION = 30;
 const WARM_BRIEFING_LIMIT = 10;
 
@@ -4952,6 +4971,8 @@ function warnUncoveredSections(kwMap) {
 }
 
 // 접속했을 때 가장 먼저 보이는 화면부터 순서대로 데운다.
+//   작업 하나 = 칸 여러 개(parts). [P6] 전체 화면은 섹션 7칸을 한 작업으로 묶어 예전처럼 동시에 데운다.
+//   섹션마다 따로 작업으로 두면 사이마다 WARM_GAP 이 붙어 전체 화면이 15초쯤 늦게 데워진다.
 function warmJobs(kwMap) {
   const secOpts = { limit: WARM_PER_SECTION, hours: WARM_HOURS, sort: WARM_SORT };
   const briefOpts = { limit: WARM_BRIEFING_LIMIT, hours: WARM_HOURS };
@@ -4959,13 +4980,11 @@ function warmJobs(kwMap) {
   const jobs = [
     {
       name: 'briefing',
-      key: buildBriefingKey(briefOpts, kwMap),
-      run: () => buildBriefing(briefOpts, kwMap),
+      parts: [{ key: buildBriefingKey(briefOpts, kwMap), run: () => buildBriefing(briefOpts, kwMap) }],
     },
     {
       name: 'all/sections',
-      key: buildSectionsKey('all', ALL_SECTIONS, secOpts, kwMap),
-      run: () => buildAllSections(secOpts, kwMap),
+      parts: allSectionParts(secOpts, kwMap),
     },
   ];
 
@@ -4977,8 +4996,7 @@ function warmJobs(kwMap) {
     const sources = digestSources(base, SECTIONS);
     jobs.push({
       name: `${base}/digest`,
-      key: buildDigestKey(base, sources, digestOpts, kwMap),
-      run: () => buildDigest(sources, digestOpts, kwMap),
+      parts: [{ key: buildDigestKey(base, sources, digestOpts, kwMap), run: () => buildDigest(sources, digestOpts, kwMap) }],
     });
   });
 
@@ -5021,20 +5039,23 @@ async function warmCache() {
       // 방금 사용자 요청이 채워 둔 칸을 또 채우면 네이버 호출만 두 번 쓴다.
       //   재배포 직후엔 접속한 사람의 요청이 먼저 캐시를 채우므로 특히 겹친다.
       //   최근에 갱신된 칸은 건너뛴다 (다음 회차에 정상적으로 갱신된다).
-      const hit = respCache.get(job.key);
-      if (hit && Date.now() - hit.ts < WARM_SKIP_IF_YOUNGER) { skipped++; continue; }
+      const todo = job.parts.filter((p) => {
+        const hit = respCache.get(p.key);
+        return !(hit && Date.now() - hit.ts < WARM_SKIP_IF_YOUNGER);
+      });
+      if (!todo.length) { skipped++; continue; }
 
       if (i > 0) await sleep(WARM_GAP);   // 네이버 API 429 방지
-      try {
-        // cachedResponse 가 아니라 runProducer 를 직접 부른다.
-        //   cachedResponse 는 '아직 쓸 만하면 그냥 돌려주는' 함수라 갱신이 안 될 수 있다.
-        //   프리워밍은 무조건 새로 받아 캐시를 채우는 게 목적이다.
-        //   warmFlag.run 으로 감싸 이 안의 네이버 호출을 '프리워밍'으로 표시한다.
-        //   → 사용자 요청이 슬롯을 먼저 쓰게 된다 (naverSlotAcquire 참고).
-        await warmFlag.run(true, () => runProducer(job.key, job.run));
-      } catch (e) {
-        console.error(`[프리워밍] ${job.name} 실패:`, e.message);   // 하나 실패가 전체를 멈추지 않게
-      }
+      // cachedResponse 가 아니라 runProducer 를 직접 부른다.
+      //   cachedResponse 는 '아직 쓸 만하면 그냥 돌려주는' 함수라 갱신이 안 될 수 있다.
+      //   프리워밍은 무조건 새로 받아 캐시를 채우는 게 목적이다.
+      //   warmFlag.run 으로 감싸 이 안의 네이버 호출을 '프리워밍'으로 표시한다.
+      //   → 사용자 요청이 슬롯을 먼저 쓰게 된다 (naverSlotAcquire 참고).
+      //   allSettled : 칸 하나 실패가 같은 작업의 다른 칸이나 다음 작업을 멈추지 않게
+      const results = await warmFlag.run(true, () => Promise.allSettled(todo.map((p) => runProducer(p.key, p.run))));
+      results.forEach((r) => {
+        if (r.status === 'rejected') console.error(`[프리워밍] ${job.name} 실패:`, r.reason && r.reason.message);
+      });
     }
     // 캐시가 막 채워진 지금이 사본을 남기기 가장 좋은 시점이다.
     //   종료 훅은 배포판이 프로세스를 즉시 죽이면 실행되지 않으므로 믿지 않는다.
@@ -5042,7 +5063,7 @@ async function warmCache() {
     await saveArticleCacheToSupabase();
     // 완성된 응답도 사본을 남긴다 → 다음 재배포 때 첫 손님이 이걸 받는다.
     //   담는 순서 = 중요한 순서. 용량이 넘치면 뒤쪽(스포츠 등)부터 빠진다.
-    lastWarmKeys = [MARKET_EXTRA_KEY, ...jobs.map((j) => j.key)];
+    lastWarmKeys = [MARKET_EXTRA_KEY, ...jobs.flatMap((j) => j.parts.map((p) => p.key))];
     await saveRespCacheToSupabase(lastWarmKeys);
     console.log(
       `[프리워밍] 완료 ${Math.round((Date.now() - t0) / 1000)}초 · ` +

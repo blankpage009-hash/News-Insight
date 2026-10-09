@@ -160,7 +160,7 @@ Render 로그에서 본 것. **응답 캐시 사본(2장 마지막 절)이 저�
 ### 프리워밍 개편 (`85d395e`)
 - 기사 본문이 아니라 **완성된 응답**을 데운다 (`warmJobs()`)
 - 화면이 보내는 조건과 정확히 같아야 캐시 키가 맞음
-  (`WARM_HOURS=24`, `WARM_SORT=sim`, `WARM_PER_SECTION=30`, `WARM_BRIEFING_LIMIT=10`)
+  (`WARM_HOURS=24`, `WARM_SORT=sim`(개인화 P6 에서 `date` 로 — 4장 참고), `WARM_PER_SECTION=30`, `WARM_BRIEFING_LIMIT=10`)
 - 소요시간 57초 → 13초
 
 ### 프런트 초기 로딩 병렬화 (`85d395e`)
@@ -422,7 +422,13 @@ Events 탭이 비어 있고 무료 시간이 750 밑이면 대개 우리가 할 
 
 ## 4. 작업할 때 조심할 것 (실제로 겪은 것들)
 
-- **[개인화 P5 이후, 브랜치 `feat/personalize`]** 화면은 더 이상 키워드를 주소(`kw=`)에 싣지 않는다. 서버가 공용 기본값 + 그 사용자의 키워드로 정하므로(`kwMapFor`) 아래 첫 함정은 구조적으로 사라졌다. 대신 키워드를 바꾼 사용자는 P6(섹션 단위 캐시) 전까지 전체 화면 칸이 따로 생긴다. 측정 요청에 `kw` 를 붙여도 무시된다.
+- **[개인화 P5 이후, 브랜치 `feat/personalize`]** 화면은 더 이상 키워드를 주소(`kw=`)에 싣지 않는다. 서버가 공용 기본값 + 그 사용자의 키워드로 정하므로(`kwMapFor`) 아래 첫 함정은 구조적으로 사라졌다. 측정 요청에 `kw` 를 붙여도 무시된다.
+- **[개인화 P6 이후, 브랜치 `feat/personalize`]** `/api/all/sections` 의 응답 캐시는 **섹션마다 1칸**이다(열쇠 `allsec/<섹션키>|건수|기간|정렬|그 섹션 검색어 해시`, `allSectionParts`). 화면 통째 칸(`all|…`)은 없다. 섹션 하나를 바꾼 사용자는 그 섹션만 새로 부르고 나머지 6칸은 남과 같이 쓴다.
+  - 겉에 화면 통째 칸을 다시 얹지 말 것. 겉 칸을 다시 만들 때 낡은(stale) 섹션 칸을 받아 '지금' 시각으로 찍어서 기사가 최대 120분까지 낡는다.
+  - 프리워밍 작업은 칸 여러 개(`parts`)를 가진다. 전체 화면은 7칸을 한 작업으로 묶어 동시에 데운다(섹션마다 `WARM_GAP` 을 두면 15초 늦어진다). `lastWarmKeys`(재배포 사본) · 키워드 순위도 같은 `allSectionParts` 로 열쇠를 만든다.
+  - 필터 조합 하나가 7칸을 쓰므로 `RESP_CACHE_MAX` 를 120 → 240 으로 올렸다(칸이 1/7 크기라 메모리 상한은 예전보다 작다).
+  - 브리핑 · 엄선 목록(digest)은 아직 **화면 통째 칸**이다. 그 소스 섹션(브리핑 기본 6개 · 엄선 목록의 하위 섹션)을 바꾼 사용자는 그 화면을 통째로 새로 만든다.
+- **[P6 에서 발견] 전체 화면의 정렬 기본값은 최신순(`date`)이다.** v3.0(`ad96da1`, 2026-10-06)부터 화면은 Daily Brief 만 정확도순이고 나머지는 최신순(html `SECTION_FILTER_DEFAULTS`)인데, 프리워밍은 `WARM_SORT='sim'` 으로 남아 있어 **전체 화면이 프리워밍 칸을 못 쓰고 있었다**(운영 `main` 도 같음). P6 에서 `WARM_SORT='date'` 로 맞췄다. 화면의 기본 필터를 바꾸면 `WARM_*` 상수도 같이 바꿀 것.
 - **프리워밍 캐시 키 일치가 깨지기 쉽다.** 프런트는 `DEFAULT_KEYWORDS` 로 빠진 섹션을
   채워 보내지만 서버 프리워밍은 저장된 설정만 본다. 어긋나면 조용히 헛돈다
   (느려지는 게 아니라 안 빨라진다). Render 로그에
@@ -441,7 +447,7 @@ Events 탭이 비어 있고 무료 시간이 750 밑이면 대개 우리가 할 
   - '개선 전' 상태는 저장된 `resp_cache` 행을 지우고 재현한다
 - 측정용 요청은 파라미터 이름을 정확히 맞춰야 한다. 하나라도 다르면 프리워밍과 **다른 칸**을 재게 된다.
   `/api/all/sections` 는 `limit` 이 아니라 **`perSection`** 이다
-  (`?perSection=30&hours=24&sort=sim`, 브리핑은 `?limit=10&hours=24`).
+  (`?perSection=30&hours=24&sort=date`, 브리핑은 `?limit=10&hours=24`). v3.0 전에는 `sort=sim` 이었다.
 - 로컬 포트 3000이 이미 쓰이는 경우가 있어 `.claude/launch.json` 에 `"autoPort": true` 를 넣어 뒀다
   (`.claude/` 는 `.gitignore` 대상이라 커밋되지 않음).
 - **줄바꿈** : `server.js` CRLF, `news-insight-naver.html` LF. 편집 후 확인할 것.
@@ -460,10 +466,10 @@ Events 탭이 비어 있고 무료 시간이 750 밑이면 대개 우리가 할 
 - **이어보기(`POST /api/followup`)는 네이버를 새로 부르는 유일한 '장식' 기능이다** (Phase 7 D3).
   저장 기사 5건 × 1질의 = 한 번에 최대 5호출. 씨앗별로 `followupCache` 에 10분(허용 60분) 담는다.
   **이 캐시를 `respCache` 로 옮기지 말 것.** 열쇠가 사람마다 다른 저장 기사라 종류가 끝없이 늘어나
-  `RESP_CACHE_MAX`(120칸)를 채우고, 프리워밍이 만들어 둔 80KB짜리 섹션 응답을 밀어낸다.
+  `RESP_CACHE_MAX`(P6 부터 240칸)를 채우고, 프리워밍이 만들어 둔 섹션 응답을 밀어낸다.
   (지수 차트 `indexChartCache` 를 따로 뺀 것과 같은 이유)
   화면 쪽도 **1024px 미만에서는 아예 부르지 않는다** — 레일이 안 보이는 폭이다.
-- 화면 기본값 : `hours=24`, `sort=sim`, `perSection=30`, 브리핑 `limit=10`.
+- 화면 기본값 : `hours=24`, `perSection=30`, 브리핑 `limit=10`. 정렬은 Daily Brief 만 `sim`, 나머지(전체 화면 포함) `date`.
   브리핑 외 카테고리로 이동하면 count가 5로 바뀐다(`applyBriefingCountDefault`).
 - 미국 기준금리는 **뉴욕 연은 → FRED → 마지막 성공값 → 폴백 상수** 순으로 조회한다(`US_RATE_SOURCES`).
   1순위인 뉴욕 연은(`markets.newyorkfed.org/api/rates/unsecured/effr/last/200.json`)은
