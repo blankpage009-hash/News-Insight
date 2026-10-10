@@ -3447,15 +3447,28 @@
     function isDislikedKey(key) { return voteOf(key) === -1; }
 
     // 서버의 내 투표로 통째로 바꾼다. 다른 기기에서 바뀐 것도 여기서 따라온다.
+    //   로그아웃하면 이 기기 사본은 지워지지만 서버 기록은 남는다. 다시 로그인한 첫 화면은 투표 0건으로 그려지므로,
+    //   서버 투표가 사본과 다르면 추천 순서를 다시 계산해야 취향이 초기화된 것처럼 보이지 않는다.
+    //   (사본과 같으면 = 평소 새로고침이면 다시 부르지 않는다)
     async function syncVotesInBackground() {
       try {
         const data = await apiGet('/api/votes');
+        const before = voteSignature();
         votes = new Map((data.votes || []).filter((x) => x && x.key && (x.vote === 1 || x.vote === -1))
           .map((x) => [x.key, { v: x.vote, section: x.section || '', title: x.title || '', t: x.t || 0 }]));
         persistVotes();
         document.querySelectorAll('[data-vote-key]').forEach((b) => paintVoteButton(b));
         dropDislikedFromScreen();
+        renderRecoSetting();
+        if (voteSignature() !== before) {
+          // 첫 검색이 아직 돌고 있으면 runSearch 가 새로 시작하지 않으므로, 끝난 뒤에 다시 부른다.
+          Promise.resolve(isLoading ? searchDone : null).catch(() => {}).then(() => rerunIfAllView());
+        }
       } catch (e) { console.error('투표 기록을 불러오지 못했습니다.', e); }
+    }
+
+    function voteSignature() {
+      return [...votes].map(([k, e]) => `${k}|${e.v}|${e.t}`).sort().join('\n');
     }
 
     function paintVoteButton(btn) {
