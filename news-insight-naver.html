@@ -3498,6 +3498,7 @@
     // [추가] P3 좋아요/싫어요
     //   - 누르면 화면부터 바꾸고(낙관적 반영) 서버 저장은 뒤에서 한다. 저장이 실패하면 되돌리고 알린다.
     //   - 싫어요는 목록에서 바로 숨긴다. 전체 화면은 섹션마다 30건을 받아 두므로 다음 후보가 그 자리를 채운다.
+    //     한 목록짜리 화면은 '숨긴 자리 채우기'(topUpList)가 기사를 더 받아 노출 건수를 지킨다.
     //   - 저장한 기사 화면에서는 숨기지 않는다(내가 저장한 기사를 투표 때문에 잃지 않게). 기록만 한다.
     //   - votes 는 첫 화면을 빨리 그리려고 이 기기에도 사본을 둔다. 서버 값이 오면 통째로 바꾼다. 로그아웃하면 지운다.
     //   - 추천 계산(P4)은 이 votes 를 그대로 쓴다.
@@ -3593,6 +3594,7 @@
         if (spots.length) {
           lastHidden = { key, spots, prev };
           rerenderListIfShown();
+          topUpList();
           showToast('싫어요를 눌러 이 기사를 숨겼습니다.', '되돌리기', undoHide);
         }
       }
@@ -3645,6 +3647,12 @@
         const arr = sec ? (sectionState.find((s) => s.key === sec) || {}).items : currentResults;
         if (arr) arr.splice(Math.min(index, arr.length), 0, item);
       });
+      // 숨긴 사이 채워 넣은 기사는 다시 후보로 돌린다 (되돌린 뒤에도 노출 건수 그대로)
+      const lv = activeListView();
+      if (lv) {
+        while (currentResults.length > lv.target) lv.reserve.unshift(currentResults.pop());
+        refreshListCounts();
+      }
       rerenderListIfShown();
     }
 
@@ -3671,7 +3679,70 @@
       };
       sectionState.forEach((s) => sweep(s.items));
       sweep(currentResults);
-      if (removed) rerenderListIfShown();
+      if (removed) { rerenderListIfShown(); topUpList(); }
+    }
+
+    // ---------------------------------------------------------------
+    // [추가] 숨긴 자리 채우기
+    //   싫어요 · '이 섹션에 안 맞음'으로 기사를 숨기면 목록이 노출 건수(예: 10건)보다 짧아진다.
+    //   전체 화면 상자는 섹션마다 30건을 받아 두어 다음 후보가 저절로 올라오지만,
+    //   한 목록짜리 화면(브리핑 · 섹션 · 하위 섹션 · 속보 · 검색 결과)은 노출 건수만큼만 받아서 9건이 됐다.
+    //   → 모자랄 때만 같은 주소로 '노출 건수 + 10건'을 한 번 더 받아, 화면에 없는 기사로 빈자리를 채운다.
+    //   첫 요청 건수는 그대로 둔다. 서버 캐시 열쇠에 건수가 들어가서, 바꾸면 데워 둔 칸을 못 쓴다(PERFORMANCE.md).
+    //   이미 숨긴 기사가 처음부터 걸러져 짧게 온 경우도 같은 길로 채운다.
+    // ---------------------------------------------------------------
+    const LIST_REFILL_EXTRA = 10;
+    let listView = null;   // { gen, target, reserve, refetch, decorate, keepBlocked, status, max, fetched, exhausted }
+    let listGen = 0;       // runSearch 마다 1 씩 올린다. 다른 화면으로 넘어간 뒤 도착한 응답은 버린다.
+
+    // rawCount : 서버가 준 건수(걸러 내기 전). 요청보다 적으면 서버에 더 없는 것이라 다시 묻지 않는다.
+    function setListView(rawCount, opts) {
+      listView = { gen: listGen, target: getCount(), reserve: [], fetched: false, exhausted: rawCount < getCount(), ...opts };
+      topUpList();
+    }
+
+    function activeListView() {
+      return listView && listView.gen === listGen && !sectionState.length ? listView : null;
+    }
+
+    // 후보 줄에서 화면에 없고 숨김 대상도 아닌 기사를 뒤에 붙인다
+    function fillFromReserve(lv) {
+      const have = new Set(currentResults.map(savedKeyOf));
+      let added = 0;
+      while (currentResults.length < lv.target && lv.reserve.length) {
+        const it = lv.reserve.shift();
+        const key = savedKeyOf(it);
+        if ((key && have.has(key)) || isDislikedKey(key) || (!lv.keepBlocked && isBlockedFor(it, it.category))) continue;
+        have.add(key);
+        currentResults.push(it);
+        added++;
+      }
+      return added;
+    }
+
+    async function topUpList() {
+      const lv = activeListView();
+      if (!lv) return;
+      let added = fillFromReserve(lv);
+      if (currentResults.length < lv.target && !lv.fetched && !lv.exhausted) {
+        lv.fetched = true;   // 화면 하나에 한 번만 더 묻는다 (계속 모자라도 되풀이하지 않게)
+        try {
+          const raw = await lv.refetch(Math.min(lv.target + LIST_REFILL_EXTRA, lv.max || 50));
+          if (lv !== activeListView()) return;
+          lv.reserve = lv.decorate(raw);
+          added += fillFromReserve(lv);
+        } catch (e) { console.error('빈자리를 채울 기사를 더 받지 못했습니다.', e); }
+      }
+      if (added) rerenderListIfShown();
+      refreshListCounts();
+    }
+
+    // 제목 줄 'N건' · 안내 문구 속 건수를 지금 목록에 맞춘다
+    function refreshListCounts() {
+      const lv = activeListView();
+      if (!lv) return;
+      document.getElementById('cat-header-count').textContent = visibleCount() + '건';
+      if (lv.status) document.getElementById('status-line').textContent = lv.status(currentResults.length);
     }
 
     // ---------------------------------------------------------------
@@ -3735,7 +3806,7 @@
       };
       sectionState.forEach((s) => sweep(s.items));
       sweep(currentResults);
-      if (removed) rerenderListIfShown();
+      if (removed) { rerenderListIfShown(); topUpList(); }
     }
 
     // '이 섹션에 안 맞음'을 기록할 섹션. 정할 수 없으면 '' (검색 결과 · 저장 화면 · 관련 기사 · 이어보기).
@@ -3808,6 +3879,7 @@
       setBlockLocal(key, section, true, title);
       const spots = hideFromLists(key, (it) => isBlockedFor(it, it.category));
       rerenderListIfShown();
+      topUpList();
       showToast(`${categoryLabels[section] || section} 섹션에서 모든 사용자에게 숨겼습니다.`, '되돌리기', () => unblockSection(key, section, spots));
       sendBlock(key, section, true, title, spots);
     }
@@ -6358,8 +6430,8 @@
       return data;   // { items, mode, relaxed, requested, ... }
     }
 
-    async function fetchBriefing({ dateFrom, dateTo }) {
-      const params = new URLSearchParams({ limit: String(getCount()), hours: String(getHours()) });
+    async function fetchBriefing({ dateFrom, dateTo, display }) {
+      const params = new URLSearchParams({ limit: String(display || getCount()), hours: String(getHours()) });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
       const data = await apiGet(`/api/briefing?${params.toString()}`);
@@ -6377,8 +6449,8 @@
       return data.sections;
     }
 
-    async function fetchSubSectionData(base, key, { dateFrom, dateTo }) {
-      const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()), sort: getSort() });
+    async function fetchSubSectionData(base, key, { dateFrom, dateTo, display }) {
+      const params = new URLSearchParams({ display: String(display || getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
       const data = await apiGet(`/api/${base}/section/${key}?${params.toString()}`);
@@ -6389,8 +6461,8 @@
     // [추가] 상위 섹션 엄선 목록(물류/경제/증시)
     //   서버가 하위 섹션들을 모두 모아 정확도·중요도·인기·최신성으로 순위를 매겨 준다.
     //   display 로 보낸 건수만큼만 잘라서 온다. (설정 화면의 '기본 섹션' 노출 건수)
-    async function fetchDigest(base, { dateFrom, dateTo }) {
-      const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()), sort: getSort() });
+    async function fetchDigest(base, { dateFrom, dateTo, display }) {
+      const params = new URLSearchParams({ display: String(display || getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
       const data = await apiGet(`/api/${base}/digest?${params.toString()}`);
@@ -6399,8 +6471,8 @@
     }
 
     // [추가] 단일 상위 섹션(정치·사회/글로벌 등) : '전체' 화면과 같은 키워드 설정 사용
-    async function fetchTopic(key, { dateFrom, dateTo }) {
-      const params = new URLSearchParams({ display: String(getCount()), hours: String(getHours()), sort: getSort() });
+    async function fetchTopic(key, { dateFrom, dateTo, display }) {
+      const params = new URLSearchParams({ display: String(display || getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
       const data = await apiGet(`/api/topic/${key}?${params.toString()}`);
@@ -7305,11 +7377,14 @@
       relatedItems = [];   // [추가] 새 검색 시 관련기사 임시목록도 비워 id 충돌 방지
       followupItems = [];  // [추가] 이어보기 임시목록도 같은 이유로 비운다
       sectionState = [];
+      listView = null;     // [추가] 빈자리 채우기 상태도 새 화면 것으로 (늦게 온 예전 응답은 버린다)
+      listGen++;
 
       try {
         if (keyword) {
           const data = await fetchFlatNews({ q: keyword, sort: getSort() });
-          const list = sortItemsByCurrent(decorateItems(data.items, ['all', 'logistics', 'stock', 'sports', 'briefing'].includes(currentCategory) ? 'society' : currentCategory, false, true));
+          const searchCat = ['all', 'logistics', 'stock', 'sports', 'briefing'].includes(currentCategory) ? 'society' : currentCategory;
+          const list = sortItemsByCurrent(decorateItems(data.items, searchCat, false, true));
           currentResults = list;
 
           const modeText = searchConditionText(data);
@@ -7317,6 +7392,11 @@
           document.getElementById('status-line').textContent =
             `"${keyword}" 검색 결과 · ${modeText} · ${periodText}`;
           renderNews(list);
+          setListView(data.items.length, {
+            refetch: (n) => fetchFlatNews({ q: keyword, display: n, sort: getSort() }).then((d) => d.items),
+            decorate: (raw) => decorateItems(raw, searchCat, false, true),
+            keepBlocked: true,
+          });
 
           if (!list.length) {
             showFallbackBanner(data.excludes && data.excludes.length
@@ -7334,19 +7414,30 @@
           const items = await fetchBriefing({ dateFrom, dateTo });
           const list = sortItemsByCurrent(decorateItems(items, 'briefing'));
           currentResults = list;
-          document.getElementById('status-line').textContent =
-            `현재 시각 기준 가장 이슈가 되는 뉴스 ${list.length}건입니다.`;
+          const status = (n) => `현재 시각 기준 가장 이슈가 되는 뉴스 ${n}건입니다.`;
+          document.getElementById('status-line').textContent = status(list.length);
           renderBriefing(list);
+          setListView(items.length, {
+            refetch: (n) => fetchBriefing({ dateFrom, dateTo, display: n }),
+            decorate: (raw) => decorateItems(raw, 'briefing'),
+            status, max: 30,   // 서버가 브리핑은 30건까지만 준다
+          });
           if (!list.length) showFallbackBanner('브리핑에 표시할 기사를 찾지 못했습니다.');
 
         } else if (DIGEST_CATEGORIES.includes(currentCategory)) {
           // [수정] 물류/경제/증시/스포츠 : 하위 섹션 전체보기 대신 '엄선 목록' 한 덩어리
-          const items = await fetchDigest(currentCategory, { dateFrom, dateTo });
-          const list = sortItemsByCurrent(decorateItems(items, currentCategory));
+          const base = currentCategory;
+          const items = await fetchDigest(base, { dateFrom, dateTo });
+          const list = sortItemsByCurrent(decorateItems(items, base));
           currentResults = list;
-          document.getElementById('status-line').textContent =
-            `${categoryLabels[currentCategory]} 섹션에서 가장 중요한 뉴스 ${list.length}건을 골랐습니다. (최근 ${hoursLabel()} 이내)`;
+          const status = (n) => `${categoryLabels[base]} 섹션에서 가장 중요한 뉴스 ${n}건을 골랐습니다. (최근 ${hoursLabel()} 이내)`;
+          document.getElementById('status-line').textContent = status(list.length);
           renderNews(list);
+          setListView(items.length, {
+            refetch: (n) => fetchDigest(base, { dateFrom, dateTo, display: n }),
+            decorate: (raw) => decorateItems(raw, base),
+            status, max: 30,   // 엄선 목록은 30건까지만 순위를 매겨 둔다(서버 DIGEST_KEEP)
+          });
           if (!list.length) showFallbackBanner(`최근 ${hoursLabel()} 이내 기사를 찾지 못했습니다. 게재 기간을 늘려보세요.`);
 
         } else if (currentCategory === 'all') {
@@ -7381,29 +7472,43 @@
         } else if (currentCategory.startsWith('logistics_') || currentCategory.startsWith('stock_')
                    || currentCategory.startsWith('economy_') || currentCategory.startsWith('sports_')) {
           const base = currentCategory.split('_')[0];
-          const items = await fetchSubSectionData(base, currentCategory, { dateFrom, dateTo });
-          const list = sortItemsByCurrent(decorateItems(items, currentCategory));
+          const key = currentCategory;
+          const items = await fetchSubSectionData(base, key, { dateFrom, dateTo });
+          const list = sortItemsByCurrent(decorateItems(items, key));
           currentResults = list;
           document.getElementById('status-line').textContent = `${categoryLabels[currentCategory]} 분야 뉴스입니다. (최근 ${hoursLabel()} 이내)`;
           renderNews(list);
+          setListView(items.length, {
+            refetch: (n) => fetchSubSectionData(base, key, { dateFrom, dateTo, display: n }),
+            decorate: (raw) => decorateItems(raw, key),
+          });
           if (!list.length) showFallbackBanner(`최근 ${hoursLabel()} 이내 기사를 찾지 못했습니다. 게재 기간을 늘려보세요.`);
 
         } else if (currentCategory === 'breaking') {
-          const bp = new URLSearchParams({ display: String(getCount()) });
-          const data = await apiGet(`/api/breaking?${bp.toString()}`);
-          const list = sortItemsByCurrent(decorateItems(data.items || [], 'breaking'));
+          const fetchBreakingList = (n) => apiGet(`/api/breaking?${new URLSearchParams({ display: String(n) })}`).then((d) => d.items || []);
+          const items = await fetchBreakingList(getCount());
+          const list = sortItemsByCurrent(decorateItems(items, 'breaking'));
           currentResults = list;
           document.getElementById('status-line').textContent = '최근 1시간 이내 속보입니다.';
           renderNews(list);
+          setListView(items.length, {
+            refetch: fetchBreakingList,
+            decorate: (raw) => decorateItems(raw, 'breaking'),
+          });
           if (!list.length) showFallbackBanner('최근 1시간 이내 속보가 없습니다.');
 
         } else {
           // 정치·사회 / 글로벌 / AI : '전체' 화면과 동일한 키워드 설정으로 수집
-          const items = await fetchTopic(currentCategory, { dateFrom, dateTo });
-          const list = sortItemsByCurrent(decorateItems(items, currentCategory));
+          const key = currentCategory;
+          const items = await fetchTopic(key, { dateFrom, dateTo });
+          const list = sortItemsByCurrent(decorateItems(items, key));
           currentResults = list;
           document.getElementById('status-line').textContent = `${categoryLabels[currentCategory]} 분야 뉴스입니다. (최근 ${hoursLabel()} 이내)`;
           renderNews(list);
+          setListView(items.length, {
+            refetch: (n) => fetchTopic(key, { dateFrom, dateTo, display: n }),
+            decorate: (raw) => decorateItems(raw, key),
+          });
           if (!list.length) showFallbackBanner(`최근 ${hoursLabel()} 이내 기사를 찾지 못했습니다. 게재 기간을 늘려보세요.`);
         }
 
@@ -7930,9 +8035,10 @@
       s.collapsed = false;
       renderSectionsFromState();
       try {
-        const fresh = await fetchOneSection(key, s.count, s.hours, s.sort);
+        // [수정] 처음 불러올 때처럼 30건(넘으면 고른 건수)을 받아 둔다. 노출 건수만 받으면 싫어요로 숨긴 자리를 채울 후보가 없었다.
+        const fresh = await fetchOneSection(key, Math.max(s.count, 30), s.hours, s.sort);
         if (fresh) {
-          // 이 섹션만의 정렬값 적용 + [P4] 추천. 받은 건수가 count 뿐이라 건수 늘리기는 있는 만큼만 된다(shownCountOf).
+          // 이 섹션만의 정렬값 적용 + [P4] 추천. 추천이 건수를 늘려도 받아 둔 만큼만 된다(shownCountOf).
           s.items = rerankForTaste(sortItemsBy(decorateItems(fresh, key), s.sort), key, currentCategory === 'all' ? tasteProfile() : null);
           mergeCatsAcrossSections(sectionState);                 // 섹션 겹침 태그 다시 계산
           currentResults = sectionState.flatMap((x) => x.items); // 요약/원문 링크가 새 기사를 찾도록 갱신
