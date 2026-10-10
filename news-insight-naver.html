@@ -2147,6 +2147,11 @@
 
           <!-- 제목 바 오른쪽 필터 (노출 건수 / 게재 기간 / 정렬) -->
           <div id="cat-header-filters" class="flex items-center gap-1.5 flex-wrap">
+            <!-- [추가] 저장한 기사 화면 전용 : 섹션 고르기 (보기 옵션은 saved 화면을 열 때 채운다) -->
+            <select id="header-section-select" onchange="onHeaderFilterChange()" title="섹션"
+              class="hidden bg-ink/70 border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
+              <option value="all">전체 섹션</option>
+            </select>
             <select id="header-count-select" onchange="onHeaderFilterChange()" title="노출 건수"
               class="bg-ink/70 border border-line rounded-lg px-2 py-1 text-paper font-mono text-[0.85rem] focus:outline-none focus:border-gold/70">
               <option value="3">3개</option>
@@ -2933,16 +2938,45 @@
     }
 
     // 저장 화면 그리기. 보관함을 화면용 기사(id 부여)로 바꿔 목록과 똑같은 행으로 그린다.
+    // [추가] 저장 화면 필터. 다른 섹션의 수집 조건(count-select 등)과 섞이지 않게 따로 둔다.
+    //   기본값은 '다 보이기' — 담아 둔 기사가 기간·건수 때문에 숨으면 사라진 줄 안다.
+    //   sort 'saved' = 담은 순서(최근에 담은 것 먼저), 'date' = 기사 게재 최신순
+    const savedFilter = { section: 'all', count: 'all', hours: 'all', sort: 'saved' };
+
+    // 보관함에 실제로 있는 섹션만 드롭다운에 올린다 (없는 섹션을 고르면 빈 화면이 되므로)
+    function savedSectionOptions() {
+      const seen = new Set();
+      savedArticles.forEach((a) => tagCatsOf(a).forEach((c) => seen.add(c)));
+      return [...seen].map((c) => [c, c === 'mykw' ? '내 키워드' : (categoryLabels[c] || '기타')]);
+    }
+
+    function applySavedFilter(list) {
+      const f = savedFilter;
+      let out = list;
+      if (f.section !== 'all') out = out.filter((it) => tagCatsOf(it).includes(f.section));
+      if (f.hours !== 'all') {
+        const from = Date.now() - Number(f.hours) * 3600 * 1000;
+        out = out.filter((it) => (new Date(it.datetime || 0).getTime() || 0) >= from);
+      }
+      if (f.sort === 'date') out = sortItemsBy(out, 'date');
+      if (f.count !== 'all') out = out.slice(0, Number(f.count));
+      return out;
+    }
+
     function renderSavedView() {
-      // 정렬 셀렉트는 쓰지 않는다. 담은 순서(최신순)가 곧 이 화면의 순서다.
-      const list = decorateItems(savedArticles, 'saved');
+      const all = decorateItems(savedArticles, 'saved');
+      const list = applySavedFilter(all);
       currentResults = list;
-      document.getElementById('status-line').textContent = list.length
-        ? `내 계정에 저장한 기사 ${list.length}건입니다.`
-        : '저장한 기사가 없습니다.';
+      const filtered = list.length !== all.length;
+      document.getElementById('status-line').textContent = !all.length
+        ? '저장한 기사가 없습니다.'
+        : filtered
+          ? `내 계정에 저장한 기사 ${all.length}건 중 ${list.length}건을 보여줍니다.`
+          : `내 계정에 저장한 기사 ${all.length}건입니다.`;
       if (!list.length) {
-        document.getElementById('news-list').innerHTML =
-          emptyBoxHtml('저장한 기사가 없습니다. 카드의 저장 버튼을 누르면 여기에 모입니다.');
+        document.getElementById('news-list').innerHTML = all.length
+          ? emptyBoxHtml('필터 조건에 맞는 저장 기사가 없습니다. 필터를 바꿔 보세요.')
+          : emptyBoxHtml('저장한 기사가 없습니다. 카드의 저장 버튼을 누르면 여기에 모입니다.');
         return;
       }
       renderNews(list, true);
@@ -5901,6 +5935,16 @@
     // 제목 바 필터를 바꾸면 → 현재 모드(키워드/카테고리)에 맞는 원본 필터 값을 갱신 후 재검색
     function onHeaderFilterChange() {
       const kw = isKeywordMode();
+      if (!kw && currentCategory === 'saved') {
+        // 저장 화면은 서버에 다시 묻지 않고 보관함만 다시 거른다
+        savedFilter.section = document.getElementById('header-section-select').value;
+        savedFilter.count = document.getElementById('header-count-select').value;
+        savedFilter.hours = document.getElementById('header-hours-select').value;
+        savedFilter.sort = document.getElementById('header-sort-select').value;
+        renderSavedView();
+        updateCatHeader();   // 건수(n건)를 거른 결과로 맞춘다
+        return;
+      }
       document.getElementById(kw ? 'search-count-select' : 'count-select').value =
         document.getElementById('header-count-select').value;
       document.getElementById(kw ? 'search-hours-select' : 'hours-select').value =
@@ -5915,9 +5959,39 @@
       const c = document.getElementById('header-count-select');
       const h = document.getElementById('header-hours-select');
       const s = document.getElementById('header-sort-select');
+      const sec = document.getElementById('header-section-select');
+      const savedView = !isKeywordMode() && currentCategory === 'saved';
+      syncSavedOnlyOptions(savedView);
+      if (sec) sec.classList.toggle('hidden', !savedView);
+      if (savedView) {
+        const opts = savedSectionOptions();
+        if (savedFilter.section !== 'all' && !opts.some(([k]) => k === savedFilter.section)) savedFilter.section = 'all';
+        sec.innerHTML = '<option value="all">전체 섹션</option>'
+          + opts.map(([k, label]) => `<option value="${esc(k)}">${esc(label)}</option>`).join('');
+        sec.value = savedFilter.section;
+        c.value = savedFilter.count;
+        h.value = savedFilter.hours;
+        s.value = savedFilter.sort;
+        return;
+      }
       if (c) c.value = String(getCount());
       if (h) h.value = String(getHours());
       if (s) s.value = getSort();
+    }
+
+    // 저장 화면에서만 쓰는 보기 : 건수 '전체', 정렬 '저장순'(정확도순은 의미가 없다).
+    //   옵션을 넣었다 뺐다 한다 — <option hidden> 은 iOS Safari 에서 숨겨지지 않는다.
+    function syncSavedOnlyOptions(on) {
+      const c = document.getElementById('header-count-select');
+      const s = document.getElementById('header-sort-select');
+      if (!c || !s) return;
+      const cAll = c.querySelector('option[value="all"]');
+      if (on && !cAll) c.insertAdjacentHTML('beforeend', '<option value="all">전체</option>');
+      if (!on && cAll) cAll.remove();
+      // 정렬 첫 칸을 화면에 따라 '정확도순(sim)' ↔ '저장순(saved)' 으로 바꿔 끼운다
+      const first = s.options[0];
+      const want = on ? ['saved', '저장순'] : ['sim', '정확도순'];
+      if (first && first.value !== want[0]) { first.value = want[0]; first.textContent = want[1]; }
     }
 
     // ---------------------------------------------------------------
@@ -6120,6 +6194,11 @@
     // 섹션을 옮길 때 : 떠나는 섹션 값 저장 → 들어가는 섹션 값(또는 기본값) 적용
     function switchSectionFilters(newCat, oldCat) {
       if (newCat === oldCat) return;
+      if (oldCat === 'saved') {
+        // 저장 화면 전용 보기(전체 · 저장순 · 섹션 칸)를 걷어 낸다 — 다른 화면에서 'all' · 'saved' 가 그대로 읽히지 않게
+        syncSavedOnlyOptions(false);
+        document.getElementById('header-section-select')?.classList.add('hidden');
+      }
       if (oldCat) sectionFilterMemory[oldCat] = readCategoryFilters();
       writeCategoryFilters(sectionFilterMemory[newCat] || defaultSectionFilters(newCat));
     }
@@ -6384,14 +6463,11 @@
       document.getElementById('cat-header-count').classList.toggle('hidden', noBriefIcon);
 
       // [추가] '지수 차트'는 기사 목록이 아니라서 건수·필터(노출 건수/게재 기간/정렬)가 의미 없다 → 감춘다
-      // [추가] '저장한 기사'는 이미 담아 둔 것을 보여줄 뿐이라 수집 조건(건수·기간·정렬)이 통하지 않는다.
-      //   건수는 보여주고 필터 버튼만 감춘다.
-      const savedView = !keyword && currentCategory === 'saved';
       // [추가] '키워드 랭킹'도 기사 목록이 아니라 건수·필터가 의미 없다 → 지수 차트와 같게 다룬다.
       const rankView = isKeywordRankView();
       document.getElementById('cat-header-count').textContent = rankView ? '' : visibleCount() + '건';
       const filterBtn = document.getElementById('cat-header-filter-btn');
-      if (filterBtn) filterBtn.classList.toggle('hidden', savedView || rankView);
+      if (filterBtn) filterBtn.classList.toggle('hidden', rankView);   // [수정] 저장 화면도 필터(섹션·건수·기간·정렬)를 쓴다
       if (rankView && document.body.classList.contains('hf-open')) toggleHeaderFilters();
 
       syncHeaderFilters();
