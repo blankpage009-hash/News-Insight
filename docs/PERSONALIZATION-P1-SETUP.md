@@ -9,7 +9,7 @@
 | 단계 | 어디서 | 하는 일 | 걸리는 시간 |
 |---|---|---|---|
 | 1 | Supabase | 지금 서버가 쓰는 키가 올바른 종류인지 확인 (**2단계 SQL 전에 필수**) | 3분 |
-| 2 | Supabase | 테이블 만들기 + 잠금(RLS) 켜기 — [sql/personalization-p1.sql](sql/personalization-p1.sql) | 5분 |
+| 2 | Supabase | 테이블 만들기 + 잠금(RLS) 켜기 — [sql/personalization-p1.sql](../sql/personalization-p1.sql) | 5분 |
 | 3 | 구글 클라우드 | 로그인용 OAuth 클라이언트 만들기 | 10분 |
 | 4 | Supabase | 구글 로그인 켜기 + 돌아올 주소 등록 | 5분 |
 | 5 | 내 PC | 암호화 열쇠 만들기 | 1분 |
@@ -33,7 +33,7 @@
 ## 2단계. 테이블 만들기 + 잠금(RLS) 켜기
 
 1. Supabase 대시보드 → **SQL Editor → New query**.
-2. [sql/personalization-p1.sql](sql/personalization-p1.sql) 의 내용을 **통째로** 복사해 붙여 넣고 **Run**.
+2. [sql/personalization-p1.sql](../sql/personalization-p1.sql) 의 내용을 **통째로** 복사해 붙여 넣고 **Run**.
 3. 맨 아래 확인 쿼리 결과에서 **일곱 줄 모두 `rls_on = true`** 인지 봅니다.
    - `app_settings` · `allowed_users` · `user_settings` · `user_ai_keys` · `article_votes` · `saved_articles` · `read_marks`
 4. 여러 번 실행해도 안전합니다. 중간에 에러가 나면 에러 문구를 알려 주세요.

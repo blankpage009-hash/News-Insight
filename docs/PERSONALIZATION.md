@@ -170,7 +170,7 @@
   - 배포 : Render 에 `ADMIN_TOKEN` 등록 후 `main` 병합(`fb62738`) · push. 운영 실측 : 모델 진단 · 키워드 저장 모두 토큰 없음/틀린 토큰 **401**, 설정 읽기 · 화면 200. 사용자가 맞는 토큰으로 진단 결과 수신 · 관리자 탭 키워드 저장 성공 확인.
   - 진단은 이제 주소창이 아니라 헤더를 붙여 부른다 (server.js 진단 절 주석 참고).
   - 이 임시 토큰은 P2(구글 로그인 · `ADMIN_EMAILS`)에서 없앤다. 그때 Render 의 `ADMIN_TOKEN` 도 지운다.
-- **P1 결과 (2026-10-09, 브랜치 `feat/personalize`)** : 코드 변경 없음. 가이드 [PERSONALIZATION-P1-SETUP.md](PERSONALIZATION-P1-SETUP.md) 와 SQL [sql/personalization-p1.sql](sql/personalization-p1.sql) 작성. **사용자 실행 완료 (2026-10-09)**.
+- **P1 결과 (2026-10-09, 브랜치 `feat/personalize`)** : 코드 변경 없음. 가이드 [PERSONALIZATION-P1-SETUP.md](PERSONALIZATION-P1-SETUP.md) 와 SQL [sql/personalization-p1.sql](../sql/personalization-p1.sql) 작성. **사용자 실행 완료 (2026-10-09)**.
   - 실행 결과 : SQL 실행(7개 테이블 RLS 켬, 반드시 'Logs' 가 아닌 PRIVATE 쿼리에서 실행) · 구글 OAuth 클라이언트 생성 · Supabase Google 로그인 · Site URL/Redirect URLs 등록 · 환경변수 3개(`SUPABASE_ANON_KEY` · `ADMIN_EMAILS` · `KEY_ENCRYPTION_SECRET`) Render 와 로컬 `.env` 에 등록. 등록 후 운영 화면 · 설정 읽기 · 방침 페이지 모두 200.
   - 추가로 한 일 : 구글 앱 게시에 개인정보처리방침 URL 이 필요해 [privacy.html](privacy.html) 을 만들어 `main` 에 배포(병합 `780641a`). 주소 `https://news-insight.onrender.com/privacy.html`. 로고는 넣지 않았다(게시 후 로고가 있으면 구글 인증 심사 대상). 승인된 도메인은 `news-insight.onrender.com` 하나(`onrender.com` · `supabase.co` 는 구글이 거부).
   - 남은 확인 : 로컬에서 로그인 시험 시 `autoPort` 로 3000 이 아닌 포트가 뜨면 Supabase Redirect URLs 에 그 포트를 추가해야 한다(P2 시험 때). 방침에 'P10 내 데이터 지우기' 를 언급했으므로 P10 전까지는 이메일 삭제 요청으로 대응.

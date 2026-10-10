@@ -6,12 +6,12 @@
 - `news-insight-naver.html` — 화면 전체. 단일 파일, **줄바꿈 LF**
 - 배포 : Render. `origin/main` 에 push하면 자동 배포됨 (push 전에 확인받을 것)
 - 로컬 실행 : `.claude/launch.json` 의 `newsinsight` 설정 사용
-- **v3.0 리디자인 진행 중** — 작업 브랜치 `v3`, 계획·진행 기록은 [REDESIGN-v3.md](REDESIGN-v3.md) (한 Phase 씩, 끝나면 멈추고 확인)
-- **개인화 작업 진행 중 (v3 다크 테마보다 먼저)** — 구글 로그인·허용 사용자·좋아요/싫어요·계정별 설정·개인 AI 키. 계획·결정·진행 기록은 [PERSONALIZATION.md](PERSONALIZATION.md) (P0 부터 한 단계씩, 끝나면 멈추고 확인)
+- **v3.0 리디자인 진행 중** — 작업 브랜치 `v3`, 계획·진행 기록은 [REDESIGN-v3.md](docs/REDESIGN-v3.md) (한 Phase 씩, 끝나면 멈추고 확인)
+- **개인화 작업 진행 중 (v3 다크 테마보다 먼저)** — 구글 로그인·허용 사용자·좋아요/싫어요·계정별 설정·개인 AI 키. 계획·결정·진행 기록은 [PERSONALIZATION.md](docs/PERSONALIZATION.md) (P0 부터 한 단계씩, 끝나면 멈추고 확인)
 
 ## 로딩 속도 개선 작업
 
-진행 중인 성능 작업은 [PERFORMANCE.md](PERFORMANCE.md) 에 정리돼 있다.
+진행 중인 성능 작업은 [PERFORMANCE.md](docs/PERFORMANCE.md) 에 정리돼 있다.
 캐시 · 프리워밍 · 네이버 동시 호출 슬롯을 건드리기 전에 그 문서를 먼저 읽을 것.
 특히 "작업할 때 조심할 것" 절에 반복해서 발목을 잡힌 함정들이 있다.
 
