@@ -106,8 +106,8 @@ v2(어두운 금색 톤 · 좌측 사이드바 + 우측 마켓 레일 3단)를 �
 - [ ] Phase 11 다크·시스템 테마 — 브랜치 `v3-dark` (2026-10-10 계획)
   - [x] 11a 색 변수로 바꾸기 (2026-10-10)
   - [x] 11b 다크 색 정하기 (2026-10-10) — A 먹색
-  - [ ] 11c 켜기 ← 다음
-  - [ ] 11d 전 화면 점검
+  - [x] 11c 켜기 (2026-10-10)
+  - [ ] 11d 전 화면 점검 ← 다음
   - [ ] 11e 배포
 
 ### Phase 11 계획 (2026-10-10)
@@ -147,6 +147,24 @@ v2(어두운 금색 톤 · 좌측 사이드바 + 우측 마켓 레일 3단)를 �
 | 11c 켜기 | `applyTheme` 원래 판정 복구 · 기본값 `'light'` · `THEME_READY` 에 다크·시스템 · theme-color 갱신 · OS 테마 따라가기 · 차트 다시 그리기 필요 여부 · **예전 저장값 초기화**(권장 : 저장 키를 `newsInsightTheme_v2` 로 바꾸고 계정 동기화 키도 새 이름으로 → 옛 값이 자연히 무시됨. 계정 동기화(P7) `theme` 경로를 함께 확인) | Opus 5.5 · high | 세 버튼 동작 · 새로고침 깜빡임 0 · 옛 `dark` 저장값 → 화이트 · 두 기기 동기화 |
 | 11d 전 화면 점검 | 1440 · 1024 · 402 · 375 × 두 테마 : 첫 화면 · 섹션 · 검색 · 저장 · 팝업(주요 내용 · Insight · 관련 기사 · 차트) · 시트 · 설정 · 로그인/승인 대기 · PDF 저장 · 인쇄. 발견한 것 고치기 | Sonnet 5.5 · high | 화면별 측정값 + 스크린샷, 콘솔 에러 0, 가로 스크롤 0 |
 | 11e 배포 | `v3-dark` → `main` 머지 · 버전 표시(`APP_VERSION`) 올림 · push(승인) · Render 에서 두 테마 확인 | Sonnet 5.5 · low | 운영 화면 확인 |
+
+### Phase 11c 에서 한 것 / 배운 것 (2026-10-10) — `news-insight-naver.html` · `server.js`
+
+- **판정 복구** : `applyTheme` = light/dark 는 그대로, system 은 OS 판정. OS 에 **'dark' 냐고 묻는** 쪽으로 바꿨다(`systemPrefersDark`) → matchMedia 가 없거나 답이 없으면 화이트(결정 3 과 같은 쪽). OS 변화 감지도 `prefers-color-scheme: dark` 로.
+- **기본값 · 옛 값 초기화** : 로컬 키 `newsInsightTheme_v1` → **`newsInsightTheme_v2`**, 저장값이 없거나 이상하면 `'light'`. 옛 v1 키는 `<head>` 에서 한 번 지운다.
+  계정 동기화 칸도 `theme` → **`themeV2`** (화면 `PREF_SYNC` · `queuePref` · 서버 `cleanPrefsPatch`). 서버에 남은 옛 `theme` 는 아무도 안 읽는다(지우지 않음). 서버는 옛 `theme` 쓰기를 더 받지 않는다.
+- **버튼** : `THEME_READY` 에 dark · system 추가 → '준비 중' 껍데기 없어짐.
+- **theme-color** : `applyTheme` 이 `<meta name="theme-color">` 를 화이트 #f3f2f2 / 다크 #181615 로 바꾼다. `manifest.webmanifest` 의 색은 테마를 못 따라가서 그대로 둠(설치형 앱 시작 화면에만 쓰임).
+- **깜빡임** : body 배경(`bg-ink`)은 tailwind CDN 이 스크립트로 늦게 만든다 → `@media screen { html { background: rgb(var(--c-ink)) } }` 를 `<style>` 에 깔았다(인쇄는 제외). 밝은 화면은 html·body 둘 다 #f3f2f2 로 변화 없음.
+- **차트** : 11a 에서 선 색을 `currentColor` + CSS 변수로 바꿔 둬서 테마를 바꿔도 다시 그릴 필요 없음(JS 가 색을 읽는 곳은 PDF 캔버스뿐).
+- **검증 (미리보기)** :
+  옛 v1=`dark` 만 있는 상태로 새로고침 → 화이트 · v1 지워짐 /
+  세 버튼 각각 → `data-theme` · meta 색 · 켜짐 표시(aria-checked) · 저장값 · 보낼 대기열(`themeV2`) 일치 /
+  시스템 + OS 다크↔라이트 에뮬레이션 → 새로고침 없이 따라감(meta 색까지) /
+  다크 저장 후 새로고침 → 처음부터 다크(html·로그인 관문 배경 #181615, 테마 적용·다크 블록·html 배경 규칙이 모두 `<body>` 앞) /
+  서버 값 `theme:dark` → 무시, `themeV2:dark` → 적용, 이상한 값 → 무시 / 서버 `cleanPrefsPatch({theme,themeV2,…})` → `themeV2` 만 남음 / 콘솔 에러 0.
+  **두 기기 실제 동기화는 로그인이 필요해 11e(Render)에서 확인한다.**
+- **배운 것** : 미리보기 창이 숨겨져 있으면 OS 테마 변경 이벤트(`change`)가 다음 화면 그리기 때까지 안 온다 → 스크린샷 한 번 찍으면 도착한다. 숨긴 창에서 `requestAnimationFrame` 을 기다리면 영영 안 끝난다.
 
 ### Phase 11b 에서 한 것 / 배운 것 (2026-10-10) — `news-insight-naver.html` 한 파일
 

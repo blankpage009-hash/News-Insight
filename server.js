@@ -775,7 +775,8 @@ const AI_MODEL_RE = /^gemini-[a-z0-9][a-z0-9.-]{0,60}$/;
 function cleanPrefsPatch(p) {
   const out = {};
   if (!isPlainObj(p)) return out;
-  if (['light', 'dark', 'system'].includes(p.theme)) out.theme = p.theme;
+  // v3 Phase 11c : 테마 칸 이름을 themeV2 로 바꿨다(v2 때 저장한 theme 값을 무시하고 모두 화이트에서 다시 시작). 옛 theme 는 더 받지 않는다.
+  if (['light', 'dark', 'system'].includes(p.themeV2)) out.themeV2 = p.themeV2;
   if (Number.isInteger(p.fontSize) && p.fontSize >= 13 && p.fontSize <= 19) out.fontSize = p.fontSize;
   if (isPlainObj(p.counts)) {
     const c = {};

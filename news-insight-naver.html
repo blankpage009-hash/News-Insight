@@ -25,7 +25,7 @@
       },
       extend: {
         // [수정] 테마(다크/화이트) 전환을 위해 색을 CSS 변수로 뺀다.
-        //   실제 값은 아래 <style>의 :root(v3 밝은 화면) / :root[data-theme="dark"](Phase 11 용)에 있다.
+        //   실제 값은 아래 <style>의 :root(v3 밝은 화면) / :root[data-theme="dark"](다크)에 있다.
         //   rgb(var(--x) / <alpha-value>) 형태라 bg-ink/90 같은 투명도 표기도 그대로 동작한다.
         colors: {
           ink:   'rgb(var(--c-ink) / <alpha-value>)',
@@ -69,31 +69,37 @@
   // [추가] 테마(화이트/다크/시스템)
   //   - 화면이 그려지기 전에 먼저 적용해야 깜빡임(다크→화이트)이 없어서
   //     본문 스크립트가 아니라 여기(head)에서 바로 실행한다.
-  //   - 저장값 : 'light' | 'dark' | 'system'  (기본 system)
+  //   - 저장값 : 'light' | 'dark' | 'system'  (기본 light)
+  //   - [수정] v3 Phase 11c : 키를 _v2 로 바꿨다. v2 때 저장한 다크·시스템 값은 v3 의 새 다크와 상관없이
+  //     골라 둔 것이라, 옛 키는 읽지 않고 한 번 지운다 → 모두 화이트에서 다시 시작(2026-10-10 사용자 결정).
   // ---------------------------------------------------------------
-  const THEME_STORAGE_KEY = 'newsInsightTheme_v1';
+  const THEME_STORAGE_KEY = 'newsInsightTheme_v2';
+  try { localStorage.removeItem('newsInsightTheme_v1'); } catch {}
+  const THEME_COLOR = { light: '#f3f2f2', dark: '#181615' };   // 아이폰 상태바 · 안드로이드 주소창 = 각 테마 배경(--c-ink)
 
   function readThemePref() {
-    try { return localStorage.getItem(THEME_STORAGE_KEY) || 'system'; } catch { return 'system'; }
+    let v = null;
+    try { v = localStorage.getItem(THEME_STORAGE_KEY); } catch {}
+    return ['light', 'dark', 'system'].includes(v) ? v : 'light';
   }
-  function systemPrefersLight() {
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  // 'dark' 를 물어본다 : matchMedia 가 없거나 OS 가 답을 안 주면 화이트로 떨어지게(기본 테마와 같게).
+  function systemPrefersDark() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   }
   // 실제로 화면에 입힐 테마('light' | 'dark')를 정해 <html data-theme>에 적는다.
   function applyTheme(pref) {
-    // [수정] v3 Phase 1 : 밝은 화면으로 고정한다. 예전에 다크·시스템을 저장해 둔 사용자도 밝게 보인다.
-    //   저장값은 건드리지 않는다 → Phase 11 에서 아래 한 줄만 원래 판정으로 돌리면 된다.
-    //   원래 판정 : (pref === 'light' || pref === 'dark') ? pref : (systemPrefersLight() ? 'light' : 'dark')
-    const mode = 'light';
+    const mode = (pref === 'light' || pref === 'dark') ? pref : (systemPrefersDark() ? 'dark' : 'light');
     document.documentElement.setAttribute('data-theme', mode);
     document.documentElement.style.colorScheme = mode;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', THEME_COLOR[mode]);
     return mode;
   }
   applyTheme(readThemePref());
 
   // '시스템' 설정일 때는 OS 테마가 바뀌면 즉시 따라간다.
   if (window.matchMedia) {
-    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
       if (readThemePref() === 'system') {
         applyTheme('system');
         if (typeof renderThemeButtons === 'function') renderThemeButtons();
@@ -177,7 +183,7 @@
   }
   /* 다크 테마 = Phase 11b 'A 먹색' (2026-10-10 사용자 선택) — 밝은 화면의 따뜻한 회색을 어둡게 뒤집은 값.
      레드는 글자로도(배경 6.0 · 카드면 5.4:1) 버튼 면으로도(위의 어두운 글자 6.0:1) 기준을 넘어 하나로 쓴다.
-     켜는 일(applyTheme · 저장값)은 11c. */
+     <head> 의 applyTheme 이 <html data-theme="dark"> 를 붙이면 켜진다(Phase 11c). */
   :root[data-theme="dark"] {
     --c-ink: 24 22 21;      --c-ink2: 33 31 30;    --c-ink3: 47 44 43;      /* 배경 #181615 · 면 #211f1e · 한 단계 밝은 면 */
     --c-line: 78 74 72;     --c-gold: 255 94 69;   --c-gold2: 255 125 104;  /* 선 · 강조 #ff5e45 · 강조 hover */
@@ -195,6 +201,10 @@
     --sh-pop: 0 0 0 1px rgb(78 74 72), 0 8px 24px rgb(0 0 0 / .6);
     --sh-panel: 0 0 0 1px rgb(78 74 72), 0 14px 30px rgb(0 0 0 / .45);
   }
+  /* [추가] Phase 11c : body 배경(bg-ink)은 tailwind CDN 이 스크립트로 만들어 넣어서 한 박자 늦다.
+     다크로 새로고침할 때 그 사이 밝은 화면이 비치지 않게 html 에 같은 배경을 먼저 깐다.
+     screen 한정 : 인쇄는 흰 종이로 따로 맞춘다(@media print). */
+  @media screen { html { background: rgb(var(--c-ink)); } }
   /* 화이트 테마에서 어두운 배경을 전제로 한 amber 계열 배너 색 보정 */
   :root[data-theme="light"] .text-amber-200 { color: #92400e; }
   /* [삭제] 'Insight' 버튼·배지의 연한 초록 보정 규칙은 Phase 4 에서 걷어냈다.
@@ -3252,7 +3262,9 @@
     // 화면 설정 한 칸마다 : local() = 이 기기에 '사람이 정해 둔 값'(없으면 undefined), apply(v) = 서버 값을 사본 · 화면에 반영.
     //   apply 는 값을 서버로 되돌려 보내지 않는다(되울림 방지). true 를 돌려주면 기사를 다시 불러와야 하는 변화다.
     const PREF_SYNC = {
-      theme: {
+      // [수정] Phase 11c : 칸 이름을 theme → themeV2 로 바꿨다. 계정에 남은 v2 때 theme 값(다크·시스템)을
+      //   읽지 않게 해서 모두 화이트에서 다시 시작한다(옛 칸은 서버에 남아도 아무도 안 읽는다).
+      themeV2: {
         local: () => syncLsGet(THEME_STORAGE_KEY) || undefined,
         apply(v) {
           if (!['light', 'dark', 'system'].includes(v)) return false;
@@ -5336,15 +5348,13 @@
     //   applyTheme / readThemePref 는 <head>에 미리 정의돼 있다. (깜빡임 방지)
     // ---------------------------------------------------------------
     // [수정] v3 Phase 8 · 시안 1e : 붙은 버튼 3개(화이트 · 다크 · 시스템).
-    //   화면은 Phase 11 전까지 밝게 고정이라(applyTheme) 다크·시스템은 누를 수 없는 껍데기로 둔다.
-    //   예전에 다크를 저장해 둔 사용자도 화면은 밝으니 켜진 표시는 화이트에 둔다.
-    //   → Phase 11 에서는 THEME_READY 에 'dark', 'system' 을 더하기만 하면 된다.
+    //   Phase 11c 에서 셋 다 켰다. THEME_READY 에서 빼면 그 버튼은 다시 '준비 중' 껍데기가 된다.
     const THEME_OPTIONS = [
       { key: 'light', label: '화이트' },
       { key: 'dark', label: '다크' },
       { key: 'system', label: '시스템' },
     ];
-    const THEME_READY = ['light'];
+    const THEME_READY = ['light', 'dark', 'system'];
 
     function renderThemeButtons() {
       const wrap = document.getElementById('theme-buttons');
@@ -5362,7 +5372,7 @@
 
     function setTheme(pref) {
       try { localStorage.setItem(THEME_STORAGE_KEY, pref); } catch {}
-      queuePref('theme', pref);
+      queuePref('themeV2', pref);
       applyTheme(pref);
       renderThemeButtons();
     }
