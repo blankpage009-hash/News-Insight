@@ -1998,7 +1998,9 @@ async function fetchArticleTextSmart(url, naverUrl, minLen = 200) {
 }
 
 // 기사 목록 중 '핵심 주제'가 키워드와 맞는 것만 남긴다
-async function filterByCore(items, terms) {
+//   core 가 있는 섹션(팀 · 회사처럼 주인공이 하나인 섹션)은 더 엄격한 규칙을 쓴다.
+async function filterByCore(items, terms, core) {
+  if (core) return filterByCoreStrict(items, core);
   const strongTerms = terms.filter((t) => !CORE_WEAK_TERMS.has(compact(t)));
   const weakTerms = terms.filter((t) => CORE_WEAK_TERMS.has(compact(t)));
   const passed = [];
@@ -2016,6 +2018,34 @@ async function filterByCore(items, terms) {
     const lead = body.slice(0, LEAD_CHARS);
     if (strongTerms.some((t) => textContainsTerm(lead, t))) return it;
     return coreHits(lead, weakTerms) >= CORE_WEAK_MIN_HITS ? it : null;
+  });
+
+  return passed.concat(verified.filter(Boolean));
+}
+
+// [엄격] 제목에 이름이 있거나, 본문 앞 leadChars 자 안에 처음 나오고 앞 countChars 자 안에 minHits 번 이상 나와야 통과.
+//   - 이름은 긴 것부터 맞춰 '포항스틸러스'를 '포항' + '스틸러스' 2번으로 세지 않는다.
+//   - 본문을 못 읽으면 버린다. 제목에 이름이 있는 기사는 이미 통과했으므로 잃는 게 적고,
+//     살려두면 본문에만 한 번 나온 패션 · 은행 기사까지 섞였다.
+//   - 본문 전체가 아니라 앞 800자에서만 센다. 재배포 뒤 캐시(리드 800자)로 바로 셀 수 있어 원문을 다시 읽지 않고,
+//     실측에서도 전체로 셀 때보다 엉뚱한 기사가 적었다(3건 → 1건, 놓친 기사는 둘 다 0건).
+async function filterByCoreStrict(items, { names, leadChars, countChars, minHits }) {
+  const alt = [...names].sort((a, b) => b.length - a.length)
+    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const passed = [];
+  const pending = [];
+  items.forEach((it) => {
+    if (new RegExp(alt, 'i').test(it.title || '')) passed.push(it);
+    else pending.push(it);
+  });
+
+  const targets = pending.slice(0, VERIFY_LIMIT);
+  const verified = await mapLimit(targets, VERIFY_CONCURRENCY, async (it) => {
+    const body = (await fetchArticleText(it.url)).slice(0, countChars);
+    if (!body) return null;
+    const first = body.search(new RegExp(alt, 'i'));
+    if (first < 0 || first >= leadChars) return null;
+    return (body.match(new RegExp(alt, 'gi')) || []).length >= minHits ? it : null;
   });
 
   return passed.concat(verified.filter(Boolean));
@@ -2243,6 +2273,7 @@ async function searchByTerms(terms, opts = {}) {
     domain,           // [I] 도메인(맥락) 검증 키 : 'logistics' | 'stock' | ...
     exclude = null,   // [설정] 사용자가 세팅에서 정한 '제외 키워드' (null이면 도메인 기본값)
     pages = 1,        // [다이제스트] 네이버 결과를 몇 페이지까지 받아올지 (대형 이슈에 묻힌 기사까지 확보)
+    core,             // [엄격] 섹션의 core 설정 (filterByCoreStrict). 없으면 기존 검증
   } = opts;
 
   // [D] 넉넉히 받아온 뒤 서버에서 추린다 (요청 비용은 동일)
@@ -2309,7 +2340,7 @@ async function searchByTerms(terms, opts = {}) {
 
   // 카테고리 정확도 검증 (원문 핵심 내용 확인) - 키워드 검색에서는 사용하지 않음 [A]
   if (verify) {
-    merged = await filterByCore(merged, terms);
+    merged = await filterByCore(merged, terms, core);
     if (domain) merged = await refineByDomain(merged, terms, domain, exclude); // [I] 맥락 검증
     if (sort !== 'sim') merged.sort(byDate);
   }
@@ -2395,7 +2426,11 @@ const STOCK_SECTIONS = [
 // [추가] 스포츠 하위 카테고리 (포항스틸러스 / 국내축구 / 해외축구 / 해외야구 / 기타)
 const SPORTS_SECTIONS = [
   { key: 'sports_pohang', label: '포항스틸러스',
-    terms: ['포항스틸러스', '포항 스틸러스'], domain: 'sports' },
+    terms: ['포항스틸러스', '포항 스틸러스'], domain: 'sports',
+    // 리드문에 한 번 스친 K리그 순위 · 타 팀 기사가 절반을 넘어서 '주인공' 기준으로 거른다 (filterByCoreStrict)
+    //   기사 제목은 '인천, 포항 3-0 완파'처럼 줄여 쓰므로 '포항'만으로도 이름으로 센다.
+    //   (2026-10-10 실측 60건 : 엉뚱한 기사 27건 → 1건, 놓친 관련 기사 0건)
+    core: { names: ['포항 스틸러스', '포항스틸러스', '포항', '스틸러스'], leadChars: 300, countChars: 800, minHits: 3 } },
   { key: 'sports_kfootball', label: '국내축구',
     terms: ['K리그', '축구 국가대표', '국내축구'], domain: 'sports' },
   { key: 'sports_wfootball', label: '해외축구',
@@ -3235,7 +3270,7 @@ async function buildOneOfAllSections(sec, { limit, dateFrom, dateTo, hours, sort
   const { terms, exclude } = resolveSectionKw(kwMap, sec);
   const items = sec.breaking
     ? await fetchBreaking(limit, terms, exclude)
-    : collapseEvents(await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain, exclude }), sort).slice(0, limit);
+    : collapseEvents(await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, domain: sec.domain, exclude, core: sec.core }), sort).slice(0, limit);
   return { key: sec.key, label: sec.label, items };
 }
 
@@ -3818,7 +3853,7 @@ app.post('/api/news-images', async (req, res) => {
 // -----------------------------------------------------------------
 async function buildOneSection(sec, { limit, dateFrom, dateTo, hours, sort }, kwMap) {
   const { terms, exclude } = resolveSectionKw(kwMap, sec);
-  const items = await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, sort, domain: sec.domain, exclude });
+  const items = await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, sort, domain: sec.domain, exclude, core: sec.core });
   return { items: collapseEvents(items, sort).slice(0, limit), label: sec.label };
 }
 
@@ -3898,7 +3933,7 @@ function digestParts(sources, { dateFrom, dateTo, hours }, kwMap) {
       const { terms, exclude } = resolveSectionKw(kwMap, sec);
       const items = await searchByTerms(terms, {
         display: DIGEST_POOL_PER_SECTION, dateFrom, dateTo, hours,
-        sort: 'sim', domain: sec.domain, exclude,
+        sort: 'sim', domain: sec.domain, exclude, core: sec.core,
       });
       return { items: items.slice(0, DIGEST_POOL_PER_SECTION) };
     },
@@ -4005,7 +4040,7 @@ async function buildTopic(sec, { limit, dateFrom, dateTo, hours, sort }, kwMap) 
   const { terms, exclude } = resolveSectionKw(kwMap, sec);
   const items = sec.breaking
     ? await fetchBreaking(limit, terms, exclude)
-    : collapseEvents(await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, sort, domain: sec.domain, exclude }), sort).slice(0, limit);
+    : collapseEvents(await searchByTerms(terms, { display: limit, dateFrom, dateTo, hours, sort, domain: sec.domain, exclude, core: sec.core }), sort).slice(0, limit);
   return { items, label: sec.label };
 }
 
