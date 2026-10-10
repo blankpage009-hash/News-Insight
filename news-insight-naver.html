@@ -605,6 +605,8 @@
     transition: background-color .15s;
   }
   .panel-all-btn:hover, .panel-all-btn.is-on { background: rgb(var(--c-ink2)); }
+  /* 전체보기 버튼 안의 '이어볼 기사 합계' */
+  .panel-followup-total { padding-left: .35rem; border-left: 1px solid currentColor; font-variant-numeric: tabular-nums; }
 
   /* --- [추가] 키워드 랭킹 (Phase 7 C1 · 시안 01번 레일 하단) --- */
   /* 보이기/숨기기를 Tailwind 의 .hidden + .flex 조합으로 하면 어느 쪽이 이기는지가
@@ -2260,6 +2262,7 @@
           <button id="panel-saved-btn" onclick="selectCategory('saved')" class="panel-all-btn">
             <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M6 3h12v18l-6-5-6 5Z"/></svg>
             <span>전체보기</span>
+            <span id="panel-saved-followup" class="panel-followup-total" title="이어볼 기사 합계" hidden></span>
           </button>
         </div>
         <div id="panel-saved-list"></div>
@@ -2932,6 +2935,7 @@
       if (!box) return;
       if (!savedArticles.length) {
         box.innerHTML = '<p class="panel-saved-empty">카드의 저장 버튼을 누르면 여기에 모입니다.</p>';
+        updatePanelFollowupTotal();
         return;
       }
       box.innerHTML = savedArticles.slice(0, PANEL_SAVED_MAX).map((a) => {
@@ -2942,10 +2946,21 @@
           <button class="panel-saved-x" data-panel-unsave="${key}" title="저장 취소" aria-label="저장 취소"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
           <span class="panel-saved-meta">
             <span class="panel-saved-src">${esc(a.source || '출처 미상')} · ${esc(formatDate(a.datetime))}</span>
-            <button class="panel-resume" data-panel-resume="${key}" title="이어보기">${icon('history', 'w-3 h-3')}이어보기</button>
+            <button class="panel-resume" data-panel-resume="${key}" title="이어보기">${icon('history', 'w-3 h-3')}이어보기 <span data-followup-count>${followupCache.has(a.key) ? followupCache.get(a.key).length : 0}</span></button>
           </span>
         </div>`;
       }).join('');
+      updatePanelFollowupTotal();
+      primeFollowupBadges(savedArticles);   // 저장 기사 전체의 이어볼 기사 수를 채운다 (캐시에 있으면 부르지 않는다)
+    }
+
+    // '전체보기' 버튼에 저장 기사 전체의 이어볼 기사 합계를 쓴다. 아직 못 센 기사는 0 으로 치고, 도착할 때마다 다시 쓴다.
+    function updatePanelFollowupTotal() {
+      const el = document.getElementById('panel-saved-followup');
+      if (!el) return;
+      const total = savedArticles.reduce((sum, a) => sum + (followupCache.get(a.key)?.length || 0), 0);
+      el.textContent = String(total);
+      el.hidden = total === 0;
     }
 
     // 낱말·주소에 따옴표가 섞여도 안전하도록 key 는 data 속성으로 받고, 클릭은 한 곳에서 처리한다
@@ -8292,6 +8307,7 @@
     //   결과는 기사 열쇠(key) 기준으로 캐시해 두어, 저장 화면을 다시 열어도 다시 부르지 않는다.
     // ---------------------------------------------------------------
     const followupCache = new Map();   // savedKey -> 후속 기사 배열 (원본, decorateItems 이전)
+    const followupPending = new Set(); // 지금 서버에 묻는 중인 기사 key (같은 기사를 겹쳐 부르지 않으려고)
     let followupItems = [];            // [추가] 이어보기 팝업에 뜬 기사들 (요약/주요내용 버튼이 id로 찾도록 보관)
 
     async function fetchFollowupForItem(item) {
@@ -8312,11 +8328,12 @@
 
     // 화면에 떠 있는 같은 기사의 '이어보기 N' 배지를 고쳐 쓴다. (syncSaveButtons와 같은 방식)
     function updateFollowupBadge(key, count) {
-      document.querySelectorAll('.followup-btn').forEach((btn) => {
-        if (btn.dataset.followupKey !== key) return;
+      document.querySelectorAll('.followup-btn, .panel-resume').forEach((btn) => {
+        if ((btn.dataset.followupKey || btn.dataset.panelResume) !== key) return;
         const el = btn.querySelector('[data-followup-count]');
         if (el) el.textContent = String(count);
       });
+      updatePanelFollowupTotal();
     }
 
     // 저장 화면을 그린 직후 부른다. 카드마다 배지를 0으로 먼저 그려 두고, 여기서 실제 건수로 채운다.
@@ -8328,8 +8345,27 @@
           updateFollowupBadge(key, followupCache.get(key).length);
           return;
         }
-        fetchFollowupForItem(item).then((items) => updateFollowupBadge(key, items.length));
+        if (followupPending.has(key)) return;   // 이미 부르는 중이면 또 부르지 않는다
+        followupPending.add(key);
+        followupQueue.push({ key, item });
       });
+      pumpFollowupQueue();
+    }
+
+    // 저장 기사가 많아도 서버(네이버 호출)에 한꺼번에 몰리지 않게 2건씩만 묻는다
+    const followupQueue = [];
+    let followupRunning = 0;
+    function pumpFollowupQueue() {
+      while (followupRunning < 2 && followupQueue.length) {
+        const { key, item } = followupQueue.shift();
+        followupRunning++;
+        fetchFollowupForItem(item).then((items) => {
+          followupPending.delete(key);
+          followupRunning--;
+          updateFollowupBadge(key, items.length);
+          pumpFollowupQueue();
+        });
+      }
     }
 
     // ---------------------------------------------------------------
