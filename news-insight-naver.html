@@ -177,7 +177,8 @@
     --c-scrollbar-hover: 186 182 182;
     --c-text2: 68 65 65;    --c-tint: 255 242 239; --c-redink: 124 20 5;  /* 보조 본문 #444141 · 연한 레드 바탕 #fff2ef · 진한 레드 글자 #7c1405 */
     --c-tag: 107 114 128;                                                   /* 기사 카드 .bc-tag 배지 바탕 #6b7280 */
-    --sh-card: 0 12px 32px rgb(45 43 43 / .22);                             /* 카드 · 팝업/토스트 · 패널 그림자 (색이 아니라 통째 값) */
+    --c-toast-act: 236 48 19;                                               /* 되돌리기 토스트의 버튼 글자 (토스트는 화면과 반대 색 바탕) */
+    --sh-card: 0 12px 32px rgb(45 43 43 / .22);                            /* 카드 · 팝업/토스트 · 패널 그림자 (색이 아니라 통째 값) */
     --sh-pop: 0 8px 24px rgb(0 0 0 / .25);
     --sh-panel: 0 14px 30px rgb(0 0 0 / .12);
   }
@@ -196,6 +197,7 @@
     --c-scrollbar-hover: 84 80 78;
     --c-text2: 212 207 203; --c-tint: 66 30 24;    --c-redink: 255 176 158; /* 보조 본문 · 연한 레드 바탕(어두운 붉은 면) · 진한 레드 글자(밝은 분홍) */
     --c-tag: 84 82 90;                                                      /* .bc-tag 배지 바탕 (글자는 #fff 고정이라 어둡게 둔다) */
+    --c-toast-act: 174 24 0;                                                /* 다크의 토스트는 밝은 바탕이라 진한 레드 #ae1800 (대비 5.9) — 밝은 레드는 2.5 로 미달 */
     /* 어두운 바탕에서는 그림자가 거의 안 보여서 1px 테두리 선을 같이 둔다 */
     --sh-card: 0 0 0 1px rgb(78 74 72), 0 12px 32px rgb(0 0 0 / .55);
     --sh-pop: 0 0 0 1px rgb(78 74 72), 0 8px 24px rgb(0 0 0 / .6);
@@ -1005,7 +1007,7 @@
   .st-seg > button + button { border-left: 1px solid rgb(var(--c-paper)); }
   .st-seg > button:hover:not(:disabled) { background: rgb(var(--c-ink2)); }
   .st-seg > button.is-on, .st-seg > button.is-on:hover { background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); }
-  /* 다크·시스템은 Phase 11 전까지 껍데기만 있다 */
+  /* THEME_READY 에 없는 버튼만 잠긴다 (Phase 11c 이후 테마 세 개 모두 켜져 있어 지금은 쓰이지 않는다) */
   .st-seg > button:disabled { color: rgb(var(--c-muted) / .5); cursor: not-allowed; }
   .st-seg.is-sm > button { width: 35px; padding: 5px 0; font-size: 12px; line-height: 18px; text-align: center; }
   /* 값 칸 안에서 다시 줄로 나뉘는 목록 (노출 건수 · 화면 옵션) */
@@ -1264,7 +1266,7 @@
     background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); box-shadow: var(--sh-pop);
   }
   #ni-toast[hidden] { display: none; }
-  #ni-toast button { flex: none; padding: 4px 2px; font-weight: 800; color: rgb(var(--c-gold)); cursor: pointer; }
+  #ni-toast button { flex: none; padding: 4px 2px; font-weight: 800; color: rgb(var(--c-toast-act)); cursor: pointer; }
 
   /* [오분류 B] 관리자가 👎 를 누르면 뜨는 사유 고르기 창. 위치는 스크립트가 버튼 옆에 맞춘다(화면 밖으로 안 나가게). */
   #dislike-menu {
@@ -1758,7 +1760,7 @@
     --c-up: 190 40 48;      --c-down: 25 65 180;   --c-ok: 21 94 61;
     /* 새 토큰도 밝은 값으로 덮는다 (다크 화면에서 PDF 를 저장해도 종이는 흰색 · 글자는 어둡게) */
     --c-scrollbar: 215 211 211; --c-scrollbar-hover: 186 182 182;
-    --c-text2: 68 65 65;    --c-tint: 255 242 239; --c-redink: 124 20 5;   --c-tag: 107 114 128;
+    --c-text2: 68 65 65;    --c-tint: 255 242 239; --c-redink: 124 20 5;   --c-tag: 107 114 128;   --c-toast-act: 236 48 19;
     --sh-card: 0 12px 32px rgb(45 43 43 / .22); --sh-pop: 0 8px 24px rgb(0 0 0 / .25); --sh-panel: 0 14px 30px rgb(0 0 0 / .12);
     font-family: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
   }
@@ -1780,7 +1782,7 @@
       --c-up: 190 40 48;      --c-down: 25 65 180;
       --c-ok: 21 94 61;
       --c-scrollbar: 215 211 211; --c-scrollbar-hover: 186 182 182;
-      --c-text2: 68 65 65;    --c-tint: 255 242 239; --c-redink: 124 20 5;   --c-tag: 107 114 128;
+      --c-text2: 68 65 65;    --c-tint: 255 242 239; --c-redink: 124 20 5;   --c-tag: 107 114 128;   --c-toast-act: 236 48 19;
       --sh-card: 0 12px 32px rgb(45 43 43 / .22); --sh-pop: 0 8px 24px rgb(0 0 0 / .25); --sh-panel: 0 14px 30px rgb(0 0 0 / .12);
     }
     :root .text-amber-200 { color: #92400e; }
@@ -2298,7 +2300,7 @@
         <!-- 화면 설정 : 누르는 즉시 적용되고 내 계정에 저장된다([P7]) -->
         <div id="st-pane-prefs" class="st-pane" role="tabpanel" aria-labelledby="st-tab-prefs">
           <div class="st-row">
-            <div class="st-name"><b>테마</b><span class="st-hint">화면 밝기 · 내 계정에 저장<br>다크 · 시스템은 준비 중</span></div>
+            <div class="st-name"><b>테마</b><span class="st-hint">화면 밝기 · 내 계정에 저장<br>시스템은 기기 설정을 따라갑니다</span></div>
             <div class="st-seg" id="theme-buttons" role="radiogroup" aria-label="테마"></div>
           </div>
           <!-- [추가] 본문 크기 (Phase 7 A3) : 화면 전체가 rem 이라 기준 크기 하나로 같이 커진다 -->
