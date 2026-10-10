@@ -572,6 +572,14 @@
     transition: background-color .15s;
   }
   .panel-more:hover, .panel-more.is-on { background: rgb(var(--c-ink2)); }
+  /* 칸 머리 오른쪽의 '전체보기' 버튼 (저장 기사 화면으로 이동) */
+  .panel-all-btn {
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .2rem .6rem; font-size: .73rem; font-weight: 600;
+    color: rgb(var(--c-paper)); border: 1px solid rgb(var(--c-paper));
+    transition: background-color .15s;
+  }
+  .panel-all-btn:hover, .panel-all-btn.is-on { background: rgb(var(--c-ink2)); }
 
   /* --- [추가] 키워드 랭킹 (Phase 7 C1 · 시안 01번 레일 하단) --- */
   /* 보이기/숨기기를 Tailwind 의 .hidden + .flex 조합으로 하면 어느 쪽이 이기는지가
@@ -2213,14 +2221,16 @@
       <!-- 저장 기사 : 최근 5건 + 이어보기. 사이드바가 데스크톱에서 사라져 저장 화면으로 가는 길도 여기 둔다 -->
       <section class="panel-sec" style="margin-top:.8rem">
         <div class="panel-head">
-          <h2>저장 기사</h2>
-          <span id="panel-saved-count" class="text-[0.73rem] text-muted"></span>
+          <div class="flex items-baseline gap-2">
+            <h2>저장 기사</h2>
+            <span id="panel-saved-count" class="text-[0.73rem] text-muted"></span>
+          </div>
+          <button id="panel-saved-btn" onclick="selectCategory('saved')" class="panel-all-btn">
+            <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M6 3h12v18l-6-5-6 5Z"/></svg>
+            <span>전체보기</span>
+          </button>
         </div>
         <div id="panel-saved-list"></div>
-        <button id="panel-saved-btn" onclick="selectCategory('saved')" class="panel-more">
-          <span>저장한 기사 전체 보기</span>
-          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-        </button>
       </section>
     </aside>
 
