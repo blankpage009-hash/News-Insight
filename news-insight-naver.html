@@ -1228,6 +1228,19 @@
   #ni-toast[hidden] { display: none; }
   #ni-toast button { flex: none; padding: 4px 2px; font-weight: 800; color: rgb(var(--c-gold)); cursor: pointer; }
 
+  /* [오분류 B] 관리자가 👎 를 누르면 뜨는 사유 고르기 창. 위치는 스크립트가 버튼 옆에 맞춘다(화면 밖으로 안 나가게). */
+  #dislike-menu {
+    position: fixed; z-index: 210; width: 248px; max-width: calc(100vw - 16px);
+    background: rgb(var(--c-ink)); color: rgb(var(--c-paper));
+    border: 1px solid rgb(var(--c-paper) / .4); box-shadow: 0 8px 24px rgb(0 0 0 / .25);
+  }
+  #dislike-menu button {
+    display: block; width: 100%; padding: 10px 14px; text-align: left; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  #dislike-menu button + button { border-top: 1px solid rgb(var(--c-line)); }
+  #dislike-menu button:hover, #dislike-menu button:focus-visible { background: rgb(var(--c-ink3)); outline: none; }
+  #dislike-menu button span { display: block; margin-top: 2px; font-size: 12px; font-weight: 500; color: rgb(var(--c-muted)); }
+
   .bc-nav { display: flex; align-items: center; gap: 16px; padding: 4px 0 2rem; }
   .bc-arrow {
     display: inline-flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px;
@@ -2361,6 +2374,18 @@
               <div id="au-lists"></div>
             </div>
           </div>
+          <!-- [오분류 B] 관리자가 기사 👎 → '이 섹션에 안 맞음'으로 뺀 기사. 해제는 누르는 즉시 서버에 반영된다 -->
+          <div class="st-row">
+            <div class="st-name">
+              <b>섹션에서 뺀 기사</b>
+              <span class="st-hint">기사의 👎 에서 <b>이 섹션에 안 맞음</b>을 고르면 모든 사용자의 그 섹션에서 빠집니다.
+                <b>해제</b>하면 다시 보입니다. 누르는 즉시 반영됩니다.</span>
+            </div>
+            <div class="min-w-0">
+              <p id="sb-msg" class="st-msg" role="status"></p>
+              <div id="sb-list"></div>
+            </div>
+          </div>
           <div class="st-row is-wide">
             <div class="st-name">
               <b>공용 기본 키워드</b>
@@ -3141,7 +3166,7 @@
       const neverSynced = syncLsGet(SYNC_OWNER_KEY) === null;
       clearVoteCache();
       clearKeywordCache();
-      const keys = [SAVED_STORAGE_KEY, READ_STORAGE_KEY, SYNC_PENDING_KEY, SYNC_OWNER_KEY, AI_KEY_FLAG_KEY];
+      const keys = [SAVED_STORAGE_KEY, READ_STORAGE_KEY, SYNC_PENDING_KEY, SYNC_OWNER_KEY, AI_KEY_FLAG_KEY, BLOCK_STORAGE_KEY];
       aiKeyInfo = undefined;
       aiModelList = null;
       applyAiKeyUi();
@@ -3442,19 +3467,25 @@
     function voteButtonsHtml(item, key) {
       const mk = (val, name, label) => {
         const on = voteOf(key) === val;
-        return `<button type="button" onclick="castVote(${item.id}, ${val})" data-vote-key="${esc(key)}" data-vote="${val}"
+        return `<button type="button" onclick="castVote(${item.id}, ${val}, this)" data-vote-key="${esc(key)}" data-vote="${val}"
           aria-pressed="${on}" aria-label="${label}" title="${label}" class="bc-vbtn${on ? ' is-on' : ''}">${icon(name)}</button>`;
       };
       return `<span class="bc-vote" role="group" aria-label="기사 평가">${mk(1, 'thumbs-up', '좋아요')}${mk(-1, 'thumbs-down', '싫어요')}</span>`;
     }
 
     // 같은 버튼을 다시 누르면 취소다.
-    function castVote(id, want) {
+    //   [오분류 B] 관리자가 새로 👎 를 누르면 바로 싫어요하지 않고 사유를 고르게 한다(취소는 바로).
+    function castVote(id, want, btn) {
       const item = findItem(id);
       const key = savedKeyOf(item);
       if (!key) return;
       const prev = votes.get(key) || null;
       const next = prev && prev.v === want ? 0 : want;
+      if (next === -1 && btn && isAdminUser()) { openDislikeMenu(btn, item); return; }
+      applyVote(item, key, prev, next);
+    }
+
+    function applyVote(item, key, prev, next) {
       // [P4] 전체 화면 상자에서 누른 투표는 그 상자의 섹션으로 기록한다.
       //   cats[0] 은 같은 기사가 걸린 첫 섹션(주로 '속보')이라, 경제 상자에서 누른 좋아요가 속보 점수로 들어갔다.
       const inBox = sectionState.some((s) => s.items.includes(item));
@@ -3500,16 +3531,25 @@
     }
 
     // 지금 화면의 목록들에서 이 기사를 빼고 어디에 있었는지 기억한다(되돌리기용).
-    function hideFromLists(key) {
+    //   only : 이 조건에 맞는 자리에서만 뺀다([오분류 B] 섹션에서 빼기는 그 섹션 자리만).
+    function hideFromLists(key, only = () => true) {
       const spots = [];
       const cut = (arr, sec) => {
         for (let i = arr.length - 1; i >= 0; i--) {
-          if (savedKeyOf(arr[i]) === key) spots.unshift({ sec, index: i, item: arr.splice(i, 1)[0] });
+          if (savedKeyOf(arr[i]) === key && only(arr[i])) spots.unshift({ sec, index: i, item: arr.splice(i, 1)[0] });
         }
       };
       sectionState.forEach((s) => cut(s.items, s.key));
       cut(currentResults, '');
       return spots;
+    }
+
+    function restoreSpots(spots) {
+      spots.forEach(({ sec, index, item }) => {
+        const arr = sec ? (sectionState.find((s) => s.key === sec) || {}).items : currentResults;
+        if (arr) arr.splice(Math.min(index, arr.length), 0, item);
+      });
+      rerenderListIfShown();
     }
 
     function undoHide() {
@@ -3520,11 +3560,7 @@
       const back = h.prev ? h.prev.v : 0;
       const meta = h.prev ? { section: h.prev.section, title: h.prev.title } : { section: '', title: '' };
       setVoteLocal(h.key, back, meta);
-      h.spots.forEach(({ sec, index, item }) => {
-        const arr = sec ? (sectionState.find((s) => s.key === sec) || {}).items : currentResults;
-        if (arr) arr.splice(Math.min(index, arr.length), 0, item);
-      });
-      rerenderListIfShown();
+      restoreSpots(h.spots);
       sendVote(h.key, back, meta, null);
     }
 
@@ -3540,6 +3576,197 @@
       sectionState.forEach((s) => sweep(s.items));
       sweep(currentResults);
       if (removed) rerenderListIfShown();
+    }
+
+    // ---------------------------------------------------------------
+    // [오분류 B] 관리자가 '이 섹션에 안 맞음'으로 뺀 기사
+    //   모든 사용자가 같은 목록(/api/section-blocks)을 받아 화면에서 거른다. 서버 기사 캐시와는 상관없다.
+    //   뺀 섹션은 그 화면의 섹션(category)이나, 브리핑에서는 기사가 온 섹션(item.cat)과 같을 때만 숨긴다
+    //   → AI 에서 뺀 기사가 경제 섹션에도 걸려 있으면 경제에는 그대로 보인다.
+    //   싫어요 투표는 기록하지 않는다. 오분류 기사에 싫어요를 누르면 그 섹션 취향 점수가 반대로 깎였다.
+    // ---------------------------------------------------------------
+    const BLOCK_STORAGE_KEY = 'newsinsight:section-blocks:v1';
+    let sectionBlocks = [];         // [{ key, section, title, t, by }] 최근 순 (관리자 목록용)
+    let blockedSet = new Set();     // '<기사 열쇠>|<섹션>'
+    const blockId = (key, section) => `${key}|${section}`;
+
+    function setSectionBlocks(list) {
+      sectionBlocks = list;
+      blockedSet = new Set(list.map((b) => blockId(b.key, b.section)));
+    }
+
+    // 이 기기 사본 : 첫 그림부터 빼려는 용도. 제목은 빼고 둔다(최대 2000건이라 사본이 커지지 않게).
+    function loadSectionBlocksFromCache() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(BLOCK_STORAGE_KEY) || '[]');
+        setSectionBlocks((Array.isArray(raw) ? raw : []).filter((b) => b && b.key && b.section));
+      } catch { setSectionBlocks([]); }
+    }
+
+    function persistSectionBlocks() {
+      try {
+        localStorage.setItem(BLOCK_STORAGE_KEY, JSON.stringify(sectionBlocks.map(({ key, section }) => ({ key, section }))));
+      } catch (e) { console.error('섹션 제외 사본을 기록하지 못했습니다.', e); }
+    }
+
+    function isBlockedFor(item, category) {
+      if (!blockedSet.size) return false;
+      const key = savedKeyOf(item);
+      if (!key) return false;
+      // 출처 섹션(cat)은 브리핑만 본다. 다른 화면 기사에 cat 이 붙게 되더라도 엉뚱한 섹션에서 사라지지 않게.
+      return blockedSet.has(blockId(key, category))
+        || (category === 'briefing' && !!item.cat && blockedSet.has(blockId(key, item.cat)));
+    }
+
+    async function syncSectionBlocksInBackground() {
+      try {
+        const data = await apiGet('/api/section-blocks');
+        setSectionBlocks((data.blocks || []).filter((b) => b && b.key && b.section));
+        persistSectionBlocks();
+        dropBlockedFromScreen();
+        renderSectionBlocksAdmin();
+      } catch (e) { console.error('섹션에서 뺀 기사 목록을 불러오지 못했습니다.', e); }
+    }
+
+    // 서버 값이 늦게 도착했을 때 : 이미 그려 둔 목록에서 뺀 기사를 걷어 낸다. 검색 결과 · 저장 화면은 건드리지 않는다.
+    function dropBlockedFromScreen() {
+      if (currentCategory === 'saved' || document.getElementById('search-input').value.trim()) return;
+      let removed = 0;
+      const sweep = (arr) => {
+        for (let i = arr.length - 1; i >= 0; i--) {
+          if (isBlockedFor(arr[i], arr[i].category)) { arr.splice(i, 1); removed++; }
+        }
+      };
+      sectionState.forEach((s) => sweep(s.items));
+      sweep(currentResults);
+      if (removed) rerenderListIfShown();
+    }
+
+    // '이 섹션에 안 맞음'을 기록할 섹션. 정할 수 없으면 '' (검색 결과 · 저장 화면 · 관련 기사 · 이어보기).
+    function blockSectionOf(item) {
+      if (sectionState.some((s) => s.items.includes(item))) return item.category;
+      if (document.getElementById('search-input').value.trim()) return '';
+      if (['saved', 'keywords'].includes(currentCategory) || !currentResults.includes(item)) return '';
+      // 'mykw' 는 내 우선 키워드로 찾은 기사라 섹션이 아니다
+      if (currentCategory === 'briefing') return item.cat && item.cat !== 'mykw' ? item.cat : '';
+      return currentCategory;
+    }
+
+    function closeDislikeMenu() {
+      const m = document.getElementById('dislike-menu');
+      if (m) m.remove();
+      document.removeEventListener('pointerdown', onDislikeMenuOutside, true);
+      document.removeEventListener('keydown', onDislikeMenuKey, true);
+      window.removeEventListener('scroll', closeDislikeMenu, true);
+      window.removeEventListener('resize', closeDislikeMenu);
+    }
+    function onDislikeMenuOutside(e) { if (!e.target.closest('#dislike-menu')) closeDislikeMenu(); }
+    function onDislikeMenuKey(e) { if (e.key === 'Escape') closeDislikeMenu(); }
+
+    function openDislikeMenu(btn, item) {
+      closeDislikeMenu();
+      const section = blockSectionOf(item);
+      const m = document.createElement('div');
+      m.id = 'dislike-menu';
+      m.setAttribute('role', 'menu');
+      m.setAttribute('aria-label', '싫어요 사유');
+      m.innerHTML = `<button type="button" role="menuitem" data-act="dislike">관심 없음<span>내 화면에서 숨기고 취향에 반영합니다</span></button>`
+        + (section ? `<button type="button" role="menuitem" data-act="block">이 섹션에 안 맞음<span>모든 사용자의 ${esc(categoryLabels[section] || section)} 섹션에서 뺍니다</span></button>` : '');
+      m.addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        closeDislikeMenu();
+        const key = savedKeyOf(item);
+        if (b.dataset.act === 'block') blockFromSection(item, section);
+        else applyVote(item, key, votes.get(key) || null, -1);
+      });
+      document.body.appendChild(m);
+      // 버튼 아래 오른쪽 끝에 맞추고, 화면 밖으로 나가면 안쪽 · 위쪽으로 옮긴다
+      const r = btn.getBoundingClientRect();
+      const w = m.offsetWidth;
+      const h = m.offsetHeight;
+      let top = r.bottom + 6;
+      if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+      m.style.left = `${Math.min(Math.max(8, r.right - w), window.innerWidth - w - 8)}px`;
+      m.style.top = `${top}px`;
+      m.querySelector('button').focus();
+      // 지금 누른 손가락(pointerdown)이 바로 창을 닫지 않게 한 박자 뒤에 건다
+      setTimeout(() => {
+        document.addEventListener('pointerdown', onDislikeMenuOutside, true);
+        document.addEventListener('keydown', onDislikeMenuKey, true);
+        window.addEventListener('scroll', closeDislikeMenu, true);
+        window.addEventListener('resize', closeDislikeMenu);
+      });
+    }
+
+    function setBlockLocal(key, section, on, title = '') {
+      const rest = sectionBlocks.filter((b) => !(b.key === key && b.section === section));
+      setSectionBlocks(on ? [{ key, section, title, t: Date.now(), by: (authMe && authMe.email) || '' }, ...rest] : rest);
+      persistSectionBlocks();
+    }
+
+    function blockFromSection(item, section) {
+      const key = savedKeyOf(item);
+      if (!key || !section) return;
+      const title = plainText(item.title || '').slice(0, 300);
+      setBlockLocal(key, section, true, title);
+      const spots = hideFromLists(key, (it) => isBlockedFor(it, it.category));
+      rerenderListIfShown();
+      showToast(`${categoryLabels[section] || section} 섹션에서 모든 사용자에게 숨겼습니다.`, '되돌리기', () => unblockSection(key, section, spots));
+      sendBlock(key, section, true, title, spots);
+    }
+
+    // spots : 화면에서 뺀 자리(되돌리기). 관리자 목록에서 해제하면 없다 → 다음에 불러올 때 다시 보인다.
+    function unblockSection(key, section, spots = null) {
+      setBlockLocal(key, section, false);
+      if (spots) restoreSpots(spots);
+      sendBlock(key, section, false, '', null);
+    }
+
+    // 투표와 같은 줄(voteChain)로 보낸다 : 빼기 → 되돌리기를 빨리 눌러도 순서가 뒤바뀌지 않게.
+    function sendBlock(key, section, blocked, title, spots) {
+      voteChain = voteChain.then(async () => {
+        try {
+          const res = await apiFetch('/api/section-blocks', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, section, blocked, title }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+          renderSectionBlocksAdmin();
+        } catch (e) {
+          console.error('섹션 제외를 저장하지 못했습니다.', e);
+          // 그 사이 같은 기사를 또 바꿨다면(= 지금 상태가 내가 보낸 값이 아님) 건드리지 않는다.
+          if (blockedSet.has(blockId(key, section)) !== blocked) return;
+          setBlockLocal(key, section, !blocked, title);
+          if (blocked) { if (spots) restoreSpots(spots); } else dropBlockedFromScreen();
+          renderSectionBlocksAdmin();
+          showToast(blocked ? '섹션에서 빼지 못했습니다. 잠시 뒤 다시 눌러 주세요.' : '되살리지 못했습니다. 잠시 뒤 다시 눌러 주세요.');
+        }
+      });
+    }
+
+    // 관리자 Setting 탭의 '섹션에서 뺀 기사' 목록
+    function renderSectionBlocksAdmin() {
+      const wrap = document.getElementById('sb-list');
+      if (!wrap || !isAdminUser()) return;
+      const arg = (s) => esc(JSON.stringify(s));
+      wrap.innerHTML = `<div class="au-group"><h4>뺀 기사 (${sectionBlocks.length})</h4><div class="st-list">${
+        sectionBlocks.length ? sectionBlocks.map((b) => `<div class="st-item">
+          <div class="st-item-name"><span class="truncate">${esc(b.title || b.key)}</span><span>${esc([
+            categoryLabels[b.section] || b.section, b.t ? fmtAuthTime(new Date(b.t).toISOString()) : '', b.by,
+          ].filter(Boolean).join(' · '))}</span></div>
+          <div class="au-btns"><button type="button" class="pv-btn" onclick="adminUnblock(${arg(b.key)}, ${arg(b.section)})">해제</button></div>
+        </div>`).join('') : '<div class="au-empty">없음</div>'
+      }</div></div>`;
+    }
+
+    function adminUnblock(key, section) {
+      unblockSection(key, section);
+      renderSectionBlocksAdmin();
+      const msg = document.getElementById('sb-msg');
+      if (msg) { msg.textContent = '해제했습니다. 기사를 다시 불러오면 그 섹션에 다시 보입니다.'; msg.className = 'st-msg is-ok'; }
     }
 
     // ---------------------------------------------------------------
@@ -4040,6 +4267,8 @@
       loadReadArticles();           // [추가] 읽은 기사 목록 (목록을 그리기 전에 있어야 흐리게 표시된다)
       loadVotesFromCache();         // [추가] P3 : 싫어요 기사를 처음부터 빼고 그리려고 이 기기의 사본을 먼저 읽는다
       syncVotesInBackground();      // 서버의 내 투표로 바꾸고, 그 사이 그려진 목록에서 싫어요 기사를 걷어 낸다
+      loadSectionBlocksFromCache(); // [오분류 B] 관리자가 섹션에서 뺀 기사도 같은 방식 (이 기기 사본 → 서버 값)
+      syncSectionBlocksInBackground();
       loadScreenPrefs();            // [추가] 화면 옵션 (읽음 흐리게) — 첫 렌더 전에 적용
       loadSyncPending();            // [추가] P7 : 지난번에 서버로 못 보낸 변경
       loadAiKeyFlag();              // [P8] 키가 없던 기기면 첫 그림부터 Insight 버튼을 흐리게
@@ -4689,7 +4918,7 @@
         document.getElementById(`st-pane-${k}`).hidden = !on;
         document.getElementById(`st-foot-${k}`).hidden = !on;
       });
-      if (tab === 'admin') loadAdminUsers();
+      if (tab === 'admin') { loadAdminUsers(); syncSectionBlocksInBackground(); }
       renderKeywordSettings();   // 키워드 편집기는 하나라 보이는 탭(내 키워드 / 공용 기본 키워드) 칸에 다시 그린다
       renderSettingToggle();
     }
@@ -6058,8 +6287,10 @@
     }
 
     //   keepAll : 싫어요 기사도 남긴다 (저장한 기사 · 이어보기처럼 사용자가 직접 연 기사)
-    function decorateItems(items, category, keepAll = false) {
-      const shown = keepAll || category === 'saved' ? items : items.filter((item) => !isDislikedKey(savedKeyOf(item)));
+    //   keepBlocked : [오분류 B] 관리자가 섹션에서 뺀 기사도 남긴다 (검색 결과 · 관련 기사 · 이어보기는 섹션 목록이 아니다)
+    function decorateItems(items, category, keepAll = false, keepBlocked = false) {
+      const shown = keepAll || category === 'saved' ? items : items.filter((item) =>
+        !isDislikedKey(savedKeyOf(item)) && (keepBlocked || !isBlockedFor(item, category)));
       return shown.map((item) => ({
         id: nextId++,
         title: item.title || '(제목 없음)',
@@ -6933,7 +7164,7 @@
       try {
         if (keyword) {
           const data = await fetchFlatNews({ q: keyword, sort: getSort() });
-          const list = sortItemsByCurrent(decorateItems(data.items, ['all', 'logistics', 'stock', 'sports', 'briefing'].includes(currentCategory) ? 'society' : currentCategory));
+          const list = sortItemsByCurrent(decorateItems(data.items, ['all', 'logistics', 'stock', 'sports', 'briefing'].includes(currentCategory) ? 'society' : currentCategory, false, true));
           currentResults = list;
 
           const modeText = searchConditionText(data);
@@ -8785,7 +9016,7 @@
         // 기준 기사와 같은 카테고리 태그를 물려주되, 관련기사는 원본 섹션을 알 수 없으므로
         // 화면에는 기준 기사의 대표 섹션을 그대로 사용한다.
         const baseCat = (Array.isArray(item.cats) && item.cats.length) ? item.cats[0] : (item.category || 'society');
-        const list = decorateItems(data.items || [], baseCat);
+        const list = decorateItems(data.items || [], baseCat, false, true);
 
         // 요약/주요내용 버튼이 id로 찾을 수 있도록 등록 (누적)
         relatedItems = relatedItems.concat(list);
@@ -8827,7 +9058,7 @@
         updateFollowupBadge(key, raw.length);   // 배지가 아직 0이었으면 여기서 맞춰준다
 
         const baseCat = (Array.isArray(item.cats) && item.cats.length) ? item.cats[0] : (item.category || 'society');
-        const list = decorateItems(raw, baseCat);
+        const list = decorateItems(raw, baseCat, false, true);
         followupItems = followupItems.concat(list);
 
         document.getElementById('followup-count').textContent = list.length ? `${list.length}건` : '';

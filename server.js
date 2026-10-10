@@ -453,6 +453,86 @@ app.put('/api/votes', async (req, res) => {
   }
 });
 
+// -----------------------------------------------------------------
+// [오분류 B] 관리자가 '이 섹션에 안 맞음'으로 뺀 기사 (section_blocks)
+//   - 모든 사용자가 같이 쓰는 목록이다. 읽기는 허용 사용자 모두, 쓰기는 관리자만.
+//   - 거르기는 화면(decorateItems)이 한다. 기사 응답 캐시 열쇠에 이 목록이 들어가지 않게 하려는 것이다
+//     (들어가면 관리자가 뺄 때마다 프리워밍 칸을 못 쓴다 — PERFORMANCE.md 4장).
+//   - 모든 사용자가 화면을 열 때마다 읽으므로 1분 동안 메모리에 둔다. 서버가 하나라 쓰기 때 바로 고친다.
+// -----------------------------------------------------------------
+const BLOCKS_TABLE = 'section_blocks';
+const BLOCKS_READ_MAX = 2000;
+const BLOCKS_TTL = 60 * 1000;
+let blocksCache = null;   // { ts, rows: [{ key, section, title, by, t }] }
+
+async function readSectionBlocks() {
+  if (blocksCache && Date.now() - blocksCache.ts < BLOCKS_TTL) return blocksCache.rows;
+  const url = `${SUPABASE_URL}/rest/v1/${BLOCKS_TABLE}`
+    + `?select=url_key,section,title,blocked_by,created_at&order=created_at.desc&limit=${BLOCKS_READ_MAX}`;
+  const r = await fetchWithTimeout(url, { headers: supabaseHeaders() }, 5000);
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+  const rows = await r.json();
+  const list = (Array.isArray(rows) ? rows : []).map((x) => ({
+    key: x.url_key, section: x.section, title: x.title || '', by: x.blocked_by || '', t: Date.parse(x.created_at) || 0,
+  }));
+  blocksCache = { ts: Date.now(), rows: list };
+  return list;
+}
+
+app.get('/api/section-blocks', async (req, res) => {
+  try {
+    const rows = await readSectionBlocks();
+    res.set('Cache-Control', 'no-store');
+    // 누가 뺐는지는 관리자 목록에서만 쓴다
+    res.json({ blocks: req.user.isAdmin ? rows : rows.map(({ by, ...x }) => x) });
+  } catch (e) {
+    console.error('[섹션 제외 조회 실패]', e.message);
+    res.status(500).json({ error: '섹션에서 뺀 기사 목록을 읽지 못했습니다.' });
+  }
+});
+
+// blocked : true 빼기 · false 되살리기(행 삭제)
+app.put('/api/section-blocks', requireAdminUser, async (req, res) => {
+  const b = req.body || {};
+  const key = typeof b.key === 'string' ? b.key.trim() : '';
+  const section = typeof b.section === 'string' ? b.section.trim() : '';
+  if (!key || key.length > 2000) return res.status(400).json({ error: '기사 주소가 올바르지 않습니다.' });
+  if (!section || section.length > 40) return res.status(400).json({ error: '섹션이 올바르지 않습니다.' });
+  if (typeof b.blocked !== 'boolean') return res.status(400).json({ error: 'blocked 는 true 나 false 여야 합니다.' });
+  try {
+    if (!b.blocked) {
+      const url = `${SUPABASE_URL}/rest/v1/${BLOCKS_TABLE}?url_key=eq.${encodeURIComponent(key)}&section=eq.${encodeURIComponent(section)}`;
+      const r = await fetchWithTimeout(url, { method: 'DELETE', headers: { ...supabaseHeaders(), Prefer: 'return=minimal' } }, 5000);
+      if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+      if (blocksCache) blocksCache.rows = blocksCache.rows.filter((x) => !(x.key === key && x.section === section));
+      return res.json({ ok: true, blocked: false });
+    }
+    const row = {
+      url_key: key,
+      section,
+      title: typeof b.title === 'string' ? b.title.slice(0, 300) : null,
+      blocked_by: req.user.email || null,
+      created_at: new Date().toISOString(),
+    };
+    const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${BLOCKS_TABLE}?on_conflict=url_key,section`, {
+      method: 'POST',
+      headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify([row]),
+    }, 5000);
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+    if (blocksCache) {
+      blocksCache.rows = [
+        { key, section, title: row.title || '', by: row.blocked_by || '', t: Date.parse(row.created_at) },
+        ...blocksCache.rows.filter((x) => !(x.key === key && x.section === section)),
+      ];
+    }
+    res.json({ ok: true, blocked: true });
+  } catch (e) {
+    console.error('[섹션 제외 저장 실패]', e.message);
+    res.status(500).json({ error: '섹션에서 빼지 못했습니다.' });
+  }
+});
+
 // 파일 캐시: Supabase가 죽었을 때만 읽는다. 쓰기는 Supabase 성공 후 따라 쓴다.
 function readKeywordsFile() {
   try {
