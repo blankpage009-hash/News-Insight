@@ -1447,12 +1447,14 @@ const DOMAINS = {
     exclude: [],
   },
   // [추가] AI 도메인 : 인공지능 모델·기업·반도체 등 AI 맥락 단어
+  //   [ ] 로 묶은 것은 같은 뜻이라 한 가지로 센다(ctxHits). '인공지능(AI)' 한 마디가 2개로 세지던 것을 막는다.
+  //   서비스 · 기술 · 개발 · 출시 · 모델 · 학습은 아무 기사에나 나와 뺐다(금융·부동산 기사가 AI 섹션에 들어옴).
   ai: {
-    context: ['AI','인공지능','생성형','거대언어모델','LLM','챗봇','모델','알고리즘',
-              '머신러닝','딥러닝','학습','추론','데이터센터','GPU','반도체','가속기',
-              '오픈AI','OpenAI','앤스로픽','Anthropic','클로드','Claude','챗GPT','GPT',
-              '제미나이','Gemini','그록','Grok','엔비디아','NVIDIA','구글','마이크로소프트',
-              '메타','네이버','카카오','AI반도체','서비스','기술','개발','출시'],
+    context: [['AI','인공지능'],'생성형',['거대언어모델','LLM'],'챗봇','알고리즘',
+              '머신러닝','딥러닝','추론','데이터센터','GPU','반도체','가속기',
+              ['오픈AI','OpenAI'],['앤스로픽','Anthropic'],['클로드','Claude'],['챗GPT','GPT'],
+              ['제미나이','Gemini'],['그록','Grok'],['엔비디아','NVIDIA'],'구글','마이크로소프트',
+              '메타','네이버','카카오','AI반도체'],
     exclude: [],
   },
   // [추가] 스포츠 도메인 : 경기/선수/리그 등 스포츠 맥락 단어
@@ -1471,6 +1473,46 @@ function hitCount(text, words) {
   return (words || []).filter((w) => t.includes(compact(w))).length;
 }
 
+// 맥락 단어가 몇 '가지' 나오는지 센다. hitCount 는 '오픈AI' 하나를 '오픈AI'·'AI' 2개로,
+//   '인공지능(AI)' 하나를 2개로 셌다. 묶음([...])은 한 가지로 치고, 긴 단어부터 찾아 지워서
+//   그 안에 든 짧은 단어를 또 세지 않는다.
+function ctxHits(text, words) {
+  let t = compact(text);
+  const flat = [];
+  (words || []).forEach((w, gi) => {
+    [].concat(w).forEach((s) => { const c = compact(s); if (c) flat.push([c, gi]); });
+  });
+  flat.sort((a, b) => b[0].length - a[0].length);
+  const hit = new Set();
+  for (const [c, gi] of flat) {
+    if (!t.includes(c)) continue;
+    hit.add(gi);
+    t = t.split(c).join('\u0000');
+  }
+  return hit.size;
+}
+
+// 섹션 검색어 낱말이 글에 몇 번 나오는지(검색어마다 센 것의 합).
+//   여러 낱말 검색어('증시 코스피')는 낱말이 모두 나와야 세고, 그때는 낱말 수만큼 센다.
+//   서로 다른 두 낱말이 함께 나온 것 자체가 한 낱말 두 번만큼의 근거라서다.
+//   (낱말마다 2번씩 요구하면 '코스피 지지부진 속 코스닥 선전' 같은 증시 기사까지 빠졌다)
+//   띄어쓰기만 다른 검색어('포항 스틸러스' · '포항스틸러스')는 같은 말이라 둘 중 많이 센 쪽만 더한다.
+//   (한쪽을 아예 건너뛰면 본문 표기와 다른 쪽이 남아 0번이 됐다)
+function coreHits(text, terms) {
+  const lower = String(text || '').toLowerCase();
+  const best = new Map();   // 띄어쓰기 없앤 검색어 -> 센 횟수
+  for (const term of terms) {
+    const key = compact(term);
+    if (!key) continue;
+    const toks = tokensOf(term);
+    const n = Math.min(...toks.map((k) => lower.split(k).length - 1)) * toks.length;
+    best.set(key, Math.max(best.get(key) || 0, n));
+  }
+  let total = 0;
+  best.forEach((n) => { total += n; });
+  return total;
+}
+
 // -----------------------------------------------------------------
 // [추가] 카테고리 정확도 검증
 //  - 제목에 키워드가 있으면 = 그 기사의 '핵심 주제' → 통과
@@ -1483,6 +1525,13 @@ const VERIFY_LIMIT = 20;     // 원문을 읽어볼 최대 후보 수(속도 보
 // 동시성이 낮으면 느린 언론사 한 곳이 워커 하나를 붙잡아 그 줄 전체가 밀린다.
 // 6 → 20 으로 올려 느린 꼬리가 전체를 지연시키지 않게 한다.
 const VERIFY_CONCURRENCY = 20;
+// 제목에 섹션 검색어가 없을 때, 리드문에 '흔한 낱말' 검색어만 나오면 2번 이상 나와야 그 섹션 기사로 본다.
+//   1번이면 '반도체와 인공지능(AI) 관련 업종…' 처럼 지나가듯 한 번 언급한 금융 기사도 AI 섹션에 들어왔다.
+//   회사 이름 · 고유명사('CJ대한통운' · '포항스틸러스')나 분류 이름('정치' · '국제')은 예전대로 1번이면 통과.
+//   이런 검색어까지 2번을 요구하면 포항 하위 섹션이 12건 → 2건, 경쟁사 섹션에서
+//   '롯데글로벌로지스·CJ대한통운 … 휴머노이드 실증' 기사가 빠지는 등 제 섹션 기사까지 빠졌다.
+const CORE_WEAK_TERMS = new Set(['ai', '물류']);
+const CORE_WEAK_MIN_HITS = 2;
 
 // url -> { ts, text, lead }   (Map = 삽입순 유지 → LRU 로 씀)
 //   lead=true 는 '리드문만 있는 항목'이라는 표시다. 정확도 검증에는 충분하지만
@@ -1870,6 +1919,8 @@ async function fetchArticleTextSmart(url, naverUrl, minLen = 200) {
 
 // 기사 목록 중 '핵심 주제'가 키워드와 맞는 것만 남긴다
 async function filterByCore(items, terms) {
+  const strongTerms = terms.filter((t) => !CORE_WEAK_TERMS.has(compact(t)));
+  const weakTerms = terms.filter((t) => CORE_WEAK_TERMS.has(compact(t)));
   const passed = [];
   const pending = [];
 
@@ -1883,7 +1934,8 @@ async function filterByCore(items, terms) {
     const body = await fetchArticleText(it.url);
     if (!body) return it; // [B] 원문 확인 불가 → 버리지 않고 살려둔다 (언론사 봇 차단이 잦음)
     const lead = body.slice(0, LEAD_CHARS);
-    return terms.some((t) => textContainsTerm(lead, t)) ? it : null;
+    if (strongTerms.some((t) => textContainsTerm(lead, t))) return it;
+    return coreHits(lead, weakTerms) >= CORE_WEAK_MIN_HITS ? it : null;
   });
 
   return passed.concat(verified.filter(Boolean));
@@ -1917,7 +1969,7 @@ async function refineByDomain(items, terms, domKey, excludeOverride) {
     if (hitCount(head, excl) >= 2) continue;      // 요약에도 제외어 다수 → 탈락
 
     const subjectInTitle = terms.some((t) => textContainsTerm(it.title, t));
-    const ctx = hitCount(head, dom.context);
+    const ctx = ctxHits(head, dom.context);
 
     if (subjectInTitle && ctx >= 1) pass.push(it);
     else if (ctx >= 2) pass.push(it);
@@ -1930,7 +1982,7 @@ async function refineByDomain(items, terms, domKey, excludeOverride) {
     const lead = (await fetchArticleText(it.url)).slice(0, LEAD_CHARS);
     if (!lead) return null;                              // 확인 불가 → 정확도 우선(탈락)
     if (hitCount(lead, excl) >= 2) return null;
-    return hitCount(lead, dom.context) >= 2 ? it : null;
+    return ctxHits(lead, dom.context) >= 2 ? it : null;
   });
 
   return pass.concat(rescued.filter(Boolean));
