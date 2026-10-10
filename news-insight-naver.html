@@ -2308,8 +2308,9 @@
           </div>
           <!-- [P9] AI 모델 : 내 키로 쓸 수 있는 모델만 보인다. 고른 모델이 안 되면 자동 순서로 대신 만든다 -->
           <div class="st-row" id="ai-model-row">
-            <div class="st-name"><b>AI 모델</b><span class="st-hint">자동이 가장 무난합니다 · 고른 모델이 응답하지 않으면 자동 순서로 대신 만듭니다<br>
-              같은 기사를 이미 누가 정리했다면 모델과 상관없이 그 결과가 보입니다(아래에 만든 모델 표시)</span></div>
+            <div class="st-name"><b>AI 모델</b><span class="st-hint">ㆍ선택한 모델을 우선으로 사용합니다.<br>
+              ㆍ선택한 모델이 응답하지 않으면 자동으로 순서를 바꿔 만듭니다.<br>
+              ㆍ다른 사용자가 이미 생성한 결과가 있다면 모델과 상관없이 그 결과가 보입니다. (아래에 만든 모델 표시)</span></div>
             <div class="min-w-0">
               <div class="au-add">
                 <select id="ai-model-select" class="st-input" aria-label="AI 모델" onchange="onAiModelChange(this.value)"></select>
@@ -8586,10 +8587,20 @@
     // ---------------------------------------------------------------
     let aiModelLoading = false;
 
+    // 한 번도 고른 적 없는 사람의 기본 모델. 'auto' 를 직접 고른 사람은 그대로 자동으로 둔다.
+    const AI_MODEL_DEFAULT = 'gemini-3.5-flash-lite';
+
+    // 지금 선택된 값('auto' 또는 모델 이름). 저장된 값이 없으면 기본 모델
+    function aiModelCur() {
+      const v = syncLsGet(AI_MODEL_KEY);
+      if (!v) return AI_MODEL_DEFAULT;
+      return v === 'auto' || AI_MODEL_RE.test(v) ? v : AI_MODEL_DEFAULT;
+    }
+
     // 요청에 실을 모델 이름. 자동이면 ''
     function aiModelPick() {
-      const v = syncLsGet(AI_MODEL_KEY);
-      return v && v !== 'auto' && AI_MODEL_RE.test(v) ? v : '';
+      const v = aiModelCur();
+      return v === 'auto' ? '' : v;
     }
 
     function setAiModelMsg(msg, kind = '') {
@@ -8604,7 +8615,7 @@
       const sel = document.getElementById('ai-model-select');
       if (!sel) return;
       const ok = !!aiKeyInfo && !aiKeyInfo.broken;
-      const cur = aiModelPick() || 'auto';
+      const cur = aiModelCur();
       const L = aiModelList;
       const opt = (m) => `<option value="${esc(m.id)}">${esc(m.id)}${m.note ? ` — ${esc(m.note)}` : ''}</option>`;
       let html = `<option value="auto">자동 (권장) — ${ok ? `${esc((L && L.autoFirst) || 'gemini-3.1-flash-lite')} 우선` : aiKeyInfo === undefined ? '키 확인 중…' : 'AI 키를 등록하면 고를 수 있습니다'}</option>`;
