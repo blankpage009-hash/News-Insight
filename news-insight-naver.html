@@ -1797,7 +1797,7 @@
       <div class="flex items-end gap-2 lg:gap-3 min-w-0">
         <h1 class="min-w-0 shrink">
           <!-- [수정] v3 : 시안 3c '칼럼' 로고. 검정 사각형 위에 레드 줄 1개 + 흰(배경색) 줄 2개. -->
-          <span id="app-logo" class="flex items-center">
+          <span id="app-logo" class="flex items-center cursor-pointer" role="link" tabindex="0" title="초기화면으로" onclick="goHome()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goHome();}">
             <svg id="logo-mark-svg" class="logo-mark" viewBox="0 0 24 24" aria-hidden="true">
               <rect width="24" height="24" fill="rgb(var(--c-paper))"/>
               <rect x="4" y="4.5" width="16" height="3.5" fill="rgb(var(--c-gold))"/>
@@ -6237,6 +6237,13 @@
       });
       renderCategoryButtons();
       runSearch();
+    }
+
+    // 헤더 로고 : 어느 화면에서든 초기화면(Today's Briefing)으로 돌아간다.
+    //   검색·저장·다른 섹션 정리는 selectCategory 가 이미 하므로 그대로 재사용한다.
+    function goHome() {
+      selectCategory('briefing');
+      window.scrollTo({ top: 0 });
     }
 
     function onSearchClick() { runSearch(); }
