@@ -3775,11 +3775,22 @@
     const BLOCK_STORAGE_KEY = 'newsinsight:section-blocks:v1';
     let sectionBlocks = [];         // [{ key, section, title, t, by }] 최근 순 (관리자 목록용)
     let blockedSet = new Set();     // '<기사 열쇠>|<섹션>'
+    let blockedUpSet = new Set();   // '<기사 열쇠>|<상위 섹션>' : 하위 섹션에서 뺀 기사는 그 상위 섹션 목록에서도 뺀다
+    let movedInSet = new Set();     // '<기사 열쇠>|<섹션>' : 그 섹션(또는 그 하위)으로 옮겨 온 기사. 위 규칙으로 빠지지 않는다
     const blockId = (key, section) => `${key}|${section}`;
 
     function setSectionBlocks(list) {
       sectionBlocks = list;
       blockedSet = new Set(list.map((b) => blockId(b.key, b.section)));
+      blockedUpSet = new Set();
+      list.forEach((b) => { const up = parentCategoryOf(b.section); if (up) blockedUpSet.add(blockId(b.key, up)); });
+      movedInSet = new Set();
+      list.forEach((b) => {
+        if (!b.to || blockedSet.has(blockId(b.key, b.to))) return;   // 옮겨 간 곳에서 다시 빼면 옮겨 온 것이 아니다
+        movedInSet.add(blockId(b.key, b.to));
+        const up = parentCategoryOf(b.to);
+        if (up) movedInSet.add(blockId(b.key, up));
+      });
     }
 
     // 이 기기 사본 : 첫 그림부터 빼려는 용도. 제목은 빼고 둔다(최대 2000건이라 사본이 커지지 않게).
@@ -3801,8 +3812,16 @@
       const key = savedKeyOf(item);
       if (!key) return false;
       // 출처 섹션(cat)은 브리핑만 본다. 다른 화면 기사에 cat 이 붙게 되더라도 엉뚱한 섹션에서 사라지지 않게.
-      return blockedSet.has(blockId(key, category))
-        || (category === 'briefing' && !!item.cat && blockedSet.has(blockId(key, item.cat)));
+      return blockedIn(key, category)
+        || (category === 'briefing' && !!item.cat && blockedIn(key, item.cat));
+    }
+
+    // 그 섹션에서 뺐거나, 그 섹션의 하위 섹션 어딘가에서 뺐으면 true.
+    //   (예 : 물류 > 쿠팡에서 뺀 기사는 물류 전체 목록에서도 빠진다.)
+    //   단 그 섹션 아래로 관리자가 옮겨 온 기사는 하위 섹션 기록 때문에 빠지지 않는다(경쟁사 → 쿠팡으로 옮기면 물류에는 그대로).
+    function blockedIn(key, section) {
+      const id = blockId(key, section);
+      return blockedSet.has(id) || (blockedUpSet.has(id) && !movedInSet.has(id));
     }
 
     async function syncSectionBlocksInBackground() {
