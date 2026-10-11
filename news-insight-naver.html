@@ -169,6 +169,7 @@
     --c-ink: 243 242 242;   --c-ink2: 234 233 233; --c-ink3: 215 211 211;   /* 배경 #f3f2f2 · 면 #eae9e9 · 한 단계 진한 면 */
     --c-line: 186 182 182;  --c-gold: 236 48 19;   --c-gold2: 221 43 15;    /* 선 · 강조 #ec3013 · 강조 hover */
     --c-wire: 28 101 200;   --c-paper: 32 30 29;   --c-muted: 96 93 93;     /* 배지 파랑 · 글자 #201e1d · 보조글자 #605d5d */
+    --bw2: 2px;                                                             /* 굵은 구분선 두께 (다크에서는 1px 로 얇게) */
     --c-panel: 234 231 231;
     --c-rail: 243 242 242;  --c-muted2: 125 121 121;
     --c-up: 174 24 0;       --c-down: 28 101 200;                           /* 상승(진한 레드) · 하락 oklch(.52 .17 258) */
@@ -189,6 +190,7 @@
     --c-ink: 24 22 21;      --c-ink2: 33 31 30;    --c-ink3: 47 44 43;      /* 배경 #181615 · 면 #211f1e · 한 단계 밝은 면 */
     --c-line: 78 74 72;     --c-gold: 255 94 69;   --c-gold2: 255 125 104;  /* 선 · 강조 #ff5e45 · 강조 hover */
     --c-wire: 120 166 240;  --c-paper: 238 234 231;--c-muted: 173 167 163;  /* 배지 파랑 · 글자 #eeeae7 · 보조글자 #ada7a3 */
+    --bw2: 1px;                                                             /* 다크 : 하얀 굵은 선이 너무 도드라져서 2px → 1px */
     --c-panel: 38 36 35;
     --c-rail: 24 22 21;     --c-muted2: 140 134 130;
     --c-up: 255 112 92;     --c-down: 110 164 255;
@@ -295,7 +297,7 @@
   @media (max-width: 1023.98px) {
     #index-strip {
       display: flex; gap: 16px; padding: 8px 16px;
-      border-bottom: 2px solid rgb(var(--c-paper)); background: rgb(var(--c-ink));
+      border-bottom: var(--bw2) solid rgb(var(--c-paper)); background: rgb(var(--c-ink));
       font-size: 12px; line-height: 1.55; white-space: nowrap; font-variant-numeric: tabular-nums;
       overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
     }
@@ -319,7 +321,7 @@
     z-index: 45;                      /* 본문·상단바 위, 팝업(60~) 아래 */
     grid-template-columns: repeat(4, minmax(0, 1fr));
     padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px));   /* 아이콘을 화면 아래 끝에서 띄우려고 바 안쪽 여백을 늘림 (아이폰 둥근 모서리에 글자가 잘리지 않게) */
-    border-top: 2px solid rgb(var(--c-paper));
+    border-top: var(--bw2) solid rgb(var(--c-paper));
     background: rgb(var(--c-ink));
   }
   #tab-bar button {
@@ -362,7 +364,7 @@
       align-items: center;
       gap: 1.333rem;                        /* 시안 20px */
       padding: .667rem 2rem;                /* 시안 10px 32px */
-      border-bottom: 2px solid rgb(var(--c-paper));
+      border-bottom: var(--bw2) solid rgb(var(--c-paper));
       background: rgb(var(--c-ink));
       font-size: .8rem;                     /* 시안 12px */
       white-space: nowrap;
@@ -446,7 +448,7 @@
       top: var(--stick-top, 121px);
       /* 목록이 짧아도 왼쪽 선이 화면 아래 끝까지 내려오도록 높이를 채운다 */
       height: calc(100vh - var(--stick-top, 121px));
-      border-left: 2px solid rgb(var(--c-paper));
+      border-left: var(--bw2) solid rgb(var(--c-paper));
       overflow-y: auto;
       overflow-x: hidden;   /* overflow-y 만 auto 로 두면 가로 막대가 같이 뜰 수 있다 */
       overscroll-behavior: contain;
@@ -484,7 +486,7 @@
     #cat-chips:not(:empty) {
       display: flex; gap: 4px; padding: 6px 16px;
       box-sizing: border-box; height: 42px;   /* 상위 탭 줄과 같은 높이 */
-      background: rgb(var(--c-ink2)); border-bottom: 2px solid rgb(var(--c-paper));
+      background: rgb(var(--c-ink2)); border-bottom: var(--bw2) solid rgb(var(--c-paper));
       overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
     }
     #cat-tabs::-webkit-scrollbar, #cat-chips::-webkit-scrollbar { height: 0; }
@@ -497,7 +499,7 @@
     #top-stick { display: flow-root; padding: 0 1rem; margin-left: -1rem; margin-right: -1rem; }
     /* 제목 아래 검은 선 : 원래 기사 목록(.bc-list)의 위쪽 테두리라 스크롤하면 같이 올라가 사라졌다.
        제목 바가 보이는 화면에서는 고정 영역의 아래 테두리가 대신 맡고, 목록 쪽 선은 겹치지 않게 뺀다. */
-    #top-stick:has(#cat-header:not(.hidden)) { border-bottom: 2px solid rgb(var(--c-paper)); }
+    #top-stick:has(#cat-header:not(.hidden)) { border-bottom: var(--bw2) solid rgb(var(--c-paper)); }
     #top-stick:has(#cat-header:not(.hidden)) ~ #news-list .bc-list,
     #top-stick:has(#cat-header:not(.hidden)) ~ #news-list .bc { border-top: 0; }   /* 카드형 상자(.bc)도 같은 이유로 */
     #news-list { margin-top: 0 !important; }
@@ -527,7 +529,7 @@
     /* 검색 탭 (시안 1f) : 둥근 상자 대신 평평한 머리 = 큰 제목 · 48px 검색 칸 · 아래 2px 검정 선.
        결과를 볼 자리가 좁아 틀고정하지 않는다(updateSearchStick 도 0). 접기·닫기 버튼은 없다(다른 탭을 누르면 닫힌다).
        검색어 규칙 · 노출 건수/기간/정렬은 칸에 커서가 있을 때만 펼친다 → 평소에는 시안처럼 칸 하나만 보인다. */
-    #search-popup { position: static !important; margin: 0 -1rem !important; padding: 16px 1rem 14px !important; border-bottom: 2px solid rgb(var(--c-paper)); }
+    #search-popup { position: static !important; margin: 0 -1rem !important; padding: 16px 1rem 14px !important; border-bottom: var(--bw2) solid rgb(var(--c-paper)); }
     #search-popup > div { max-height: none; overflow: visible; background: none; border: 0; border-radius: 0; box-shadow: none; }
     #search-popup header { position: static; padding: 0 0 12px; border: 0; border-radius: 0; background: none; }
     #search-popup header h2 { font-size: 26px; font-weight: 800; letter-spacing: -.03em; color: rgb(var(--c-paper)); }
@@ -585,7 +587,7 @@
   .panel-head {
     display: flex; align-items: baseline; justify-content: space-between; gap: .5rem;
     padding: 1.333rem 1.333rem .667rem;   /* 시안 20px 20px 10px */
-    border-bottom: 2px solid rgb(var(--c-paper));
+    border-bottom: var(--bw2) solid rgb(var(--c-paper));
   }
   .panel-head h2 { font-size: .867rem; font-weight: 800; letter-spacing: .12em; }
   .panel-sec { flex-shrink: 0; }
@@ -637,7 +639,7 @@
     .rail-kw-row:hover { background: rgb(var(--c-ink2)); }
   }
   /* [수정] v3 Phase 9 · 시안 1f : 모바일 검색 탭의 키워드 랭킹 Top 10 (줄 48px · 화면 끝까지 닿는 구분선) */
-  .kw-rank-list { margin: 0 -1rem; border-top: 2px solid rgb(var(--c-paper)); }
+  .kw-rank-list { margin: 0 -1rem; border-top: var(--bw2) solid rgb(var(--c-paper)); }
   .kw-rank-row {
     display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center;
     width: 100%; height: 48px; padding: 0 1rem; text-align: left;
@@ -821,9 +823,9 @@
   .pv-shell {
     display: flex; flex-direction: column; width: 100%; max-height: 94vh;
     background: rgb(var(--c-ink)); color: rgb(var(--c-paper));
-    border: 2px solid rgb(var(--c-paper)); box-shadow: 0 12px 32px rgb(var(--c-paper) / .22);
+    border: var(--bw2) solid rgb(var(--c-paper)); box-shadow: 0 12px 32px rgb(var(--c-paper) / .22);
   }
-  .pv-head { flex: none; display: flex; align-items: center; gap: 12px; padding: 16px 28px; border-bottom: 2px solid rgb(var(--c-paper)); }
+  .pv-head { flex: none; display: flex; align-items: center; gap: 12px; padding: 16px 28px; border-bottom: var(--bw2) solid rgb(var(--c-paper)); }
   .pv-label {
     flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
     background: rgb(var(--c-gold)); color: rgb(var(--c-ink));
@@ -848,7 +850,7 @@
   /* is-flush 팝업(인사이트)의 '불러오는 중' · 오류 여백. Tailwind CDN의 p-7 은 화면에 처음 나타난 뒤에 생성돼
      첫 순간 여백이 0 이 되어 글자가 왼쪽에 붙어 잘려 보였다 → 미리 정의된 클래스로 둔다. */
   .pv-pad { padding: 28px; }
-  .pv-foot { flex: none; display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 16px 28px; border-top: 2px solid rgb(var(--c-paper)); }
+  .pv-foot { flex: none; display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 16px 28px; border-top: var(--bw2) solid rgb(var(--c-paper)); }
   .pv-note { flex: 1 1 220px; min-width: 0; font-size: 12px; line-height: 1.5; color: rgb(var(--c-muted)); }
   .pv-actions { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
   .pv-btn {
@@ -867,7 +869,7 @@
   .pv-lead { font-size: 15px; line-height: 1.7; color: rgb(var(--c-text2)); word-break: keep-all; text-wrap: pretty; }
   .pv-h4 { margin-bottom: 8px; font-size: 15px; font-weight: 800; letter-spacing: -.015em; }
   .pv-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  .pv-table thead tr { border-top: 2px solid rgb(var(--c-paper)); border-bottom: 1px solid rgb(var(--c-paper)); }
+  .pv-table thead tr { border-top: var(--bw2) solid rgb(var(--c-paper)); border-bottom: 1px solid rgb(var(--c-paper)); }
   .pv-table th { padding: 8px 0; text-align: left; font-size: 12px; font-weight: 600; color: rgb(var(--c-muted)); }
   .pv-table td { padding: 10px 0; vertical-align: top; line-height: 1.55; word-break: keep-all; border-bottom: 1px solid rgb(var(--c-paper) / .4); }
   .pv-table th:first-child, .pv-table td:first-child { width: 140px; padding-right: 16px; }
@@ -894,7 +896,7 @@
     .pv-instabs {
       position: sticky; top: 0; z-index: 1;
       display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      background: rgb(var(--c-ink)); border-bottom: 2px solid rgb(var(--c-paper));
+      background: rgb(var(--c-ink)); border-bottom: var(--bw2) solid rgb(var(--c-paper));
     }
     .pv-instabs button {
       display: flex; align-items: center; justify-content: center; gap: 6px; height: 38px; padding: 0 16px;
@@ -909,10 +911,10 @@
     .pv-cols.is-2 > .pv-col + .pv-col { border-top: 0; }
   }
   .pv-col { display: flex; flex-direction: column; gap: 14px; padding: 24px 28px 28px; }
-  .pv-col + .pv-col { border-top: 2px solid rgb(var(--c-paper)); }
+  .pv-col + .pv-col { border-top: var(--bw2) solid rgb(var(--c-paper)); }
   @media (min-width: 1024px) {
     .pv-cols.is-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-    .pv-cols.is-2 > .pv-col + .pv-col { border-top: 0; border-left: 2px solid rgb(var(--c-paper)); }
+    .pv-cols.is-2 > .pv-col + .pv-col { border-top: 0; border-left: var(--bw2) solid rgb(var(--c-paper)); }
   }
   .pv-kind { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
   .pv-kind svg { width: 15px; height: 15px; }
@@ -931,7 +933,7 @@
   .pv-sign.is-risk { color: rgb(var(--c-up)); }
   .pv-sublabel { display: block; margin-bottom: 8px; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
   .pv-chip { display: inline-block; padding: 3px 8px; border: 1px solid rgb(var(--c-paper) / .4); font-size: 11px; line-height: 1.3; color: rgb(var(--c-muted)); }
-  .pv-stocks { margin-top: 6px; padding-top: 14px; border-top: 2px solid rgb(var(--c-paper)); display: flex; flex-direction: column; gap: 12px; }
+  .pv-stocks { margin-top: 6px; padding-top: 14px; border-top: var(--bw2) solid rgb(var(--c-paper)); display: flex; flex-direction: column; gap: 12px; }
   .pv-stock { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; word-break: keep-all; }
   .pv-stock b { font-size: 14px; font-weight: 700; }
   .pv-stock .sector { font-size: 11px; color: rgb(var(--c-muted)); }
@@ -957,7 +959,7 @@
   .pv-big { font-size: 32px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1.1; }
   .pv-diff { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .pv-sub { font-size: 12px; color: rgb(var(--c-muted)); }
-  .pv-plot { padding-top: 8px; border-top: 2px solid rgb(var(--c-paper)); }
+  .pv-plot { padding-top: 8px; border-top: var(--bw2) solid rgb(var(--c-paper)); }
   .pv-fine { font-size: 12px; line-height: 1.5; color: rgb(var(--c-muted)); }
 
   @media (max-width: 639.98px) {
@@ -987,7 +989,7 @@
   .st-shell [hidden] { display: none !important; }
   .st-h2 { font-size: 15px; font-weight: 800; letter-spacing: -.015em; line-height: 1.12; }
   .st-grid { flex: 0 1 560px; min-height: 0; display: grid; grid-template-columns: 180px minmax(0, 1fr); }
-  .st-nav { display: flex; flex-direction: column; border-right: 2px solid rgb(var(--c-paper)); }
+  .st-nav { display: flex; flex-direction: column; border-right: var(--bw2) solid rgb(var(--c-paper)); }
   .st-tab {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     padding: 13px 20px; border-bottom: 1px solid rgb(var(--c-paper));
@@ -1013,7 +1015,7 @@
   .st-seg > button:disabled { color: rgb(var(--c-muted) / .5); cursor: not-allowed; }
   .st-seg.is-sm > button { width: 35px; padding: 5px 0; font-size: 12px; line-height: 18px; text-align: center; }
   /* 값 칸 안에서 다시 줄로 나뉘는 목록 (노출 건수 · 화면 옵션) */
-  .st-list { border-top: 2px solid rgb(var(--c-paper)); }
+  .st-list { border-top: var(--bw2) solid rgb(var(--c-paper)); }
   .st-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgb(var(--c-paper)); }
   .st-item-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .st-item-name > span:first-child { font-size: 14px; font-weight: 600; line-height: 21px; }
@@ -1091,8 +1093,8 @@
     position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
     padding: 16px; background: rgb(var(--c-ink)); overflow-y: auto;
   }
-  .ag-box { width: 100%; max-width: 380px; border: 2px solid rgb(var(--c-paper)); background: rgb(var(--c-ink)); }
-  .ag-head { padding: 22px 24px 16px; border-bottom: 2px solid rgb(var(--c-paper)); }
+  .ag-box { width: 100%; max-width: 380px; border: var(--bw2) solid rgb(var(--c-paper)); background: rgb(var(--c-ink)); }
+  .ag-head { padding: 22px 24px 16px; border-bottom: var(--bw2) solid rgb(var(--c-paper)); }
   .ag-brand { font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
   /* 헤더 부제와 같은 말투 : 대문자 · 자간 넓게, 버전 숫자만 소문자 그대로 */
   .ag-sub { margin-top: 6px; font-size: 12px; line-height: 1.5; color: rgb(var(--c-muted)); text-transform: uppercase; letter-spacing: .08em; }
@@ -1155,7 +1157,7 @@
   /* 640px 미만 : 왼쪽 탭 → 위쪽 가로 탭. 팝업은 바텀시트(아래 공통 규칙)가 되므로 높이 고정도 푼다 */
   @media (max-width: 639.98px) {
     .st-grid { flex: 1 1 auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-    .st-nav { flex-direction: row; border-right: 0; border-bottom: 2px solid rgb(var(--c-paper)); }
+    .st-nav { flex-direction: row; border-right: 0; border-bottom: var(--bw2) solid rgb(var(--c-paper)); }
     .st-tab { flex: 1; justify-content: center; border-bottom: 0; padding: 9px 10px; }   /* Insight 두 관점 탭(38px)과 같은 높이 */
     .st-tab + .st-tab { border-left: 1px solid rgb(var(--c-paper)); }
     .st-seg:not(.is-sm) > button { padding-top: 5px; padding-bottom: 5px; }   /* 테마 토글 : 34px → 30px */
@@ -1187,7 +1189,7 @@
   .view-toggle button:not(.is-on):hover { background: rgb(var(--c-ink2)); }
   .view-toggle button.is-on { background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); }
 
-  .bc { border-top: 2px solid rgb(var(--c-paper)); }   /* 카드형도 목록형(.bc-list)과 같은 검은 구분선 */
+  .bc { border-top: var(--bw2) solid rgb(var(--c-paper)); }   /* 카드형도 목록형(.bc-list)과 같은 검은 구분선 */
   .bc-top { display: flex; justify-content: flex-end; align-items: baseline; gap: 4px; padding-top: .25rem; position: relative; top: .875rem; font-variant-numeric: tabular-nums; }   /* top 으로만 내려 아래 카드 위치는 그대로 두고 구분선과 간격을 띄운다 */
   .bc-cur { font-size: 2.133rem; font-weight: 800; line-height: .9; letter-spacing: -.04em; color: rgb(var(--c-gold)); }
   .bc-tot { font-size: .933rem; font-weight: 600; color: rgb(var(--c-muted2)); }
@@ -1205,7 +1207,7 @@
     position: absolute; top: 8px; left: 50%;
     width: min(640px, calc(100% - 4rem)); height: calc(var(--bc-hd) - 24px);
     display: flex; flex-direction: column;
-    background: rgb(var(--c-ink2)); border: 2px solid rgb(var(--c-paper) / .4);
+    background: rgb(var(--c-ink2)); border: var(--bw2) solid rgb(var(--c-paper) / .4);
     transform: translateX(calc(-50% + var(--d, 0) * (100% + 28px) + var(--dx, 0px))) scale(var(--s, 1));
     opacity: var(--o, 1);
     transition: transform .5s cubic-bezier(.2, .8, .2, 1), opacity .4s;
@@ -1239,7 +1241,7 @@
     font-size: 1rem; line-height: 1.7; color: rgb(var(--c-text2)); text-wrap: pretty; word-break: keep-all;
     -webkit-mask-image: linear-gradient(#000 calc(100% - 2.4em), transparent); mask-image: linear-gradient(#000 calc(100% - 2.4em), transparent);
   }
-  .bc-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; border-top: 2px solid rgb(var(--c-paper)); }
+  .bc-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; border-top: var(--bw2) solid rgb(var(--c-paper)); }
   .bc-act {
     display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px;
     padding: 10px 16px; font-size: .933rem; font-weight: 800; line-height: 1.2; white-space: nowrap;
@@ -1314,7 +1316,7 @@
   .bc-seg.is-on span { height: 6px; background: rgb(var(--c-gold)); }
 
   /* 목록형 : 번호 · 메타 · 제목 · 요약 · 버튼 + 오른쪽 저장 버튼 (시안 2a 목록) */
-  .bc-list { margin: 1rem 0 2rem; border-top: 2px solid rgb(var(--c-paper)); }
+  .bc-list { margin: 1rem 0 2rem; border-top: var(--bw2) solid rgb(var(--c-paper)); }
   .bc-row {
     display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 4px 16px;
     padding: 14px 0; border-bottom: 1px solid rgb(var(--c-paper) / .4);
@@ -1354,7 +1356,7 @@
        시안에 없는 화면이라 2a 목록형 말투를 따른다 : 위 2px 검정 선 · 800 굵기 제목 · 26px 필터 아이콘 → 드롭다운.
        .sec-filters 의 열고 닫기(display)는 아래 공용 규칙(header .sec-filters)이 맡고, 여기서는 위치·모양만 정한다.
      --------------------------------------------------------------- */
-  .sec-box { margin-bottom: 2rem; border-top: 2px solid rgb(var(--c-paper)); }
+  .sec-box { margin-bottom: 2rem; border-top: var(--bw2) solid rgb(var(--c-paper)); }
   .sec-head { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgb(var(--c-paper) / .4); }
   .sec-toggle { display: flex; align-items: center; gap: 8px; min-width: 0; color: rgb(var(--c-paper)); text-align: left; }
   .sec-toggle h2 { font-size: 1.6rem; font-weight: 800; line-height: 1.2; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1369,11 +1371,11 @@
     position: absolute; top: calc(100% + .25rem); right: 0; z-index: 45;
     width: max-content; min-width: 11rem; padding: .5rem;
     flex-direction: column; align-items: stretch; gap: .375rem;
-    background: rgb(var(--c-ink2)); border: 2px solid rgb(var(--c-paper)); box-shadow: var(--sh-panel);
+    background: rgb(var(--c-ink2)); border: var(--bw2) solid rgb(var(--c-paper)); box-shadow: var(--sh-panel);
   }
   .sec-box .sec-filters > select { width: 100%; }
   .sec-empty { padding: 2rem 0; text-align: center; color: rgb(var(--c-muted)); }
-  .empty-box { padding: 2rem 0; border-top: 2px solid rgb(var(--c-paper)); font-size: .933rem; line-height: 1.6; color: rgb(var(--c-muted)); word-break: keep-all; }
+  .empty-box { padding: 2rem 0; border-top: var(--bw2) solid rgb(var(--c-paper)); font-size: .933rem; line-height: 1.6; color: rgb(var(--c-muted)); word-break: keep-all; }
   /* 상자 안 목록은 상자 머리가 이미 선을 그었으니 위 2px 선 · 바깥 여백을 뺀다 */
   .bc-list.is-in-box { margin: 0; border-top: 0; }
   .bc-list.is-in-box .bc-row:last-child { border-bottom: 0; }
@@ -1540,7 +1542,7 @@
       flex-wrap: nowrap;
       gap: .375rem;
       background: rgb(var(--c-ink2));
-      border: 2px solid rgb(var(--c-paper));
+      border: var(--bw2) solid rgb(var(--c-paper));
       border-radius: 0;
       box-shadow: var(--sh-panel);
     }
@@ -1611,7 +1613,7 @@
       flex-wrap: nowrap;
       gap: .375rem;
       background: rgb(var(--c-ink2));
-      border: 2px solid rgb(var(--c-paper));
+      border: var(--bw2) solid rgb(var(--c-paper));
       box-shadow: var(--sh-panel);
     }
     body.hf-open #cat-header-filters > select { width: 100%; }
@@ -1629,7 +1631,7 @@
        펼치면 [포함 | 제외] 두 칸, 그 아래 하위 섹션 줄(왼쪽 2px 선)이 다시 펼쳐진다.
        입력은 시안의 큰 글상자 대신 예전 칩을 그대로 쓴다. (사용자 결정 : Enter·콤마로 담고 ×·Backspace 로 지움)
      --------------------------------------------------------------- */
-  .kw-acc { border-top: 2px solid rgb(var(--c-paper)); }
+  .kw-acc { border-top: var(--bw2) solid rgb(var(--c-paper)); }
   .kw-sec { border-bottom: 1px solid rgb(var(--c-paper)); }
   .kw-sec-btn, .kw-sub-btn { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; transition: background-color .15s; }
   .kw-sec-btn { padding: 11px 4px; }
@@ -1641,7 +1643,7 @@
   .kw-sub-btn .chev { width: 14px; height: 14px; }
   [aria-expanded="true"] > .chev { transform: rotate(180deg); }
   .kw-sec-body { display: flex; flex-direction: column; gap: 12px; padding: 4px 4px 16px; }
-  .kw-sub { border-left: 2px solid rgb(var(--c-paper)); }
+  .kw-sub { border-left: var(--bw2) solid rgb(var(--c-paper)); }
   .kw-sub-btn { padding: 8px 12px; }
   .kw-sub-body { padding: 2px 12px 12px; }
   .kw-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
