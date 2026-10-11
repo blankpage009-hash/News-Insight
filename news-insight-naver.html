@@ -3723,7 +3723,16 @@
     // rawCount : 서버가 준 건수(걸러 내기 전). 요청보다 적으면 서버에 더 없는 것이라 다시 묻지 않는다.
     function setListView(rawCount, opts) {
       listView = { gen: listGen, target: getCount(), reserve: [], fetched: false, exhausted: rawCount < getCount(), ...opts };
+      // 관리자가 옮겨 온 기사는 서버가 준 건수 뒤에 더해져 있다 → 이미 그린 목록을 노출 건수로 다시 맞춘다 (검색 중이라 force)
+      if (capListToTarget(listView)) rerenderListIfShown(true);
       topUpList();
+    }
+
+    // 노출 건수보다 많이 들어간 기사는 뒤에서부터 후보로 돌린다 (숨긴 자리가 생기면 거기서 다시 올라온다)
+    function capListToTarget(lv) {
+      if (currentResults.length <= lv.target) return false;
+      lv.reserve.unshift(...currentResults.splice(lv.target));
+      return true;
     }
 
     function activeListView() {
@@ -3738,6 +3747,7 @@
         const it = lv.reserve.shift();
         const key = savedKeyOf(it);
         if ((key && have.has(key)) || isDislikedKey(key) || (!lv.keepBlocked && isBlockedFor(it, it.category))) continue;
+        if (it.movedFrom && !blockedSet.has(blockId(key, it.movedFrom))) continue;   // 옮김을 되돌린 기사가 후보에 남아 있다가 올라오지 않게
         have.add(key);
         currentResults.push(it);
         added++;
@@ -3894,7 +3904,8 @@
         }
       };
       const addTo = (arr, category, hours, sort) => {
-        const have = new Set(arr.map(savedKeyOf));
+        const lv = arr === currentResults ? activeListView() : null;
+        const have = new Set((lv ? [...arr, ...lv.reserve] : arr).map(savedKeyOf));   // 건수 때문에 후보로 밀린 기사를 또 더하지 않게
         decorateItemsCore(movedRawFor(category, hours).filter((r) => !have.has(savedKeyOf(r))), category).forEach((it) => {
           putByTime(arr, it, sort); changed = true;
         });
@@ -3907,8 +3918,9 @@
         currentResults = sectionState.flatMap((s) => s.items);
       } else if (activeListView() && currentCategory !== 'all') {
         addTo(currentResults, currentCategory, getHours(), getSort());
+        capListToTarget(activeListView());   // 옮겨 온 기사 때문에 노출 건수를 넘기지 않게
       }
-      if (changed) { rerenderListIfShown(); refreshListCounts(); }
+      if (changed) { rerenderListIfShown(); refreshListCounts(); topUpList(); }   // 옮김을 되돌려 빈 자리가 생기면 채운다
     }
 
     // '이 섹션에 안 맞음'을 기록할 섹션. 정할 수 없으면 '' (검색 결과 · 저장 화면 · 관련 기사 · 이어보기).
@@ -7929,8 +7941,8 @@
     // 지금 화면의 기사를 같은 데이터로 다시 그린다 (토글 · 1024px 를 넘나드는 창 크기 변화)
     //   보던 카드 번호는 유지한다. 서버를 다시 부르지 않는다.
     //   저장 화면은 savedArticles 가 아니라 currentResults 로 그린다 → 방금 저장을 푼 줄도 남아 있어 되돌릴 수 있다.
-    function rerenderListIfShown() {
-      if (isLoading) return;
+    function rerenderListIfShown(force = false) {
+      if (isLoading && !force) return;
       if (document.getElementById('search-input').value.trim()) {
         if (currentResults.length) renderNews(currentResults);
       } else if (currentCategory === 'briefing') {
