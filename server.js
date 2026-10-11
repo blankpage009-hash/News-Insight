@@ -843,7 +843,7 @@ function cleanPrefsPatch(p) {
     });
     if (Object.keys(v).length) out.viewMode = v;
   }
-  ['railCollapsed', 'dimRead', 'reco'].forEach((k) => { if (typeof p[k] === 'boolean') out[k] = p[k]; });
+  ['railCollapsed', 'dimRead', 'reco', 'majorPress'].forEach((k) => { if (typeof p[k] === 'boolean') out[k] = p[k]; });
   if (Number.isFinite(p.recoReset) && p.recoReset >= 0) out.recoReset = Math.floor(p.recoReset);
   if (p.aiModel === 'auto' || (typeof p.aiModel === 'string' && AI_MODEL_RE.test(p.aiModel))) out.aiModel = p.aiModel;
   return out;
