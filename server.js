@@ -3775,12 +3775,32 @@ function imageUrlAllowed(raw) {
   return u;
 }
 
+// [장애 2026-10-11] 언론사 페이지(사진 · 언론사 이름)의 주소 찾기는 dns.lookup 대신 c-ares(dns.Resolver)로 한다.
+//   dns.lookup(getaddrinfo)은 Node 의 작업 자리(libuv 스레드풀, 기본 4개)를 쓰고, 중간에 끊어도(abort) 끝까지 자리를 잡는다.
+//   응답이 느린 언론사 DNS 가 이 4자리를 붙잡으면 네이버 · Supabase 접속의 주소 찾기도 뒤에 줄을 서서
+//   네이버 검색이 모두 시간 초과(aborted)로 빈 결과가 됐다(언론사 이름 조회 배포 뒤 모든 섹션 로딩 멈춤).
+//   c-ares 는 스레드풀을 쓰지 않고(이벤트 루프 비동기) 시간 제한도 걸 수 있다. 시도마다 1.5초 × 2회.
+const pageResolver = new dns.Resolver({ timeout: 1500, tries: 2 });
+function resolvePageHost(hostname, family, cb) {
+  const v6 = () => pageResolver.resolve6(hostname, (e6, a6) => {
+    if (!e6 && a6 && a6.length) return cb(null, a6.map((address) => ({ address, family: 6 })));
+    cb(e6 || Object.assign(new Error(`주소를 찾지 못함: ${hostname}`), { code: 'ENOTFOUND' }));
+  });
+  if (family === 6) return v6();
+  pageResolver.resolve4(hostname, (e4, a4) => {
+    if (!e4 && a4 && a4.length) return cb(null, a4.map((address) => ({ address, family: 4 })));
+    // 시간 초과는 DNS 서버가 응답하지 않는 것 → IPv6 로 또 기다리지 않는다
+    if (family === 4 || (e4 && e4.code === 'ETIMEOUT')) return cb(e4 || Object.assign(new Error(`주소를 찾지 못함: ${hostname}`), { code: 'ENOTFOUND' }));
+    v6();
+  });
+}
+
 // 접속 직전 DNS 확인(②). 주소를 글자로 쓴 경우(IP)는 여기를 거치지 않으므로 ①이 따로 막는다.
 //   Node 24 는 IPv4/IPv6 를 번갈아 시도하느라 all:true 로 부른다 → 두 가지 돌려주기 모양을 다 맞춘다.
 function safeLookup(hostname, options, callback) {
   if (typeof options === 'function') { callback = options; options = {}; }
   const opts = typeof options === 'number' ? { family: options } : { ...(options || {}) };
-  dns.lookup(hostname, { ...opts, all: true }, (err, addrs) => {
+  resolvePageHost(hostname, Number(opts.family) || 0, (err, addrs) => {
     if (err) return callback(err);
     if (!addrs || !addrs.length || addrs.some((a) => isBlockedIp(a.address))) {
       const e = new Error(`내부망 주소로 풀리는 도메인 차단: ${hostname}`);
@@ -3934,7 +3954,8 @@ app.post('/api/news-images', async (req, res) => {
 //   네이버 검색 API 는 언론사 이름을 주지 않는다(도메인만 안다). 그래서
 //   ① 확실히 아는 전국 언론사는 아래 표에서 바로 주고
 //   ② 나머지는 그 언론사 홈페이지 <head> 의 사이트 이름(og:site_name → application-name → <title>)을 읽는다.
-//   원문 읽기는 사진(news-images)과 같은 안전한 길(fetchPageHead : 내부망 차단 · 재전송 검사)과 같은 슬롯을 쓴다.
+//   원문 읽기는 사진(news-images)과 같은 안전한 길(fetchPageHead : 내부망 차단 · 재전송 검사 · c-ares 주소 찾기)을 쓰고,
+//   동시 접속은 이름 조회 전용 슬롯(3개)으로 따로 묶는다.
 //   못 찾으면 '' — 화면은 도메인을 그대로 보여 준다. 이름을 지어내지 않는다.
 //   캐시는 respCache 와 따로 둔다(섹션 응답을 밀어내지 않게, PERFORMANCE.md 4절).
 // -----------------------------------------------------------------
@@ -3960,8 +3981,21 @@ const PRESS_NAME_TTL_OK = 7 * 24 * 60 * 60 * 1000;   // 언론사 이름은 거�
 const PRESS_NAME_TTL_FAIL = 6 * 60 * 60 * 1000;      // 못 읽은 곳은 몇 시간 뒤 다시 기회를 준다
 const PRESS_NAME_CACHE_MAX = 3000;
 const PRESS_NAME_REQ_MAX = 60;                        // 한 번에 물을 수 있는 도메인 수
+const PRESS_NAME_MAX_CONCURRENT = 3;                  // 이름 조회 전용 동시 접속 수 (사진 슬롯과 따로 — 사진을 밀어내지 않게)
+const PRESS_NAME_QUEUE_MAX = 120;                     // 기다리는 일이 이보다 많으면 '나중에'로 돌린다
+const PRESS_NAME_BUDGET_MS = 6000;                    // 언론사 한 곳에 쓰는 최대 시간 (https · http · 상위 주소 모두 합쳐)
 const pressNameCache = new Map();                     // 도메인 -> { ts, name }
 const pressNameInflight = new Map();
+let pressNameActive = 0;
+const pressNameWaiters = [];
+function pressNameSlotAcquire() {
+  if (pressNameActive < PRESS_NAME_MAX_CONCURRENT) { pressNameActive += 1; return Promise.resolve(); }
+  return new Promise((resolve) => pressNameWaiters.push(resolve));
+}
+function pressNameSlotRelease() {
+  const next = pressNameWaiters.shift();
+  if (next) next(); else pressNameActive -= 1;
+}
 
 // 표에서 찾기 : 'news.kbs.co.kr' → 'kbs.co.kr' 처럼 가장 긴 꼬리부터
 function knownPressName(domain) {
@@ -4008,7 +4042,8 @@ function pickPressName(html) {
 }
 
 async function fetchPressName(domain) {
-  await imageSlotAcquire();
+  await pressNameSlotAcquire();
+  const started = Date.now();
   try {
     // 'news.abc.co.kr' 처럼 하위 주소는 홈이 없을 때가 많다 → 못 찾으면 한 단계 위('abc.co.kr')도 본다.
     //   단 'co.kr' 처럼 두 글자 꼬리만 남는 경우는 보지 않는다.
@@ -4017,6 +4052,7 @@ async function fetchPressName(domain) {
     if (parts.length >= 3 && !/^(co|or|go|ne|re|ac|pe)\.[a-z]{2}$/.test(parts.slice(1).join('.'))) hosts.push(parts.slice(1).join('.'));
     for (const host of hosts) {
       for (const scheme of ['https', 'http']) {
+        if (Date.now() - started > PRESS_NAME_BUDGET_MS) return '';   // 이 언론사에 쓸 시간을 다 썼다
         const page = await fetchPageHead(`${scheme}://${host}/`);
         if (!page) continue;
         const name = pickPressName(page.html);
@@ -4026,7 +4062,7 @@ async function fetchPressName(domain) {
     }
     return '';
   } finally {
-    imageSlotRelease();
+    pressNameSlotRelease();
   }
 }
 
@@ -4036,7 +4072,7 @@ function pressNameFor(domain) {
   const hit = pressNameCache.get(domain);
   if (hit && Date.now() - hit.ts < (hit.name ? PRESS_NAME_TTL_OK : PRESS_NAME_TTL_FAIL)) return Promise.resolve(hit.name);
   if (pressNameInflight.has(domain)) return pressNameInflight.get(domain);
-  if (imageWaiters.length >= IMAGE_QUEUE_MAX) return Promise.resolve(undefined);   // 붐빈다 → 다음에
+  if (pressNameWaiters.length >= PRESS_NAME_QUEUE_MAX) return Promise.resolve(undefined);   // 붐빈다 → 다음에
   const p = fetchPressName(domain).catch(() => '').then((name) => {
     pressNameCache.delete(domain);
     pressNameCache.set(domain, { ts: Date.now(), name });
