@@ -468,12 +468,13 @@ let blocksCache = null;   // { ts, rows: [{ key, section, title, by, t }] }
 async function readSectionBlocks() {
   if (blocksCache && Date.now() - blocksCache.ts < BLOCKS_TTL) return blocksCache.rows;
   const url = `${SUPABASE_URL}/rest/v1/${BLOCKS_TABLE}`
-    + `?select=url_key,section,title,blocked_by,created_at&order=created_at.desc&limit=${BLOCKS_READ_MAX}`;
+    + `?select=url_key,section,title,blocked_by,created_at,moved_to&order=created_at.desc&limit=${BLOCKS_READ_MAX}`;
   const r = await fetchWithTimeout(url, { headers: supabaseHeaders() }, 5000);
   if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
   const rows = await r.json();
   const list = (Array.isArray(rows) ? rows : []).map((x) => ({
     key: x.url_key, section: x.section, title: x.title || '', by: x.blocked_by || '', t: Date.parse(x.created_at) || 0,
+    to: x.moved_to || '',
   }));
   blocksCache = { ts: Date.now(), rows: list };
   return list;
@@ -507,12 +508,23 @@ app.put('/api/section-blocks', requireAdminUser, async (req, res) => {
       if (blocksCache) blocksCache.rows = blocksCache.rows.filter((x) => !(x.key === key && x.section === section));
       return res.json({ ok: true, blocked: false });
     }
+    // [오분류 B2] '섹션 이동' : 옮길 섹션과 분석용 기사 정보. 없으면 '그냥 뺌'이다.
+    //   다시 뺄 때 예전 값이 남지 않도록 항상 모든 칸을 보낸다(merge-duplicates 는 빠진 칸을 건드리지 않는다).
+    const text = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+    const movedTo = text(b.moveTo, 40);
+    if (movedTo === section) return res.status(400).json({ error: '같은 섹션으로는 옮길 수 없습니다.' });
     const row = {
       url_key: key,
       section,
       title: typeof b.title === 'string' ? b.title.slice(0, 300) : null,
       blocked_by: req.user.email || null,
       created_at: new Date().toISOString(),
+      moved_to: movedTo,
+      summary: text(b.summary, 600),
+      source: text(b.source, 100),
+      published_at: text(b.publishedAt, 40),
+      kw: text(b.kw, 100),
+      cats: Array.isArray(b.cats) ? text(b.cats.filter((c) => typeof c === 'string').join(','), 200) : null,
     };
     const r = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${BLOCKS_TABLE}?on_conflict=url_key,section`, {
       method: 'POST',
@@ -522,7 +534,7 @@ app.put('/api/section-blocks', requireAdminUser, async (req, res) => {
     if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
     if (blocksCache) {
       blocksCache.rows = [
-        { key, section, title: row.title || '', by: row.blocked_by || '', t: Date.parse(row.created_at) },
+        { key, section, title: row.title || '', by: row.blocked_by || '', t: Date.parse(row.created_at), to: movedTo || '' },
         ...blocksCache.rows.filter((x) => !(x.key === key && x.section === section)),
       ];
     }

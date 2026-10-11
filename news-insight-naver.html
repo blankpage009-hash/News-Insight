@@ -1282,6 +1282,10 @@
   #dislike-menu button + button { border-top: 1px solid rgb(var(--c-line)); }
   #dislike-menu button:hover, #dislike-menu button:focus-visible { background: rgb(var(--c-ink3)); outline: none; }
   #dislike-menu button span { display: block; margin-top: 2px; font-size: 12px; font-weight: 500; color: rgb(var(--c-muted)); }
+  /* [오분류 B2] '섹션 이동' 2단계 : 옮길 섹션 고르기. 섹션이 많아 창 안에서 스크롤한다. */
+  #dislike-menu .dm-head { padding: 9px 14px 7px; font-size: 12px; font-weight: 800; color: rgb(var(--c-muted)); border-bottom: 1px solid rgb(var(--c-line)); }
+  #dislike-menu .dm-list { max-height: min(60vh, 340px); overflow-y: auto; overscroll-behavior: contain; }
+  #dislike-menu .dm-list button { padding: 8px 14px; font-weight: 600; }
 
   .bc-nav { display: flex; align-items: center; gap: 16px; padding: 4px 0 2rem; }
   .bc-arrow {
@@ -2433,7 +2437,8 @@
           <div class="st-row">
             <div class="st-name">
               <b>섹션에서 뺀 기사</b>
-              <span class="st-hint">기사의 👎 에서 <b>이 섹션에 안 맞음</b>을 고르면 모든 사용자의 그 섹션에서 빠집니다.
+              <span class="st-hint">기사의 👎 에서 <b>섹션 이동</b>을 고르면 모든 사용자의 그 섹션에서 빠지고, 옮길 섹션이 기록됩니다
+                (표시된 <b>A → B</b> 는 A 에서 B 로 옮기라는 기록입니다. 지금은 B 섹션에 보이게 하는 기능이 없습니다).
                 <b>해제</b>하면 다시 보입니다. 누르는 즉시 반영됩니다.</span>
             </div>
             <div class="min-w-0">
@@ -3839,30 +3844,32 @@
       if (m) m.remove();
       document.removeEventListener('pointerdown', onDislikeMenuOutside, true);
       document.removeEventListener('keydown', onDislikeMenuKey, true);
-      window.removeEventListener('scroll', closeDislikeMenu, true);
+      window.removeEventListener('scroll', onDislikeMenuScroll, true);
       window.removeEventListener('resize', closeDislikeMenu);
     }
     function onDislikeMenuOutside(e) { if (!e.target.closest('#dislike-menu')) closeDislikeMenu(); }
     function onDislikeMenuKey(e) { if (e.key === 'Escape') closeDislikeMenu(); }
-
-    function openDislikeMenu(btn, item) {
+    // 창 안의 목록을 스크롤할 때는 닫지 않는다 (scroll 은 캡처로 받아서 창 안의 스크롤도 여기로 온다)
+    function onDislikeMenuScroll(e) {
+      if (e.target instanceof Element && e.target.closest('#dislike-menu')) return;
       closeDislikeMenu();
-      const section = blockSectionOf(item);
-      const m = document.createElement('div');
-      m.id = 'dislike-menu';
-      m.setAttribute('role', 'menu');
-      m.setAttribute('aria-label', '싫어요 사유');
-      m.innerHTML = `<button type="button" role="menuitem" data-act="dislike">관심 없음<span>내 화면에서 숨기고 취향에 반영합니다</span></button>`
-        + (section ? `<button type="button" role="menuitem" data-act="block">이 섹션에 안 맞음<span>모든 사용자의 ${esc(categoryLabels[section] || section)} 섹션에서 뺍니다</span></button>` : '');
-      m.addEventListener('click', (e) => {
-        const b = e.target.closest('button');
-        if (!b) return;
-        closeDislikeMenu();
-        const key = savedKeyOf(item);
-        if (b.dataset.act === 'block') blockFromSection(item, section);
-        else applyVote(item, key, votes.get(key) || null, -1);
-      });
-      document.body.appendChild(m);
+    }
+
+    // [오분류 B2] '섹션 이동' 으로 옮길 수 있는 섹션. 분류의 가장 작은 칸 위주로 둔다
+    // (물류 · 증시 · 스포츠는 하위 섹션이 실제 분류 칸이라 상위 이름은 뺐다).
+    const MOVE_TARGETS = [
+      'logistics_lotte', 'logistics_competitor', 'logistics_coupang', 'logistics_naver',
+      'logistics_domestic', 'logistics_global', 'logistics_freight',
+      'economy', 'economy_macro', 'society', 'global', 'ai',
+      'stock_domestic', 'stock_us', 'stock_issue',
+      'sports_pohang', 'sports_kfootball', 'sports_wfootball', 'sports_baseball', 'sports_etc',
+    ];
+    function moveTargetLabel(key) {
+      const parent = parentCategoryOf(key);
+      return { name: categoryLabels[key] || key, group: parent ? (categoryLabels[parent] || parent) : '' };
+    }
+
+    function placeDislikeMenu(m, btn) {
       // 버튼 아래 오른쪽 끝에 맞추고, 화면 밖으로 나가면 안쪽 · 위쪽으로 옮긴다
       const r = btn.getBoundingClientRect();
       const w = m.offsetWidth;
@@ -3871,32 +3878,89 @@
       if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
       m.style.left = `${Math.min(Math.max(8, r.right - w), window.innerWidth - w - 8)}px`;
       m.style.top = `${top}px`;
+    }
+
+    // 2단계 : 옮길 섹션 고르기. 지금 섹션은 목록에서 뺀다. '어디에도 안 맞음' = 옮길 곳 없이 그냥 뺌.
+    function showMoveChoices(m, btn, section) {
+      m.setAttribute('aria-label', '옮길 섹션');
+      m.innerHTML = `<div class="dm-head">${esc(categoryLabels[section] || section)} → 어느 섹션으로 옮길까요?</div>`
+        + `<div class="dm-list">${
+          MOVE_TARGETS.filter((k) => k !== section).map((k) => {
+            const t = moveTargetLabel(k);
+            return `<button type="button" role="menuitem" data-act="move" data-to="${esc(k)}">${t.group ? `${esc(t.group)} › ` : ''}${esc(t.name)}</button>`;
+          }).join('')
+        }<button type="button" role="menuitem" data-act="move" data-to="">어디에도 안 맞음<span>옮기지 않고 이 섹션에서만 뺍니다</span></button></div>`
+        + `<button type="button" role="menuitem" data-act="back">← 뒤로</button>`;
+      placeDislikeMenu(m, btn);
+      m.querySelector('.dm-list button').focus();
+    }
+
+    function openDislikeMenu(btn, item) {
+      closeDislikeMenu();
+      const section = blockSectionOf(item);
+      const m = document.createElement('div');
+      m.id = 'dislike-menu';
+      m.setAttribute('role', 'menu');
+      const showFirstStep = () => {
+        m.setAttribute('aria-label', '싫어요 사유');
+        m.innerHTML = `<button type="button" role="menuitem" data-act="dislike">관심 없음<span>내 화면에서 숨기고 취향에 반영합니다</span></button>`
+          + (section ? `<button type="button" role="menuitem" data-act="choose">섹션 이동<span>${esc(categoryLabels[section] || section)} 섹션에서 모든 사용자에게 빼고, 옮길 섹션을 기록합니다</span></button>` : '');
+      };
+      showFirstStep();
+      m.addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        // 2단계로 넘어가거나 돌아올 때는 창을 닫지 않는다
+        if (b.dataset.act === 'choose') { showMoveChoices(m, btn, section); return; }
+        if (b.dataset.act === 'back') { showFirstStep(); placeDislikeMenu(m, btn); m.querySelector('button').focus(); return; }
+        closeDislikeMenu();
+        const key = savedKeyOf(item);
+        if (b.dataset.act === 'move') blockFromSection(item, section, b.dataset.to || '');
+        else applyVote(item, key, votes.get(key) || null, -1);
+      });
+      document.body.appendChild(m);
+      placeDislikeMenu(m, btn);
       m.querySelector('button').focus();
       // 지금 누른 손가락(pointerdown)이 바로 창을 닫지 않게 한 박자 뒤에 건다
       setTimeout(() => {
         document.addEventListener('pointerdown', onDislikeMenuOutside, true);
         document.addEventListener('keydown', onDislikeMenuKey, true);
-        window.addEventListener('scroll', closeDislikeMenu, true);
+        window.addEventListener('scroll', onDislikeMenuScroll, true);
         window.addEventListener('resize', closeDislikeMenu);
       });
     }
 
-    function setBlockLocal(key, section, on, title = '') {
+    function setBlockLocal(key, section, on, title = '', to = '') {
       const rest = sectionBlocks.filter((b) => !(b.key === key && b.section === section));
-      setSectionBlocks(on ? [{ key, section, title, t: Date.now(), by: (authMe && authMe.email) || '' }, ...rest] : rest);
+      setSectionBlocks(on ? [{ key, section, title, to, t: Date.now(), by: (authMe && authMe.email) || '' }, ...rest] : rest);
       persistSectionBlocks();
     }
 
-    function blockFromSection(item, section) {
+    // moveTo : 옮길 섹션 키. '' 이면 옮길 곳 없이 그 섹션에서만 뺀다.
+    //   [오분류 B2] 서버에는 분류 분석에 쓸 기사 정보(요약 · 출처 · 게재시각 · 찾은 키워드 · 걸린 섹션)도 함께 기록한다.
+    //   1단계는 '기록'까지다 : 옮길 섹션에 기사를 실제로 보여 주는 것은 다음 단계.
+    function blockFromSection(item, section, moveTo = '') {
       const key = savedKeyOf(item);
       if (!key || !section) return;
       const title = plainText(item.title || '').slice(0, 300);
-      setBlockLocal(key, section, true, title);
+      const summary = (Array.isArray(item.summary) ? item.summary : []).filter((s) => s && s !== '요약 없음').join(' ');
+      const info = {
+        moveTo,
+        summary: plainText(summary).slice(0, 600),
+        source: item.source || '',
+        publishedAt: item.datetime || '',
+        kw: item.kw || '',
+        cats: Array.isArray(item.cats) ? item.cats : [],
+      };
+      setBlockLocal(key, section, true, title, moveTo);
       const spots = hideFromLists(key, (it) => isBlockedFor(it, it.category));
       rerenderListIfShown();
       topUpList();
-      showToast(`${categoryLabels[section] || section} 섹션에서 모든 사용자에게 숨겼습니다.`, '되돌리기', () => unblockSection(key, section, spots));
-      sendBlock(key, section, true, title, spots);
+      const from = categoryLabels[section] || section;
+      showToast(moveTo
+        ? `${from} → ${categoryLabels[moveTo] || moveTo} 이동을 기록하고, ${from} 섹션에서 모든 사용자에게 숨겼습니다.`
+        : `${from} 섹션에서 모든 사용자에게 숨겼습니다.`, '되돌리기', () => unblockSection(key, section, spots));
+      sendBlock(key, section, true, title, spots, info);
     }
 
     // spots : 화면에서 뺀 자리(되돌리기). 관리자 목록에서 해제하면 없다 → 다음에 불러올 때 다시 보인다.
@@ -3907,13 +3971,13 @@
     }
 
     // 투표와 같은 줄(voteChain)로 보낸다 : 빼기 → 되돌리기를 빨리 눌러도 순서가 뒤바뀌지 않게.
-    function sendBlock(key, section, blocked, title, spots) {
+    function sendBlock(key, section, blocked, title, spots, info = {}) {
       voteChain = voteChain.then(async () => {
         try {
           const res = await apiFetch('/api/section-blocks', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key, section, blocked, title }),
+            body: JSON.stringify({ key, section, blocked, title, ...info }),
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -3922,7 +3986,7 @@
           console.error('섹션 제외를 저장하지 못했습니다.', e);
           // 그 사이 같은 기사를 또 바꿨다면(= 지금 상태가 내가 보낸 값이 아님) 건드리지 않는다.
           if (blockedSet.has(blockId(key, section)) !== blocked) return;
-          setBlockLocal(key, section, !blocked, title);
+          setBlockLocal(key, section, !blocked, title, info.moveTo || '');
           if (blocked) { if (spots) restoreSpots(spots); } else dropBlockedFromScreen();
           renderSectionBlocksAdmin();
           showToast(blocked ? '섹션에서 빼지 못했습니다. 잠시 뒤 다시 눌러 주세요.' : '되살리지 못했습니다. 잠시 뒤 다시 눌러 주세요.');
@@ -3938,7 +4002,8 @@
       wrap.innerHTML = `<div class="au-group"><h4>뺀 기사 (${sectionBlocks.length})</h4><div class="st-list">${
         sectionBlocks.length ? sectionBlocks.map((b) => `<div class="st-item">
           <div class="st-item-name"><span class="truncate">${esc(b.title || b.key)}</span><span>${esc([
-            categoryLabels[b.section] || b.section, b.t ? fmtAuthTime(new Date(b.t).toISOString()) : '', b.by,
+            b.to ? `${categoryLabels[b.section] || b.section} → ${categoryLabels[b.to] || b.to}` : (categoryLabels[b.section] || b.section),
+            b.t ? fmtAuthTime(new Date(b.t).toISOString()) : '', b.by,
           ].filter(Boolean).join(' · '))}</span></div>
           <div class="au-btns"><button type="button" class="pv-btn" onclick="adminUnblock(${arg(b.key)}, ${arg(b.section)})">해제</button></div>
         </div>`).join('') : '<div class="au-empty">없음</div>'
