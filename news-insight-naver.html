@@ -2348,7 +2348,7 @@
           <!-- [언론사 A] 제외한 언론사 : 섹션 목록에서 빠진다 · 내 계정에 저장 -->
           <div class="st-row">
             <div class="st-name"><b>제외한 언론사 <span id="press-block-count" class="cnt"></span></b>
-              <span class="st-hint">이 언론사 기사는 섹션 목록에서 빠집니다(검색 결과 · 저장한 기사는 그대로). 주소가 같은 하위 주소(news. · m.)도 같이 빠집니다. 설정 창을 닫으면 반영됩니다</span></div>
+              <span class="st-hint">이 언론사 기사는 섹션 목록과 검색 결과에서 빠집니다(관련 기사 · 저장한 기사는 그대로). 주소가 같은 하위 주소(news. · m.)도 같이 빠집니다. 설정 창을 닫으면 반영됩니다</span></div>
             <div id="press-block-list" class="st-list"></div>
           </div>
           <!-- [언론사 C] 지금 화면에 나온 언론사(도메인) 목록. [제외]를 누르면 위 '제외한 언론사'에 들어간다 -->
@@ -6720,6 +6720,7 @@
         hours: String(getHours()),
         sort: sort || 'date',
       });
+      if (pressBlock.length) params.set('xp', pressBlock.join(','));   // [언론사 A] 서버가 추리기 전에 빼야 건수를 채운다
       const data = await apiGet(`/api/news?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data;   // { items, mode, relaxed, requested, ... }
@@ -6975,6 +6976,7 @@
     // ---------------------------------------------------------------
     // [언론사 A] 제외한 언론사 : 기사 출처 도메인 목록 (예 'abc.co.kr' → 'news.abc.co.kr' 도 같이 뺀다)
     //   '주요 언론사만'과 같은 자리(섹션 목록)에서 빠진다. 제휴 언론사도 뺄 수 있다.
+    //   검색 결과는 서버(/api/news ?xp=)가 뺀다(화면에서는 거르지 않는다).
     //   내 계정에 저장(pressBlock)하고, 이 기기에도 사본을 둔다(첫 화면부터 빼려고).
     // ---------------------------------------------------------------
     const PRESS_BLOCK_KEY = 'newsinsight:press-block:v1';
@@ -7891,6 +7893,7 @@
         if (keyword) {
           const data = await fetchFlatNews({ q: keyword, sort: getSort() });
           const searchCat = ['all', 'logistics', 'stock', 'sports', 'briefing'].includes(currentCategory) ? 'society' : currentCategory;
+          countPress(data.items);   // [언론사 A] 검색 화면에서도 '이 화면의 언론사'에서 바로 제외할 수 있게 센다
           const list = sortItemsByCurrent(decorateItems(data.items, searchCat, false, true));
           currentResults = list;
 
@@ -7901,7 +7904,7 @@
           renderNews(list);
           setListView(data.items.length, {
             refetch: (n) => fetchFlatNews({ q: keyword, display: n, sort: getSort() }).then((d) => d.items),
-            decorate: (raw) => decorateItems(raw, searchCat, false, true),
+            decorate: (raw) => { countPress(raw); return decorateItems(raw, searchCat, false, true); },
             keepBlocked: true,
           });
 

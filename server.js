@@ -2827,6 +2827,8 @@ app.get('/api/news', async (req, res) => {
   // [다이제스트] 대형 이슈(하루 수백 건)에 묻힌 다른 기사까지 확보하려면 여러 페이지를 받아온다.
   //   검색어(AND 묶음) 수가 많으면 호출 수가 늘어나므로 페이지 수를 줄여 균형을 맞춘다.
   const digestPages = terms.length <= 1 ? 5 : terms.length <= 2 ? 3 : 2;
+  // [언론사 A] 제외한 언론사(?xp=)도 검색 결과에서 뺀다. '주요 언론사만'은 섹션 목록에만 쓴다(검색에는 걸지 않는다).
+  const dropPress = pressFilter({ ...PRESS_NONE, block: pressOptsOf(req).block });
 
   try {
     let items = [];
@@ -2844,7 +2846,7 @@ app.get('/api/news', async (req, res) => {
       });
       // [D2] 제외어는 완화 단계마다 다시 건다. 여기서 0건이 되면 다음 단계로 넘어가야 하기 때문에
       //   반드시 `if (items.length) break` 앞에서 걸러야 한다.
-      items = dropExcluded(items, excludes);
+      items = dropPress(dropExcluded(items, excludes));   // 언론사도 같은 자리 : 다 빠져 0건이면 다음 완화 단계로
       used = s;
       if (items.length) break;
     }
