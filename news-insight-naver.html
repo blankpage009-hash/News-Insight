@@ -1135,6 +1135,10 @@
   .sb-toggle .cnt { font-size: 12px; color: rgb(var(--c-muted)); white-space: nowrap; }
   .sb-toggle .chev { flex: none; margin-left: auto; width: 16px; height: 16px; transition: transform .15s; }
   #sb-list[hidden] { display: none; }
+  /* [언론사 C] 화면 설정 '이 화면의 언론사' 목록 (기본 닫힘) · 제휴 표시 */
+  #press-list[hidden] { display: none; }
+  .press-tag { flex: none; font-size: 11px; line-height: 17px; padding: 0 7px; border: 1px solid rgb(var(--c-line)); border-radius: 999px; color: rgb(var(--c-muted)); }
+  .press-tag.is-major { border-color: rgb(var(--c-gold)); color: rgb(var(--c-gold)); }
   .au-empty { padding: 8px 0; font-size: 12px; color: rgb(var(--c-muted)); border-bottom: 1px solid rgb(var(--c-paper)); }
 
   /* 모바일 Safari 는 글자 크기 16px 미만인 입력칸에 포커스를 주면 화면을 확대하고, 입력 후에도 확대가 남는다.
@@ -2339,6 +2343,17 @@
           <div class="st-row">
             <div class="st-name"><b>화면 옵션</b><span class="st-hint">내 계정에 저장</span></div>
             <div id="pref-toggles" class="st-list"></div>
+          </div>
+          <!-- [언론사 C] 지금 화면에 나온 언론사(도메인) 목록. 보기만 한다 -->
+          <div class="st-row">
+            <div class="st-name">
+              <button type="button" id="press-toggle" class="sb-toggle" aria-expanded="false" aria-controls="press-list" onclick="togglePressList()">
+                <b>이 화면의 언론사</b><span id="press-count" class="cnt"></span>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <span class="st-hint">지금 화면에 나온 기사의 출처(주소) · 기사 많은 순. <b>제휴</b>는 네이버 뉴스 제휴 언론사로, '주요 언론사만'을 켜도 남습니다</span>
+            </div>
+            <div id="press-list" class="st-list" hidden></div>
           </div>
           <!-- [P4] 추천 : 전체 화면에서 좋아요/싫어요로 상자 건수 · 순서를 조정한다 -->
           <div class="st-row">
@@ -5875,6 +5890,7 @@
             aria-label="${t.label}" title="${t.label}"
             onclick="togglePref('${t.key}')" class="pref-switch"></button>
         </div>`).join('');
+      renderPressList();
     }
 
     // ---------------------------------------------------------------
@@ -6780,24 +6796,53 @@
       try { return /(^|\.)naver\.com$/i.test(new URL(item.naverUrl).hostname); } catch { return false; }
     }
 
-    const newPressStats = () => ({ keys: new Set(), minorKeys: new Set(), press: new Map() });   // press : 도메인 -> 제휴 여부
+    const newPressStats = () => ({ keys: new Set(), minorKeys: new Set(), press: new Map() });   // press : 도메인 -> { major, n }
     let pressStats = newPressStats();
 
+    // 같은 기사가 여러 섹션에 걸려 있거나 빈자리 채우기로 다시 와도 한 번만 센다
     function countPress(items) {
       items.forEach((item) => {
         if (item.movedFrom) return;
-        const major = isMajorPress(item);
         const key = savedKeyOf(item);
-        if (key) { pressStats.keys.add(key); if (!major) pressStats.minorKeys.add(key); }
-        if (item.source) pressStats.press.set(item.source, pressStats.press.get(item.source) || major);
+        if (!key || pressStats.keys.has(key)) return;
+        const major = isMajorPress(item);
+        pressStats.keys.add(key);
+        if (!major) pressStats.minorKeys.add(key);
+        const src = item.source || '출처 미상';
+        const p = pressStats.press.get(src) || { major: false, n: 0 };
+        p.major = p.major || major;
+        p.n++;
+        pressStats.press.set(src, p);
       });
+    }
+
+    function togglePressList() {
+      const list = document.getElementById('press-list');
+      const btn = document.getElementById('press-toggle');
+      if (!list || !btn) return;
+      const open = list.hidden;   // 지금 닫혀 있으면 연다
+      list.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+    }
+
+    function renderPressList() {
+      const wrap = document.getElementById('press-list');
+      if (!wrap) return;
+      const rows = [...pressStats.press.entries()].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]));
+      const cnt = document.getElementById('press-count');
+      if (cnt) cnt.textContent = rows.length ? `${rows.length}곳` : '';   // 닫혀 있어도 몇 곳인지 보이게
+      wrap.innerHTML = rows.length ? rows.map(([src, p]) => `<div class="st-item">
+          <span class="st-item-name"><span class="truncate">${esc(src)}</span><span>기사 ${p.n}건</span></span>
+          <span class="press-tag${p.major ? ' is-major' : ''}">${p.major ? '제휴' : '비제휴'}</span>
+        </div>`).join('')
+        : '<p class="au-empty">기사를 불러오면 이 화면의 언론사가 나옵니다.</p>';
     }
 
     function pressStatsText() {
       const n = pressStats.keys.size;
       if (!n) return '네이버 뉴스 제휴 언론사 기사만 보기 · 기사를 불러오면 이 화면의 집계가 나옵니다';
       const outlets = pressStats.press.size;
-      const minorOutlets = [...pressStats.press.values()].filter((v) => !v).length;
+      const minorOutlets = [...pressStats.press.values()].filter((v) => !v.major).length;
       const m = pressStats.minorKeys.size;
       return `이 화면 기사 ${n}건 · 언론사 ${outlets}곳 중 비제휴 ${minorOutlets}곳(기사 ${m}건, ${Math.round((m / n) * 100)}%)`
         + (screenPrefs.majorPress ? ' 숨김' : ' · 켜면 숨김');
