@@ -1139,6 +1139,7 @@
   #press-list[hidden] { display: none; }
   .press-tag { flex: none; font-size: 11px; line-height: 17px; padding: 0 7px; border: 1px solid rgb(var(--c-line)); border-radius: 999px; color: rgb(var(--c-muted)); }
   .press-tag.is-major { border-color: rgb(var(--c-gold)); color: rgb(var(--c-gold)); }
+  #press-block-list .cnt, .st-name .cnt { font-size: 12px; font-weight: 400; color: rgb(var(--c-muted)); }
   .au-empty { padding: 8px 0; font-size: 12px; color: rgb(var(--c-muted)); border-bottom: 1px solid rgb(var(--c-paper)); }
 
   /* 모바일 Safari 는 글자 크기 16px 미만인 입력칸에 포커스를 주면 화면을 확대하고, 입력 후에도 확대가 남는다.
@@ -2344,14 +2345,20 @@
             <div class="st-name"><b>화면 옵션</b><span class="st-hint">내 계정에 저장</span></div>
             <div id="pref-toggles" class="st-list"></div>
           </div>
-          <!-- [언론사 C] 지금 화면에 나온 언론사(도메인) 목록. 보기만 한다 -->
+          <!-- [언론사 A] 제외한 언론사 : 섹션 목록에서 빠진다 · 내 계정에 저장 -->
+          <div class="st-row">
+            <div class="st-name"><b>제외한 언론사 <span id="press-block-count" class="cnt"></span></b>
+              <span class="st-hint">이 언론사 기사는 섹션 목록에서 빠집니다(검색 결과 · 저장한 기사는 그대로). 주소가 같은 하위 주소(news. · m.)도 같이 빠집니다. 설정 창을 닫으면 반영됩니다</span></div>
+            <div id="press-block-list" class="st-list"></div>
+          </div>
+          <!-- [언론사 C] 지금 화면에 나온 언론사(도메인) 목록. [제외]를 누르면 위 '제외한 언론사'에 들어간다 -->
           <div class="st-row">
             <div class="st-name">
               <button type="button" id="press-toggle" class="sb-toggle" aria-expanded="false" aria-controls="press-list" onclick="togglePressList()">
                 <b>이 화면의 언론사</b><span id="press-count" class="cnt"></span>
                 <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
               </button>
-              <span class="st-hint">지금 화면에 나온 기사의 출처(주소) · 기사 많은 순. <b>제휴</b>는 네이버 뉴스 제휴 언론사로, '주요 언론사만'을 켜도 남습니다</span>
+              <span class="st-hint">지금 화면에 나온 기사의 출처(주소) · 기사 많은 순. <b>제휴</b>는 네이버 뉴스 제휴 언론사로, '주요 언론사만'을 켜도 남습니다. <b>제외</b>를 누르면 그 언론사 기사를 빼고 봅니다</span>
             </div>
             <div id="press-list" class="st-list" hidden></div>
           </div>
@@ -3292,7 +3299,7 @@
       aiModelList = null;
       applyAiKeyUi();
       if (!(fromGate && neverSynced)) {
-        keys.push(THEME_STORAGE_KEY, FONT_SIZE_KEY, COUNT_STORAGE_KEY, VIEW_MODE_KEY, RAIL_STORAGE_KEY, SCREEN_PREFS_KEY, AI_MODEL_KEY);
+        keys.push(THEME_STORAGE_KEY, FONT_SIZE_KEY, COUNT_STORAGE_KEY, VIEW_MODE_KEY, RAIL_STORAGE_KEY, SCREEN_PREFS_KEY, AI_MODEL_KEY, PRESS_BLOCK_KEY);
       }
       keys.forEach((k) => syncLsDel(k));
       syncPending = emptySyncPending();
@@ -3383,6 +3390,19 @@
       dimRead: screenPrefSync('dimRead'),
       reco: screenPrefSync('reco'),
       majorPress: screenPrefSync('majorPress'),
+      // [언론사 A] 제외한 언론사 : 배열 통째로 주고받는다. 바뀌면 기사를 다시 거른다.
+      pressBlock: {
+        local() { const v = syncLsJson(PRESS_BLOCK_KEY); return Array.isArray(v) ? cleanPressBlock(v) : undefined; },
+        apply(v) {
+          if (!Array.isArray(v)) return false;
+          const next = cleanPressBlock(v);
+          const changed = next.join(',') !== pressBlock.join(',');
+          pressBlock = next;
+          syncLsSet(PRESS_BLOCK_KEY, JSON.stringify(next));
+          renderPressList();
+          return changed;
+        },
+      },
       recoReset: {
         local: () => readRecoReset() || undefined,
         apply(v) {
@@ -5832,6 +5852,7 @@
         });
       } catch {}
       applyDimRead();
+      loadPressBlock();   // [언론사 A] 제외한 언론사도 이 기기 사본에서 먼저 읽는다
     }
 
     // 서버 값을 사본에 반영할 때(되울림 방지)는 이쪽만 부른다.
@@ -6682,6 +6703,14 @@
       return response.json();
     }
 
+    // [언론사 C · A] 주요 언론사만 · 제외한 언론사를 서버에 알린다 (브리핑 · 엄선 목록 · 한 섹션 화면).
+    //   서버가 고르기 전에 걸러야 노출 건수를 채운다. 화면에서만 거르면 10건 중 몇 건이 빠진 채로 보인다.
+    //   전체 화면은 섹션마다 30건을 받아 두므로 화면에서 걸러도 충분해 보내지 않는다(그래야 프리워밍 칸을 그대로 쓴다).
+    function setPressParams(params) {
+      if (screenPrefs.majorPress) params.set('press', 'major');
+      if (pressBlock.length) params.set('xp', pressBlock.join(','));
+    }
+
     async function fetchFlatNews({ q, display, sort }) {
       const params = new URLSearchParams({
         q,
@@ -6698,7 +6727,7 @@
       const params = new URLSearchParams({ limit: String(display || getCount()), hours: String(getHours()) });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
-      if (screenPrefs.majorPress) params.set('press', 'major');   // [언론사 C] 서버가 고르기 전에 걸러야 노출 건수를 채운다
+      setPressParams(params);
       const data = await apiGet(`/api/briefing?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
@@ -6718,7 +6747,7 @@
       const params = new URLSearchParams({ display: String(display || getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
-      if (screenPrefs.majorPress) params.set('press', 'major');   // [언론사 C] 서버가 넉넉히 받아 거른 뒤 건수만큼 준다
+      setPressParams(params);
       const data = await apiGet(`/api/${base}/section/${key}?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
@@ -6731,7 +6760,7 @@
       const params = new URLSearchParams({ display: String(display || getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
-      if (screenPrefs.majorPress) params.set('press', 'major');   // [언론사 C] 위 브리핑과 같은 이유
+      setPressParams(params);
       const data = await apiGet(`/api/${base}/digest?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
@@ -6742,7 +6771,7 @@
       const params = new URLSearchParams({ display: String(display || getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
-      if (screenPrefs.majorPress) params.set('press', 'major');   // [언론사 C] 위 하위 섹션과 같은 이유
+      setPressParams(params);
       const data = await apiGet(`/api/topic/${key}?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
@@ -6835,11 +6864,25 @@
       const rows = [...pressStats.press.entries()].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]));
       const cnt = document.getElementById('press-count');
       if (cnt) cnt.textContent = rows.length ? `${rows.length}곳` : '';   // 닫혀 있어도 몇 곳인지 보이게
+      const arg = (v) => esc(JSON.stringify(v));
+      const canBlock = (src) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(src);
       wrap.innerHTML = rows.length ? rows.map(([src, p]) => `<div class="st-item">
-          <span class="st-item-name"><span class="truncate">${esc(src)}</span><span>기사 ${p.n}건</span></span>
-          <span class="press-tag${p.major ? ' is-major' : ''}">${p.major ? '제휴' : '비제휴'}</span>
+          <span class="st-item-name"><span class="truncate">${esc(src)}</span><span>기사 ${p.n}건${isPressBlocked(src) ? ' · 제외함' : ''}</span></span>
+          <div class="au-btns"><span class="press-tag${p.major ? ' is-major' : ''}">${p.major ? '제휴' : '비제휴'}</span>${canBlock(src)
+            ? `<button type="button" class="pv-btn" onclick="togglePressBlock(${arg(src)})">${pressBlock.includes(src.toLowerCase()) ? '해제' : '제외'}</button>` : ''}</div>
         </div>`).join('')
         : '<p class="au-empty">기사를 불러오면 이 화면의 언론사가 나옵니다.</p>';
+
+      // [언론사 A] 제외한 언론사 (지금 화면에 없는 곳도 여기서 해제한다)
+      const bw = document.getElementById('press-block-list');
+      if (!bw) return;
+      const bc = document.getElementById('press-block-count');
+      if (bc) bc.textContent = pressBlock.length ? `${pressBlock.length}곳` : '';
+      bw.innerHTML = pressBlock.length ? pressBlock.map((d) => `<div class="st-item">
+          <span class="st-item-name"><span class="truncate">${esc(d)}</span><span>${pressStats.press.has(d) ? `이 화면 기사 ${pressStats.press.get(d).n}건` : '이 화면에는 없음'}</span></span>
+          <div class="au-btns"><button type="button" class="pv-btn" onclick="togglePressBlock(${arg(d)})">해제</button></div>
+        </div>`).join('')
+        : '<p class="au-empty">없음 · 아래 \'이 화면의 언론사\'에서 [제외]를 누르면 여기에 모입니다.</p>';
     }
 
     function pressStatsText() {
@@ -6852,12 +6895,48 @@
         + (screenPrefs.majorPress ? ' 숨김' : ' · 켜면 숨김');
     }
 
+    // ---------------------------------------------------------------
+    // [언론사 A] 제외한 언론사 : 기사 출처 도메인 목록 (예 'abc.co.kr' → 'news.abc.co.kr' 도 같이 뺀다)
+    //   '주요 언론사만'과 같은 자리(섹션 목록)에서 빠진다. 제휴 언론사도 뺄 수 있다.
+    //   내 계정에 저장(pressBlock)하고, 이 기기에도 사본을 둔다(첫 화면부터 빼려고).
+    // ---------------------------------------------------------------
+    const PRESS_BLOCK_KEY = 'newsinsight:press-block:v1';
+    const PRESS_BLOCK_MAX = 300;   // 서버와 같은 상한
+    let pressBlock = [];           // 가나다순
+
+    function cleanPressBlock(list) {
+      return [...new Set((Array.isArray(list) ? list : []).filter((d) => typeof d === 'string')
+        .map((d) => d.trim().toLowerCase()).filter((d) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d) && d.length <= 100))]
+        .sort().slice(0, PRESS_BLOCK_MAX);
+    }
+
+    function loadPressBlock() {
+      try { pressBlock = cleanPressBlock(JSON.parse(localStorage.getItem(PRESS_BLOCK_KEY) || '[]')); } catch { pressBlock = []; }
+    }
+
+    function isPressBlocked(source) {
+      const src = String(source || '').toLowerCase();
+      return pressBlock.some((d) => src === d || src.endsWith('.' + d));
+    }
+
+    function togglePressBlock(source) {
+      const src = String(source || '').toLowerCase();
+      const next = pressBlock.includes(src) ? pressBlock.filter((d) => d !== src) : cleanPressBlock([...pressBlock, src]);
+      if (next.length === pressBlock.length && next.every((d, i) => d === pressBlock[i])) return;   // 모양이 틀린 주소('출처 미상' 등)
+      pressBlock = next;
+      try { localStorage.setItem(PRESS_BLOCK_KEY, JSON.stringify(pressBlock)); } catch {}
+      queuePref('pressBlock', pressBlock);
+      prefRerunOnClose = true;   // 설정 창을 닫을 때 다시 불러온다
+      renderPressList();
+    }
+
     function decorateItemsCore(items, category, keepAll = false, keepBlocked = false) {
       const sectionList = !keepAll && !keepBlocked && category !== 'saved';
       if (sectionList) countPress(items);
       const shown = keepAll || category === 'saved' ? items : items.filter((item) =>
         !isDislikedKey(savedKeyOf(item)) && (keepBlocked || !isBlockedFor(item, category))
-        && (!sectionList || !screenPrefs.majorPress || item.movedFrom || isMajorPress(item)));
+        && (!sectionList || item.movedFrom
+          || ((!screenPrefs.majorPress || isMajorPress(item)) && !isPressBlocked(item.source))));
       return shown.map((item) => ({
         id: nextId++,
         title: item.title || '(제목 없음)',

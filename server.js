@@ -822,6 +822,14 @@ const isPlainObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 // [P9] 사용자가 고른 AI 모델 이름. 구글 주소(models/<이름>:generateContent)에 그대로 들어가므로 글자 종류를 좁게 막는다.
 const AI_MODEL_RE = /^gemini-[a-z0-9][a-z0-9.-]{0,60}$/;
 
+// [언론사 A] 제외한 언론사 = 기사 출처 도메인(guessSource 값, 예 'abc.co.kr'). 계정 설정 · 화면 요청(?xp=) 모두 이 모양만 받는다.
+const PRESS_DOMAIN_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+const PRESS_BLOCK_MAX = 300;
+function cleanPressDomains(list) {
+  return [...new Set(list.filter((d) => typeof d === 'string').map((d) => d.trim().toLowerCase())
+    .filter((d) => d.length <= 100 && PRESS_DOMAIN_RE.test(d)))].slice(0, PRESS_BLOCK_MAX);
+}
+
 // 허용한 칸 · 모양이 맞는 값만 남긴다. 모르는 칸은 버린다.
 function cleanPrefsPatch(p) {
   const out = {};
@@ -845,6 +853,7 @@ function cleanPrefsPatch(p) {
   }
   ['railCollapsed', 'dimRead', 'reco', 'majorPress'].forEach((k) => { if (typeof p[k] === 'boolean') out[k] = p[k]; });
   if (Number.isFinite(p.recoReset) && p.recoReset >= 0) out.recoReset = Math.floor(p.recoReset);
+  if (Array.isArray(p.pressBlock)) out.pressBlock = cleanPressDomains(p.pressBlock);   // [언론사 A] 배열은 통째로 바꾼다
   if (p.aiModel === 'auto' || (typeof p.aiModel === 'string' && AI_MODEL_RE.test(p.aiModel))) out.aiModel = p.aiModel;
   return out;
 }
@@ -3254,26 +3263,39 @@ function selectBriefing(groups, limit) {
 //   화면이 ?press=major 를 보내면 고르기(브리핑 · 엄선 목록) '전에' 비제휴 기사를 뺀다.
 //   고른 뒤에 화면에서 빼면 노출 건수를 못 채운다(10건 중 4건이 빠져 6건).
 //   칸(캐시)은 거르지 않은 그대로 같이 쓴다 → 칸 열쇠는 그대로, 고른 결과 기억(memoPick) 열쇠에만 넣는다.
+// [언론사 A] 같은 자리에서 '제외한 언론사'(?xp=도메인,도메인)도 뺀다. 제휴 언론사도 뺄 수 있다.
+//   'abc.co.kr' 을 빼면 'news.abc.co.kr' · 'm.abc.co.kr' 도 같이 빠진다.
 function isMajorPressItem(it) {
   try { return /(^|\.)naver\.com$/i.test(new URL(it.naverUrl).hostname); } catch { return false; }
 }
-const pressFilter = (majorOnly) => (items) => (majorOnly ? items.filter(isMajorPressItem) : items);
-//   한 섹션짜리 화면(/api/topic · 하위 섹션)은 칸에 '요청 건수만큼 자른' 기사가 담긴다. 그래서 주요 언론사만이면
+const PRESS_NONE = { majorOnly: false, block: [] };
+function pressOptsOf(req) {
+  return { majorOnly: req.query.press === 'major', block: cleanPressDomains(String(req.query.xp || '').split(',')).sort() };
+}
+const pressActive = (o) => o.majorOnly || o.block.length > 0;
+const pressSig = (o) => `${o.majorOnly ? 'major' : ''}|${o.block.join(',')}`;   // 고른 결과 기억 열쇠용
+function pressFilter(o) {
+  if (!pressActive(o)) return (items) => items;
+  const blocked = (src) => o.block.some((d) => src === d || src.endsWith('.' + d));
+  return (items) => items.filter((it) => (!o.majorOnly || isMajorPressItem(it)) && !blocked(String(it.source || '').toLowerCase()));
+}
+//   한 섹션짜리 화면(/api/topic · 하위 섹션)은 칸에 '요청 건수만큼 자른' 기사가 담긴다. 그래서 거를 게 있으면
 //   요청 건수 대신 이 건수(라우트 허용 최대치)로 칸을 만들어 거른 뒤 자른다. 이 칸은 프리워밍 대상이 아니다.
 const PRESS_POOL = 50;
 async function sectionItemsForPress(req, want, load) {
-  const majorOnly = req.query.press === 'major';
-  const data = await load(majorOnly ? PRESS_POOL : want);
-  return majorOnly ? { ...data, items: data.items.filter(isMajorPressItem).slice(0, want) } : data;
+  const press = pressOptsOf(req);
+  if (!pressActive(press)) return load(want);
+  const data = await load(PRESS_POOL);
+  return { ...data, items: pressFilter(press)(data.items).slice(0, want) };
 }
 
-async function buildBriefing({ limit, dateFrom, dateTo, hours, majorOnly = false }, kwMap) {
+async function buildBriefing({ limit, dateFrom, dateTo, hours, pressOpts = PRESS_NONE }, kwMap) {
   const { cfg, main, words, fill } = briefingParts({ dateFrom, dateTo, hours }, kwMap);
   const get = (p) => cachedResponse(p.key, TTL_SECTION, p.run);
   const exOf = (sec) => (cfg.per[sec] && cfg.per[sec].exclude) || [];
-  const press = pressFilter(majorOnly);
-  // 칸 말고 고르기를 바꾸는 값 : 건수 · 주요 언론사만 · 브리핑 설정(고른 섹션 순서 · 키워드와 그 섹션 · Brief 제외어)
-  const memoKey = `briefing|${limit}|${majorOnly ? 'major' : ''}|${JSON.stringify(cfg)}`;
+  const press = pressFilter(pressOpts);
+  // 칸 말고 고르기를 바꾸는 값 : 건수 · 주요 언론사만 · 제외한 언론사 · 브리핑 설정(고른 섹션 순서 · 키워드와 그 섹션 · Brief 제외어)
+  const memoKey = `briefing|${limit}|${pressSig(pressOpts)}|${JSON.stringify(cfg)}`;
 
   // 1) 고른 섹션 + 섹션별 키워드를 한꺼번에 수집 (카테고리별로 따로 받아 속보 쏠림 방지)
   const [mainData, kwData] = await Promise.all([Promise.all(main.map(get)), Promise.all(words.map(get))]);
@@ -3306,7 +3328,7 @@ async function buildBriefing({ limit, dateFrom, dateTo, hours, majorOnly = false
 
 app.get('/api/briefing', async (req, res) => {
   const { dateFrom, dateTo, hours } = req.query;
-  const opts = { limit: Math.min(Number(req.query.limit) || 5, 30), dateFrom, dateTo, hours, majorOnly: req.query.press === 'major' };
+  const opts = { limit: Math.min(Number(req.query.limit) || 5, 30), dateFrom, dateTo, hours, pressOpts: pressOptsOf(req) };
   const kwMap = await kwMapFor(req);
 
   try {
@@ -4005,15 +4027,15 @@ function digestParts(sources, { dateFrom, dateTo, hours }, kwMap) {
   }));
 }
 
-async function buildDigest(sources, opts, kwMap, majorOnly = false) {
+async function buildDigest(sources, opts, kwMap, pressOpts = PRESS_NONE) {
   const lists = await Promise.all(
     digestParts(sources, opts, kwMap).map((p) => cachedResponse(p.key, TTL_SECTION, p.run))
   );
   // 순위는 소스 섹션 목록과 칸 내용만으로 정해진다 → 같은 칸이면 사용자가 달라도 같은 결과를 다시 쓴다
-  //   [언론사 C] 주요 언론사만이면 순위를 매기기 전에 거른다. 기억 열쇠는 칸 값 객체 그대로(lists)라 거른 복사본은 안에서 만든다.
-  const press = pressFilter(majorOnly);
-  return memoPick(`digest|${majorOnly ? 'major' : ''}|${sources.map((s) => s.key).join(',')}`, lists,
-    () => rankDigest(sources, majorOnly ? lists.map((d) => ({ items: press(d.items) })) : lists));
+  //   [언론사 C · A] 거를 게 있으면 순위를 매기기 전에 거른다. 기억 열쇠는 칸 값 객체 그대로(lists)라 거른 복사본은 안에서 만든다.
+  const press = pressFilter(pressOpts);
+  return memoPick(`digest|${pressSig(pressOpts)}|${sources.map((s) => s.key).join(',')}`, lists,
+    () => rankDigest(sources, pressActive(pressOpts) ? lists.map((d) => ({ items: press(d.items) })) : lists));
 }
 
 function rankDigest(sources, lists) {
@@ -4075,7 +4097,7 @@ function registerDigestRoute(base, SECTIONS) {
     const opts = { dateFrom, dateTo, hours };
     const limit = Math.min(Math.max(Number(display) || 10, 1), DIGEST_KEEP);
     try {
-      const data = await buildDigest(sources, opts, kwMap, req.query.press === 'major');
+      const data = await buildDigest(sources, opts, kwMap, pressOptsOf(req));
       let items = data.items.slice(0, limit);
       // 최신순을 골랐으면 '뽑힌 기사들' 안에서만 시간순으로 다시 늘어놓는다.
       //   무엇을 뽑을지는 정렬과 상관없이 언제나 중요도 기준이다.
