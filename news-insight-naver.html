@@ -209,6 +209,8 @@
      다크로 새로고침할 때 그 사이 밝은 화면이 비치지 않게 html 에 같은 배경을 먼저 깐다.
      screen 한정 : 인쇄는 흰 종이로 따로 맞춘다(@media print). */
   @media screen { html { background: rgb(var(--c-ink)); } }
+  /* 헤더 아래 선 : 헤더의 Tailwind border-b-2 는 테마를 몰라서 여기서 --bw2 로 덮는다 (id 라 클래스보다 우선) */
+  #app-header { border-bottom-width: var(--bw2); }
   /* 화이트 테마에서 어두운 배경을 전제로 한 amber 계열 배너 색 보정 */
   :root[data-theme="light"] .text-amber-200 { color: #92400e; }
   /* [삭제] 'Insight' 버튼·배지의 연한 초록 보정 규칙은 Phase 4 에서 걷어냈다.
