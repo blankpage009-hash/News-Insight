@@ -3928,6 +3928,140 @@ app.post('/api/news-images', async (req, res) => {
 });
 
 // -----------------------------------------------------------------
+// [언론사 이름] /api/press-names : 기사 출처 도메인 → 언론사 이름
+//   네이버 검색 API 는 언론사 이름을 주지 않는다(도메인만 안다). 그래서
+//   ① 확실히 아는 전국 언론사는 아래 표에서 바로 주고
+//   ② 나머지는 그 언론사 홈페이지 <head> 의 사이트 이름(og:site_name → application-name → <title>)을 읽는다.
+//   원문 읽기는 사진(news-images)과 같은 안전한 길(fetchPageHead : 내부망 차단 · 재전송 검사)과 같은 슬롯을 쓴다.
+//   못 찾으면 '' — 화면은 도메인을 그대로 보여 준다. 이름을 지어내지 않는다.
+//   캐시는 respCache 와 따로 둔다(섹션 응답을 밀어내지 않게, PERFORMANCE.md 4절).
+// -----------------------------------------------------------------
+const PRESS_NAMES_KNOWN = {
+  'yna.co.kr': '연합뉴스', 'yonhapnewstv.co.kr': '연합뉴스TV', 'chosun.com': '조선일보', 'biz.chosun.com': '조선비즈',
+  'joongang.co.kr': '중앙일보', 'donga.com': '동아일보', 'hani.co.kr': '한겨레', 'khan.co.kr': '경향신문',
+  'hankookilbo.com': '한국일보', 'seoul.co.kr': '서울신문', 'segye.com': '세계일보', 'kmib.co.kr': '국민일보',
+  'munhwa.com': '문화일보', 'naeil.com': '내일신문', 'hankyung.com': '한국경제', 'mk.co.kr': '매일경제',
+  'sedaily.com': '서울경제', 'edaily.co.kr': '이데일리', 'mt.co.kr': '머니투데이', 'fnnews.com': '파이낸셜뉴스',
+  'asiae.co.kr': '아시아경제', 'heraldcorp.com': '헤럴드경제', 'etoday.co.kr': '이투데이', 'etnews.com': '전자신문',
+  'dt.co.kr': '디지털타임스', 'zdnet.co.kr': '지디넷코리아', 'bloter.net': '블로터', 'news1.kr': '뉴스1',
+  'newsis.com': '뉴시스', 'nocutnews.co.kr': '노컷뉴스', 'ohmynews.com': '오마이뉴스', 'pressian.com': '프레시안',
+  'mediatoday.co.kr': '미디어오늘', 'kbs.co.kr': 'KBS', 'imbc.com': 'MBC', 'sbs.co.kr': 'SBS', 'biz.sbs.co.kr': 'SBS Biz',
+  'ytn.co.kr': 'YTN', 'jtbc.co.kr': 'JTBC', 'ichannela.com': '채널A', 'mbn.co.kr': 'MBN', 'tvchosun.com': 'TV조선',
+  'wowtv.co.kr': '한국경제TV', 'koreaherald.com': '코리아헤럴드', 'koreatimes.co.kr': '코리아타임스',
+  'inews24.com': '아이뉴스24', 'ajunews.com': '아주경제', 'newspim.com': '뉴스핌', 'dailian.co.kr': '데일리안',
+  'mydaily.co.kr': '마이데일리', 'osen.co.kr': 'OSEN', 'sportsseoul.com': '스포츠서울', 'sports.donga.com': '스포츠동아',
+  'xportsnews.com': '엑스포츠뉴스', 'newsen.com': '뉴스엔', 'starnewskorea.com': '스타뉴스', 'bizwatch.co.kr': '비즈워치',
+  'thebell.co.kr': '더벨', 'businesspost.co.kr': '비즈니스포스트', 'mediapen.com': '미디어펜', 'newdaily.co.kr': '뉴데일리',
+  'nongmin.com': '농민신문',
+};
+const PRESS_NAME_TTL_OK = 7 * 24 * 60 * 60 * 1000;   // 언론사 이름은 거의 안 바뀐다
+const PRESS_NAME_TTL_FAIL = 6 * 60 * 60 * 1000;      // 못 읽은 곳은 몇 시간 뒤 다시 기회를 준다
+const PRESS_NAME_CACHE_MAX = 3000;
+const PRESS_NAME_REQ_MAX = 60;                        // 한 번에 물을 수 있는 도메인 수
+const pressNameCache = new Map();                     // 도메인 -> { ts, name }
+const pressNameInflight = new Map();
+
+// 표에서 찾기 : 'news.kbs.co.kr' → 'kbs.co.kr' 처럼 가장 긴 꼬리부터
+function knownPressName(domain) {
+  const parts = domain.split('.');
+  for (let i = 0; i < parts.length - 1; i++) {
+    const hit = PRESS_NAMES_KNOWN[parts.slice(i).join('.')];
+    if (hit) return hit;
+  }
+  return '';
+}
+
+// <head> 의 글자는 latin1 로 읽혀 있다(readHead). 문서 문자셋으로 풀고 나서 태그 · 문자 참조를 정리한다.
+function decodeHeadText(raw, html) {
+  const bytes = Buffer.from(raw, 'latin1');
+  const euckr = /charset\s*=\s*["']?\s*(euc-kr|ks_c_5601-1987|cp949|x-windows-949)/i.test(html);
+  let text;
+  try { text = new TextDecoder(euckr ? 'euc-kr' : 'utf-8').decode(bytes); } catch { text = bytes.toString('utf8'); }
+  return stripHtml(text
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d))));
+}
+
+// 사이트 이름 후보 → 언론사 이름. '물류신문 - 물류 전문 언론' · '홈 | 카고뉴스' 같은 꼴에서 이름 조각만 남긴다.
+const PRESS_NAME_GENERIC = /^(홈|홈페이지|메인|main|home|index|뉴스|news|기사|articles?|untitled)$/i;
+function cleanPressName(text) {
+  const parts = String(text || '').split(/\s+[|\-–—:·]\s+|\s*[|｜]\s*/).map((t) => t.trim()).filter(Boolean);
+  const name = parts.find((t) => !PRESS_NAME_GENERIC.test(t)) || '';
+  if (name.length < 2 || name.length > 30) return '';
+  if (/[<>{}]|https?:|www\.|\.(com|kr|net|co)\b/i.test(name)) return '';
+  return name;
+}
+
+function pickPressName(html) {
+  const title = (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
+  const metaRaw = (prop) => {
+    const tag = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]*>`, 'i'))?.[0];
+    return tag ? (tag.match(/content=["']([\s\S]*?)["']/i)?.[1] || '') : '';
+  };
+  for (const raw of [metaRaw('og:site_name'), metaRaw('application-name'), title]) {
+    const name = cleanPressName(decodeHeadText(raw, html));
+    if (name) return name;
+  }
+  return '';
+}
+
+async function fetchPressName(domain) {
+  await imageSlotAcquire();
+  try {
+    // 'news.abc.co.kr' 처럼 하위 주소는 홈이 없을 때가 많다 → 못 찾으면 한 단계 위('abc.co.kr')도 본다.
+    //   단 'co.kr' 처럼 두 글자 꼬리만 남는 경우는 보지 않는다.
+    const hosts = [domain];
+    const parts = domain.split('.');
+    if (parts.length >= 3 && !/^(co|or|go|ne|re|ac|pe)\.[a-z]{2}$/.test(parts.slice(1).join('.'))) hosts.push(parts.slice(1).join('.'));
+    for (const host of hosts) {
+      for (const scheme of ['https', 'http']) {
+        const page = await fetchPageHead(`${scheme}://${host}/`);
+        if (!page) continue;
+        const name = pickPressName(page.html);
+        if (name) return name;
+        break;   // 열렸는데 이름이 없으면 http 로 다시 볼 필요는 없다
+      }
+    }
+    return '';
+  } finally {
+    imageSlotRelease();
+  }
+}
+
+function pressNameFor(domain) {
+  const known = knownPressName(domain);
+  if (known) return Promise.resolve(known);
+  const hit = pressNameCache.get(domain);
+  if (hit && Date.now() - hit.ts < (hit.name ? PRESS_NAME_TTL_OK : PRESS_NAME_TTL_FAIL)) return Promise.resolve(hit.name);
+  if (pressNameInflight.has(domain)) return pressNameInflight.get(domain);
+  if (imageWaiters.length >= IMAGE_QUEUE_MAX) return Promise.resolve(undefined);   // 붐빈다 → 다음에
+  const p = fetchPressName(domain).catch(() => '').then((name) => {
+    pressNameCache.delete(domain);
+    pressNameCache.set(domain, { ts: Date.now(), name });
+    while (pressNameCache.size > PRESS_NAME_CACHE_MAX) pressNameCache.delete(pressNameCache.keys().next().value);
+    return name;
+  }).finally(() => pressNameInflight.delete(domain));
+  pressNameInflight.set(domain, p);
+  return p;
+}
+
+//   body { domains: ['abc.co.kr', …] } → { names: { 도메인: 이름 | '' }, pending: [도메인] }
+//   사진과 같이 5초 안에 못 끝낸 곳은 pending 으로 돌려주고 뒤에서 계속 읽는다(화면이 한 번 더 묻는다).
+app.post('/api/press-names', async (req, res) => {
+  const list = cleanPressDomains(Array.isArray(req.body && req.body.domains) ? req.body.domains : []).slice(0, PRESS_NAME_REQ_MAX);
+  const found = new Map();
+  const jobs = list.map((d) => pressNameFor(d).then((name) => { if (name !== undefined) found.set(d, name); }));
+  let timer;
+  await Promise.race([
+    Promise.all(jobs),
+    new Promise((resolve) => { timer = setTimeout(resolve, IMAGE_REQ_DEADLINE_MS); }),
+  ]);
+  clearTimeout(timer);
+  res.set('Cache-Control', 'no-store');
+  res.json({ names: Object.fromEntries(found), pending: list.filter((d) => !found.has(d)) });
+});
+
+// -----------------------------------------------------------------
 // 하위 카테고리 1개 조회 : /api/{base}/section/:key
 //  -> 물류 / 증시 / 스포츠 / 경제 네 곳에서 함께 사용
 //
