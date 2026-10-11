@@ -3250,23 +3250,41 @@ function selectBriefing(groups, limit) {
     .map(({ it: { _tokens, _titleWords, _words, _score, _group, _tier, ...it } }) => it);
 }
 
-async function buildBriefing({ limit, dateFrom, dateTo, hours }, kwMap) {
+// [언론사 C] '주요 언론사만' : 네이버가 link 를 네이버 뉴스 주소로 준 기사 = 네이버 뉴스 제휴 언론사 기사.
+//   화면이 ?press=major 를 보내면 고르기(브리핑 · 엄선 목록) '전에' 비제휴 기사를 뺀다.
+//   고른 뒤에 화면에서 빼면 노출 건수를 못 채운다(10건 중 4건이 빠져 6건).
+//   칸(캐시)은 거르지 않은 그대로 같이 쓴다 → 칸 열쇠는 그대로, 고른 결과 기억(memoPick) 열쇠에만 넣는다.
+function isMajorPressItem(it) {
+  try { return /(^|\.)naver\.com$/i.test(new URL(it.naverUrl).hostname); } catch { return false; }
+}
+const pressFilter = (majorOnly) => (items) => (majorOnly ? items.filter(isMajorPressItem) : items);
+//   한 섹션짜리 화면(/api/topic · 하위 섹션)은 칸에 '요청 건수만큼 자른' 기사가 담긴다. 그래서 주요 언론사만이면
+//   요청 건수 대신 이 건수(라우트 허용 최대치)로 칸을 만들어 거른 뒤 자른다. 이 칸은 프리워밍 대상이 아니다.
+const PRESS_POOL = 50;
+async function sectionItemsForPress(req, want, load) {
+  const majorOnly = req.query.press === 'major';
+  const data = await load(majorOnly ? PRESS_POOL : want);
+  return majorOnly ? { ...data, items: data.items.filter(isMajorPressItem).slice(0, want) } : data;
+}
+
+async function buildBriefing({ limit, dateFrom, dateTo, hours, majorOnly = false }, kwMap) {
   const { cfg, main, words, fill } = briefingParts({ dateFrom, dateTo, hours }, kwMap);
   const get = (p) => cachedResponse(p.key, TTL_SECTION, p.run);
   const exOf = (sec) => (cfg.per[sec] && cfg.per[sec].exclude) || [];
-  // 칸 말고 고르기를 바꾸는 값 : 건수 · 브리핑 설정(고른 섹션 순서 · 키워드와 그 섹션 · Brief 제외어)
-  const memoKey = `briefing|${limit}|${JSON.stringify(cfg)}`;
+  const press = pressFilter(majorOnly);
+  // 칸 말고 고르기를 바꾸는 값 : 건수 · 주요 언론사만 · 브리핑 설정(고른 섹션 순서 · 키워드와 그 섹션 · Brief 제외어)
+  const memoKey = `briefing|${limit}|${majorOnly ? 'major' : ''}|${JSON.stringify(cfg)}`;
 
   // 1) 고른 섹션 + 섹션별 키워드를 한꺼번에 수집 (카테고리별로 따로 받아 속보 쏠림 방지)
   const [mainData, kwData] = await Promise.all([Promise.all(main.map(get)), Promise.all(words.map(get))]);
   // Brief 제외어와 키워드 태그(키워드 + 그 키워드를 둔 섹션)는 칸을 읽은 뒤에 건다.
   //   칸은 사람마다 다른 이 값들과 상관없이 같이 쓴다. 칸의 배열 · 기사는 고치지 않는다(selectBriefing 도 복사본만 고친다).
   const firstGroups = () => [
-    ...main.map((p, i) => ({ id: p.src.cat, tier: 1, items: applyExcludeList(mainData[i].items, exOf(p.src.cat)) })),
+    ...main.map((p, i) => ({ id: p.src.cat, tier: 1, items: press(applyExcludeList(mainData[i].items, exOf(p.src.cat))) })),
     ...words.map((p, i) => ({
       id: `kw:${p.sec}:${p.w}`,
       tier: 2,
-      items: applyExcludeList(kwData[i].items, exOf(p.sec)).slice(0, 10)
+      items: press(applyExcludeList(kwData[i].items, exOf(p.sec))).slice(0, 10)
         .map((it) => ({ ...it, cat: 'mykw', cats: ['mykw', p.sec], kw: p.w })),
     })),
   ];
@@ -3279,7 +3297,7 @@ async function buildBriefing({ limit, dateFrom, dateTo, hours }, kwMap) {
     const fillData = await Promise.all(fill.map(get));
     items = memoPick(`${memoKey}|2`, [...firstValues, ...fillData], () => selectBriefing([
       ...firstGroups(),
-      ...fill.map((p, i) => ({ id: p.src.cat, tier: 3, items: fillData[i].items })),
+      ...fill.map((p, i) => ({ id: p.src.cat, tier: 3, items: press(fillData[i].items) })),
     ], limit));
   }
 
@@ -3288,7 +3306,7 @@ async function buildBriefing({ limit, dateFrom, dateTo, hours }, kwMap) {
 
 app.get('/api/briefing', async (req, res) => {
   const { dateFrom, dateTo, hours } = req.query;
-  const opts = { limit: Math.min(Number(req.query.limit) || 5, 30), dateFrom, dateTo, hours };
+  const opts = { limit: Math.min(Number(req.query.limit) || 5, 30), dateFrom, dateTo, hours, majorOnly: req.query.press === 'major' };
   const kwMap = await kwMapFor(req);
 
   try {
@@ -3909,13 +3927,16 @@ function registerSubSectionRoute(base, SECTIONS) {
 
     const { dateFrom, dateTo, display = '20', hours, sort } = req.query;
     const kwMap = await kwMapFor(req);
-    const opts = { limit: Math.min(Number(display) || 20, 50), dateFrom, dateTo, hours, sort };
+    const want = Math.min(Number(display) || 20, 50);
     try {
-      res.json(await cachedResponse(
-        buildSectionsKey(`${base}/section/${sec.key}`, [sec], opts, kwMap),
-        TTL_SECTION,
-        () => buildOneSection(sec, opts, kwMap),
-      ));
+      res.json(await sectionItemsForPress(req, want, (limit) => {
+        const opts = { limit, dateFrom, dateTo, hours, sort };
+        return cachedResponse(
+          buildSectionsKey(`${base}/section/${sec.key}`, [sec], opts, kwMap),
+          TTL_SECTION,
+          () => buildOneSection(sec, opts, kwMap),
+        );
+      }));
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
@@ -3984,12 +4005,15 @@ function digestParts(sources, { dateFrom, dateTo, hours }, kwMap) {
   }));
 }
 
-async function buildDigest(sources, opts, kwMap) {
+async function buildDigest(sources, opts, kwMap, majorOnly = false) {
   const lists = await Promise.all(
     digestParts(sources, opts, kwMap).map((p) => cachedResponse(p.key, TTL_SECTION, p.run))
   );
   // 순위는 소스 섹션 목록과 칸 내용만으로 정해진다 → 같은 칸이면 사용자가 달라도 같은 결과를 다시 쓴다
-  return memoPick(`digest|${sources.map((s) => s.key).join(',')}`, lists, () => rankDigest(sources, lists));
+  //   [언론사 C] 주요 언론사만이면 순위를 매기기 전에 거른다. 기억 열쇠는 칸 값 객체 그대로(lists)라 거른 복사본은 안에서 만든다.
+  const press = pressFilter(majorOnly);
+  return memoPick(`digest|${majorOnly ? 'major' : ''}|${sources.map((s) => s.key).join(',')}`, lists,
+    () => rankDigest(sources, majorOnly ? lists.map((d) => ({ items: press(d.items) })) : lists));
 }
 
 function rankDigest(sources, lists) {
@@ -4051,7 +4075,7 @@ function registerDigestRoute(base, SECTIONS) {
     const opts = { dateFrom, dateTo, hours };
     const limit = Math.min(Math.max(Number(display) || 10, 1), DIGEST_KEEP);
     try {
-      const data = await buildDigest(sources, opts, kwMap);
+      const data = await buildDigest(sources, opts, kwMap, req.query.press === 'major');
       let items = data.items.slice(0, limit);
       // 최신순을 골랐으면 '뽑힌 기사들' 안에서만 시간순으로 다시 늘어놓는다.
       //   무엇을 뽑을지는 정렬과 상관없이 언제나 중요도 기준이다.
@@ -4093,13 +4117,16 @@ app.get('/api/topic/:key', async (req, res) => {
 
   const { dateFrom, dateTo, display = '20', hours, sort } = req.query;
   const kwMap = await kwMapFor(req);
-  const opts = { limit: Math.min(Number(display) || 20, 50), dateFrom, dateTo, hours, sort };
+  const want = Math.min(Number(display) || 20, 50);
   try {
-    res.json(await cachedResponse(
-      buildSectionsKey(`topic/${sec.key}`, [sec], opts, kwMap),
-      sec.breaking ? TTL_BREAKING : TTL_SECTION,
-      () => buildTopic(sec, opts, kwMap),
-    ));
+    res.json(await sectionItemsForPress(req, want, (limit) => {
+      const opts = { limit, dateFrom, dateTo, hours, sort };
+      return cachedResponse(
+        buildSectionsKey(`topic/${sec.key}`, [sec], opts, kwMap),
+        sec.breaking ? TTL_BREAKING : TTL_SECTION,
+        () => buildTopic(sec, opts, kwMap),
+      );
+    }));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });

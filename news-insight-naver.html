@@ -6698,6 +6698,7 @@
       const params = new URLSearchParams({ limit: String(display || getCount()), hours: String(getHours()) });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
+      if (screenPrefs.majorPress) params.set('press', 'major');   // [언론사 C] 서버가 고르기 전에 걸러야 노출 건수를 채운다
       const data = await apiGet(`/api/briefing?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
@@ -6717,6 +6718,7 @@
       const params = new URLSearchParams({ display: String(display || getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
+      if (screenPrefs.majorPress) params.set('press', 'major');   // [언론사 C] 서버가 넉넉히 받아 거른 뒤 건수만큼 준다
       const data = await apiGet(`/api/${base}/section/${key}?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
@@ -6729,6 +6731,7 @@
       const params = new URLSearchParams({ display: String(display || getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
+      if (screenPrefs.majorPress) params.set('press', 'major');   // [언론사 C] 위 브리핑과 같은 이유
       const data = await apiGet(`/api/${base}/digest?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
@@ -6739,6 +6742,7 @@
       const params = new URLSearchParams({ display: String(display || getCount()), hours: String(getHours()), sort: getSort() });
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
+      if (screenPrefs.majorPress) params.set('press', 'major');   // [언론사 C] 위 하위 섹션과 같은 이유
       const data = await apiGet(`/api/topic/${key}?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data.items;
