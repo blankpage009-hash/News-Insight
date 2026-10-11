@@ -2438,7 +2438,7 @@
             <div class="st-name">
               <b>섹션에서 뺀 기사</b>
               <span class="st-hint">기사의 👎 에서 <b>섹션 이동</b>을 고르면 모든 사용자의 그 섹션에서 빠지고, 옮길 섹션이 기록됩니다
-                (표시된 <b>A → B</b> 는 A 에서 B 로 옮기라는 기록입니다. 지금은 B 섹션에 보이게 하는 기능이 없습니다).
+                (표시된 <b>A → B</b> 는 A 에서 B 로 옮긴 기사입니다. 모든 사용자의 B 섹션 목록에 게재 시각 순서대로 끼어 보입니다).
                 <b>해제</b>하면 다시 보입니다. 누르는 즉시 반영됩니다.</span>
             </div>
             <div class="min-w-0">
@@ -3811,6 +3811,7 @@
         setSectionBlocks((data.blocks || []).filter((b) => b && b.key && b.section));
         persistSectionBlocks();
         dropBlockedFromScreen();
+        reconcileMovedOnScreen();
         renderSectionBlocksAdmin();
       } catch (e) { console.error('섹션에서 뺀 기사 목록을 불러오지 못했습니다.', e); }
     }
@@ -3827,6 +3828,63 @@
       sectionState.forEach((s) => sweep(s.items));
       sweep(currentResults);
       if (removed) { rerenderListIfShown(); topUpList(); }
+    }
+
+    // [오분류 B2] 관리자가 '섹션 이동'으로 이 섹션에 옮긴 기사 (서버 기록 → 기사 모양으로 되살린 것)
+    //   섹션 자체(to)나 그 하위 섹션으로 옮긴 기사가 해당 섹션 목록에 들어간다 (예 : '쿠팡'으로 옮기면 쿠팡 · 물류 화면).
+    //   게재 기간 밖의 기사는 제외한다. 이미 목록에 있는 기사는 decorateItems 가 겹치지 않게 거른다.
+    function movedRawFor(category, hours = getHours()) {
+      const limit = hours === 'all' ? 0 : Number(hours) * 3600 * 1000;
+      const seen = new Set();
+      const out = [];
+      sectionBlocks.forEach((b) => {
+        if (!b.to || !b.art || seen.has(b.key)) return;
+        if (b.to !== category && parentCategoryOf(b.to) !== category) return;
+        const t = Date.parse(b.art.publishedAt || '');
+        if (limit && t && Date.now() - t > limit) return;
+        seen.add(b.key);
+        out.push({
+          title: b.title || '(제목 없음)',
+          summary: b.art.summary ? [b.art.summary] : [],
+          source: b.art.source, url: b.key, naverUrl: '', datetime: b.art.publishedAt,
+          cat: b.to, cats: [b.to], kw: b.art.kw, movedFrom: b.section,
+        });
+      });
+      return out;
+    }
+
+    // 이미 그려 둔 목록을 '지금 옮김 기록'에 맞춘다 : 해제 · 되돌리기 · 늦게 온 서버 값 · 방금 옮긴 기사.
+    //   목적지에서 빼야 할 기사(기록이 사라짐)는 걷어 내고, 더할 기사(기록이 생김)는 게재 시각 자리에 끼운다.
+    //   검색 결과 · 저장 화면 · 브리핑 · 속보는 섹션 목록이 아니라 건드리지 않는다.
+    function reconcileMovedOnScreen() {
+      if (['saved', 'keywords', 'briefing', 'breaking'].includes(currentCategory) || document.getElementById('search-input').value.trim()) return;
+      let changed = false;
+      const timeOf = (it) => Date.parse(it.datetime || '') || 0;
+      const putByTime = (arr, it, sort) => {
+        const at = sort === 'date' ? arr.findIndex((x) => timeOf(x) < timeOf(it)) : -1;
+        if (at < 0) arr.push(it); else arr.splice(at, 0, it);
+      };
+      const sweep = (arr) => {
+        for (let i = arr.length - 1; i >= 0; i--) {
+          if (arr[i].movedFrom && !blockedSet.has(blockId(savedKeyOf(arr[i]), arr[i].movedFrom))) { arr.splice(i, 1); changed = true; }
+        }
+      };
+      const addTo = (arr, category, hours, sort) => {
+        const have = new Set(arr.map(savedKeyOf));
+        decorateItemsCore(movedRawFor(category, hours).filter((r) => !have.has(savedKeyOf(r))), category).forEach((it) => {
+          putByTime(arr, it, sort); changed = true;
+        });
+      };
+      sectionState.forEach((s) => sweep(s.items));
+      sweep(currentResults);
+      if (sectionState.length) {
+        sectionState.forEach((s) => addTo(s.items, s.key, s.hours, s.sort));
+        mergeCatsAcrossSections(sectionState);
+        currentResults = sectionState.flatMap((s) => s.items);
+      } else if (activeListView() && currentCategory !== 'all') {
+        addTo(currentResults, currentCategory, getHours(), getSort());
+      }
+      if (changed) { rerenderListIfShown(); refreshListCounts(); }
     }
 
     // '이 섹션에 안 맞음'을 기록할 섹션. 정할 수 없으면 '' (검색 결과 · 저장 화면 · 관련 기사 · 이어보기).
@@ -3930,9 +3988,9 @@
       });
     }
 
-    function setBlockLocal(key, section, on, title = '', to = '') {
+    function setBlockLocal(key, section, on, title = '', to = '', art = null) {
       const rest = sectionBlocks.filter((b) => !(b.key === key && b.section === section));
-      setSectionBlocks(on ? [{ key, section, title, to, t: Date.now(), by: (authMe && authMe.email) || '' }, ...rest] : rest);
+      setSectionBlocks(on ? [{ key, section, title, to, art, t: Date.now(), by: (authMe && authMe.email) || '' }, ...rest] : rest);
       persistSectionBlocks();
     }
 
@@ -3952,8 +4010,9 @@
         kw: item.kw || '',
         cats: Array.isArray(item.cats) ? item.cats : [],
       };
-      setBlockLocal(key, section, true, title, moveTo);
+      setBlockLocal(key, section, true, title, moveTo, moveTo ? { summary: info.summary, source: info.source, publishedAt: info.publishedAt, kw: info.kw } : null);
       const spots = hideFromLists(key, (it) => isBlockedFor(it, it.category));
+      reconcileMovedOnScreen();   // 옮긴 섹션이 지금 화면에 있으면 바로 거기에 보인다
       rerenderListIfShown();
       topUpList();
       const from = categoryLabels[section] || section;
@@ -3967,6 +4026,7 @@
     function unblockSection(key, section, spots = null) {
       setBlockLocal(key, section, false);
       if (spots) restoreSpots(spots);
+      reconcileMovedOnScreen();   // 옮겨 갔던 섹션에서는 다시 빠진다
       sendBlock(key, section, false, '', null);
     }
 
@@ -3986,8 +4046,9 @@
           console.error('섹션 제외를 저장하지 못했습니다.', e);
           // 그 사이 같은 기사를 또 바꿨다면(= 지금 상태가 내가 보낸 값이 아님) 건드리지 않는다.
           if (blockedSet.has(blockId(key, section)) !== blocked) return;
-          setBlockLocal(key, section, !blocked, title, info.moveTo || '');
+          setBlockLocal(key, section, !blocked, title, info.moveTo || '', null);
           if (blocked) { if (spots) restoreSpots(spots); } else dropBlockedFromScreen();
+          reconcileMovedOnScreen();
           renderSectionBlocksAdmin();
           showToast(blocked ? '섹션에서 빼지 못했습니다. 잠시 뒤 다시 눌러 주세요.' : '되살리지 못했습니다. 잠시 뒤 다시 눌러 주세요.');
         }
@@ -6586,7 +6647,20 @@
 
     //   keepAll : 싫어요 기사도 남긴다 (저장한 기사 · 이어보기처럼 사용자가 직접 연 기사)
     //   keepBlocked : [오분류 B] 관리자가 섹션에서 뺀 기사도 남긴다 (검색 결과 · 관련 기사 · 이어보기는 섹션 목록이 아니다)
-    function decorateItems(items, category, keepAll = false, keepBlocked = false) {
+    //   hours : [오분류 B2] 옮긴 기사를 끼워 넣을 때 쓰는 게재 기간. 섹션 박스는 자기 기간을 넘긴다.
+    function decorateItems(items, category, keepAll = false, keepBlocked = false, hours = getHours()) {
+      // [오분류 B2] 섹션 목록(검색 · 관련 기사 · 이어보기 · 저장 화면이 아닌 것)에는 관리자가 이 섹션으로 옮긴 기사를 더한다.
+      if (!keepAll && !keepBlocked && category !== 'saved') {
+        const extra = movedRawFor(category, hours);
+        if (extra.length) {
+          const have = new Set(items.map(savedKeyOf));
+          items = [...items, ...extra.filter((it) => !have.has(savedKeyOf(it)))];
+        }
+      }
+      return decorateItemsCore(items, category, keepAll, keepBlocked);
+    }
+
+    function decorateItemsCore(items, category, keepAll = false, keepBlocked = false) {
       const shown = keepAll || category === 'saved' ? items : items.filter((item) =>
         !isDislikedKey(savedKeyOf(item)) && (keepBlocked || !isBlockedFor(item, category)));
       return shown.map((item) => ({
@@ -6598,6 +6672,7 @@
         naverUrl: item.naverUrl || '',   // [수정] 서버가 준 네이버 뉴스 링크를 버리지 않고 보관
         datetime: item.datetime || '',
         cat: item.cat || null,
+        movedFrom: item.movedFrom || '',   // [오분류 B2] 관리자가 다른 섹션에서 옮겨 온 기사면 그 섹션 (아니면 '')
         kw: item.kw || '',   // [추가] Brief 우선 키워드로 찾은 기사면 그 키워드 (태그 이름)
         // 이 기사가 걸린 카테고리 목록 (서버가 cats를 주면 그대로, 없으면 단일값)
         cats: (Array.isArray(item.cats) && item.cats.length)
@@ -8119,7 +8194,7 @@
         const fresh = await fetchOneSection(key, Math.max(s.count, 30), s.hours, s.sort);
         if (fresh) {
           // 이 섹션만의 정렬값 적용 + [P4] 추천. 추천이 건수를 늘려도 받아 둔 만큼만 된다(shownCountOf).
-          s.items = rerankForTaste(sortItemsBy(decorateItems(fresh, key), s.sort), key, currentCategory === 'all' ? tasteProfile() : null);
+          s.items = rerankForTaste(sortItemsBy(decorateItems(fresh, key, false, false, s.hours), s.sort), key, currentCategory === 'all' ? tasteProfile() : null);
           mergeCatsAcrossSections(sectionState);                 // 섹션 겹침 태그 다시 계산
           currentResults = sectionState.flatMap((x) => x.items); // 요약/원문 링크가 새 기사를 찾도록 갱신
         }

@@ -463,18 +463,20 @@ app.put('/api/votes', async (req, res) => {
 const BLOCKS_TABLE = 'section_blocks';
 const BLOCKS_READ_MAX = 2000;
 const BLOCKS_TTL = 60 * 1000;
-let blocksCache = null;   // { ts, rows: [{ key, section, title, by, t }] }
+let blocksCache = null;   // { ts, rows: [{ key, section, title, by, t, to, art }] }  art = 옮긴 기사의 화면용 정보(없으면 null)
+const BLOCKS_ART_MAX = 300;   // 응답에 기사 정보를 실어 보내는 '섹션 이동' 최대 건수(최근 것부터). 모든 사용자가 화면을 열 때마다 받는다.
 
 async function readSectionBlocks() {
   if (blocksCache && Date.now() - blocksCache.ts < BLOCKS_TTL) return blocksCache.rows;
   const url = `${SUPABASE_URL}/rest/v1/${BLOCKS_TABLE}`
-    + `?select=url_key,section,title,blocked_by,created_at,moved_to&order=created_at.desc&limit=${BLOCKS_READ_MAX}`;
+    + `?select=url_key,section,title,blocked_by,created_at,moved_to,summary,source,published_at,kw&order=created_at.desc&limit=${BLOCKS_READ_MAX}`;
   const r = await fetchWithTimeout(url, { headers: supabaseHeaders() }, 5000);
   if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
   const rows = await r.json();
   const list = (Array.isArray(rows) ? rows : []).map((x) => ({
     key: x.url_key, section: x.section, title: x.title || '', by: x.blocked_by || '', t: Date.parse(x.created_at) || 0,
     to: x.moved_to || '',
+    art: x.moved_to ? { summary: x.summary || '', source: x.source || '', publishedAt: x.published_at || '', kw: x.kw || '' } : null,
   }));
   blocksCache = { ts: Date.now(), rows: list };
   return list;
@@ -485,7 +487,14 @@ app.get('/api/section-blocks', async (req, res) => {
     const rows = await readSectionBlocks();
     res.set('Cache-Control', 'no-store');
     // 누가 뺐는지는 관리자 목록에서만 쓴다
-    res.json({ blocks: req.user.isAdmin ? rows : rows.map(({ by, ...x }) => x) });
+    // [오분류 B2] 옮긴 기사는 목적지 섹션에 끼워 넣을 정보(art)를 함께 준다 : 최근 BLOCKS_ART_MAX 건까지만.
+    let artLeft = BLOCKS_ART_MAX;
+    const blocks = rows.map(({ by, art, ...x }) => {
+      const out = req.user.isAdmin ? { ...x, by } : x;
+      if (art && artLeft > 0) { out.art = art; artLeft--; }
+      return out;
+    });
+    res.json({ blocks });
   } catch (e) {
     console.error('[섹션 제외 조회 실패]', e.message);
     res.status(500).json({ error: '섹션에서 뺀 기사 목록을 읽지 못했습니다.' });
@@ -534,7 +543,10 @@ app.put('/api/section-blocks', requireAdminUser, async (req, res) => {
     if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
     if (blocksCache) {
       blocksCache.rows = [
-        { key, section, title: row.title || '', by: row.blocked_by || '', t: Date.parse(row.created_at), to: movedTo || '' },
+        {
+          key, section, title: row.title || '', by: row.blocked_by || '', t: Date.parse(row.created_at), to: movedTo || '',
+          art: movedTo ? { summary: row.summary || '', source: row.source || '', publishedAt: row.published_at || '', kw: row.kw || '' } : null,
+        },
         ...blocksCache.rows.filter((x) => !(x.key === key && x.section === section)),
       ];
     }
