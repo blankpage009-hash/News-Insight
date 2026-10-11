@@ -2348,7 +2348,7 @@
           <!-- [언론사 A] 제외한 언론사 : 섹션 목록에서 빠진다 · 내 계정에 저장 -->
           <div class="st-row">
             <div class="st-name"><b>제외한 언론사 <span id="press-block-count" class="cnt"></span></b>
-              <span class="st-hint">이 언론사 기사는 섹션 목록에서 빠집니다(검색 결과 · 저장한 기사는 그대로). 주소가 같은 하위 주소(news. · m.)도 같이 빠집니다. 설정 창을 닫으면 반영됩니다</span></div>
+              <span class="st-hint">이 언론사 기사는 섹션 목록과 검색 결과에서 빠집니다(관련 기사 · 저장한 기사는 그대로). 주소가 같은 하위 주소(news. · m.)도 같이 빠집니다. 설정 창을 닫으면 반영됩니다</span></div>
             <div id="press-block-list" class="st-list"></div>
           </div>
           <!-- [언론사 C] 지금 화면에 나온 언론사(도메인) 목록. [제외]를 누르면 위 '제외한 언론사'에 들어간다 -->
@@ -2977,13 +2977,14 @@
           <a class="panel-saved-title" href="${esc(articleLink(a))}" data-panel-brief="${key}" title="${title}">${title}</a>
           <button class="panel-saved-x" data-panel-unsave="${key}" title="저장 취소" aria-label="저장 취소"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
           <span class="panel-saved-meta">
-            <span class="panel-saved-src">${esc(a.source || '출처 미상')} · ${esc(formatDate(a.datetime))}</span>
+            <span class="panel-saved-src">${a.source ? pressHtml(a.source) : '출처 미상'} · ${esc(formatDate(a.datetime))}</span>
             <button class="panel-resume" data-panel-resume="${key}" title="이어보기">${icon('history', 'w-3 h-3')}이어보기 <span data-followup-count>${followupCache.has(a.key) ? followupCache.get(a.key).length : 0}</span></button>
           </span>
         </div>`;
       }).join('');
       updatePanelFollowupTotal();
       primeFollowupBadges(savedArticles);   // 저장 기사 전체의 이어볼 기사 수를 채운다 (캐시에 있으면 부르지 않는다)
+      ensurePressNames(savedArticles.slice(0, PANEL_SAVED_MAX).map((a) => a.source));   // [언론사 이름]
     }
 
     // '전체보기' 버튼에 저장 기사 전체의 이어볼 기사 합계를 쓴다. 아직 못 센 기사는 0 으로 치고, 도착할 때마다 다시 쓴다.
@@ -5940,6 +5941,7 @@
       renderFontSizeSetting();
       renderCountSetting();
       renderPrefToggles();
+      ensurePressNames([...pressStats.press.keys(), ...pressBlock]);   // [언론사 이름] 목록에 이름으로 보이게
       renderRecoSetting();               // [P4] 추천 켜기 · 반영 중인 투표 수
       renderAiKeySetting();              // [P8] 내 AI 키 등록 상태 (+ [P9] 모델 드롭다운)
       if (!isPrefsOpen()) { setAiKeyMsg(''); setAiModelMsg(''); }
@@ -6718,6 +6720,7 @@
         hours: String(getHours()),
         sort: sort || 'date',
       });
+      if (pressBlock.length) params.set('xp', pressBlock.join(','));   // [언론사 A] 서버가 추리기 전에 빼야 건수를 채운다
       const data = await apiGet(`/api/news?${params.toString()}`);
       if (!Array.isArray(data.items)) throw new Error('예상치 못한 응답 형식입니다.');
       return data;   // { items, mode, relaxed, requested, ... }
@@ -6829,6 +6832,80 @@
       try { return /(^|\.)naver\.com$/i.test(new URL(item.naverUrl).hostname); } catch { return false; }
     }
 
+    // ---------------------------------------------------------------
+    // [언론사 이름] 출처 도메인 → 언론사 이름 (서버 /api/press-names)
+    //   서버가 아는 전국 언론사는 표로, 나머지는 그 언론사 홈페이지의 사이트 이름을 읽어 준다.
+    //   이 기기에 담아 둔다(이름 7일 · 못 찾은 곳 6시간). 이름을 모르면 도메인을 그대로 보여 준다.
+    //   기사 · 제외 목록 · 저장은 계속 도메인으로 다룬다. 이름은 보여 주기만 한다.
+    // ---------------------------------------------------------------
+    const PRESS_NAME_KEY = 'newsinsight:press-names:v1';
+    const PRESS_NAME_TTL_OK = 7 * 24 * 60 * 60 * 1000;
+    const PRESS_NAME_TTL_FAIL = 6 * 60 * 60 * 1000;
+    const PRESS_NAME_KEEP = 800;   // 이 기기에 담아 둘 최대 언론사 수 (오래 안 쓴 것부터 지운다)
+    let pressNames = null;         // 도메인 -> { n: 이름 | '', t } (처음 쓸 때 읽는다)
+    const pressNameAsking = new Set();
+    let pressNameTimer = 0;
+
+    function pressNameStore() {
+      if (!pressNames) {
+        try {
+          const v = JSON.parse(localStorage.getItem(PRESS_NAME_KEY) || '{}');
+          pressNames = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+        } catch { pressNames = {}; }
+      }
+      return pressNames;
+    }
+
+    function pressLabel(source) {
+      const hit = source ? pressNameStore()[String(source).toLowerCase()] : null;
+      return (hit && hit.n) || source || '';
+    }
+
+    // 화면에 넣는 출처 글자. 이름이 나중에 오면 applyPressLabels 가 이 칸만 바꾼다.
+    function pressHtml(source) {
+      return `<span data-press="${esc(source || '')}">${esc(pressLabel(source))}</span>`;
+    }
+
+    function applyPressLabels() {
+      document.querySelectorAll('[data-press]').forEach((el) => { el.textContent = pressLabel(el.dataset.press); });
+      renderPressList();
+    }
+
+    // 모르는(또는 오래된) 도메인만 묻는다. 서버가 5초 안에 못 읽은 곳(pending)은 4초 뒤 한 번만 다시 묻는다.
+    async function ensurePressNames(sources, retry = true) {
+      const store = pressNameStore();
+      const fresh = (d) => store[d] && Date.now() - store[d].t < (store[d].n ? PRESS_NAME_TTL_OK : PRESS_NAME_TTL_FAIL);
+      const want = [...new Set(sources.map((x) => String(x || '').toLowerCase()))]
+        .filter((d) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d) && !fresh(d) && !pressNameAsking.has(d));
+      if (!want.length) return;
+      want.forEach((d) => pressNameAsking.add(d));
+      const pending = [];
+      try {
+        for (let i = 0; i < want.length; i += 60) {
+          const data = await apiPost('/api/press-names', { domains: want.slice(i, i + 60) });
+          Object.entries(data.names || {}).forEach(([d, n]) => { store[d] = { n: typeof n === 'string' ? n.slice(0, 30) : '', t: Date.now() }; });
+          pending.push(...(Array.isArray(data.pending) ? data.pending : []));
+        }
+        const keys = Object.keys(store);
+        if (keys.length > PRESS_NAME_KEEP) {
+          keys.sort((a, b) => store[a].t - store[b].t).slice(0, keys.length - PRESS_NAME_KEEP).forEach((d) => delete store[d]);
+        }
+        try { localStorage.setItem(PRESS_NAME_KEY, JSON.stringify(store)); } catch {}
+        applyPressLabels();
+      } catch (e) {
+        console.error('언론사 이름을 받지 못했습니다.', e);
+      } finally {
+        want.forEach((d) => pressNameAsking.delete(d));
+      }
+      if (retry && pending.length) setTimeout(() => ensurePressNames(pending, false), 4000);
+    }
+
+    // 기사를 거를 때마다 부르면 화면 하나에 여러 번 불린다 → 그리기가 끝난 뒤 한 번만 묻는다
+    function schedulePressNames() {
+      clearTimeout(pressNameTimer);
+      pressNameTimer = setTimeout(() => ensurePressNames([...pressStats.press.keys(), ...pressBlock]), 300);
+    }
+
     const newPressStats = () => ({ keys: new Set(), minorKeys: new Set(), press: new Map() });   // press : 도메인 -> { major, n }
     let pressStats = newPressStats();
 
@@ -6847,6 +6924,7 @@
         p.n++;
         pressStats.press.set(src, p);
       });
+      schedulePressNames();   // [언론사 이름]
     }
 
     function togglePressList() {
@@ -6867,7 +6945,7 @@
       const arg = (v) => esc(JSON.stringify(v));
       const canBlock = (src) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(src);
       wrap.innerHTML = rows.length ? rows.map(([src, p]) => `<div class="st-item">
-          <span class="st-item-name"><span class="truncate">${esc(src)}</span><span>기사 ${p.n}건${isPressBlocked(src) ? ' · 제외함' : ''}</span></span>
+          <span class="st-item-name"><span class="truncate">${esc(pressLabel(src))}</span><span>${pressLabel(src) !== src ? `${esc(src)} · ` : ''}기사 ${p.n}건${isPressBlocked(src) ? ' · 제외함' : ''}</span></span>
           <div class="au-btns"><span class="press-tag${p.major ? ' is-major' : ''}">${p.major ? '제휴' : '비제휴'}</span>${canBlock(src)
             ? `<button type="button" class="pv-btn" onclick="togglePressBlock(${arg(src)})">${pressBlock.includes(src.toLowerCase()) ? '해제' : '제외'}</button>` : ''}</div>
         </div>`).join('')
@@ -6879,7 +6957,7 @@
       const bc = document.getElementById('press-block-count');
       if (bc) bc.textContent = pressBlock.length ? `${pressBlock.length}곳` : '';
       bw.innerHTML = pressBlock.length ? pressBlock.map((d) => `<div class="st-item">
-          <span class="st-item-name"><span class="truncate">${esc(d)}</span><span>${pressStats.press.has(d) ? `이 화면 기사 ${pressStats.press.get(d).n}건` : '이 화면에는 없음'}</span></span>
+          <span class="st-item-name"><span class="truncate">${esc(pressLabel(d))}</span><span>${pressLabel(d) !== d ? `${esc(d)} · ` : ''}${pressStats.press.has(d) ? `이 화면 기사 ${pressStats.press.get(d).n}건` : '이 화면에는 없음'}</span></span>
           <div class="au-btns"><button type="button" class="pv-btn" onclick="togglePressBlock(${arg(d)})">해제</button></div>
         </div>`).join('')
         : '<p class="au-empty">없음 · 아래 \'이 화면의 언론사\'에서 [제외]를 누르면 여기에 모입니다.</p>';
@@ -6898,6 +6976,7 @@
     // ---------------------------------------------------------------
     // [언론사 A] 제외한 언론사 : 기사 출처 도메인 목록 (예 'abc.co.kr' → 'news.abc.co.kr' 도 같이 뺀다)
     //   '주요 언론사만'과 같은 자리(섹션 목록)에서 빠진다. 제휴 언론사도 뺄 수 있다.
+    //   검색 결과는 서버(/api/news ?xp=)가 뺀다(화면에서는 거르지 않는다).
     //   내 계정에 저장(pressBlock)하고, 이 기기에도 사본을 둔다(첫 화면부터 빼려고).
     // ---------------------------------------------------------------
     const PRESS_BLOCK_KEY = 'newsinsight:press-block:v1';
@@ -7814,6 +7893,7 @@
         if (keyword) {
           const data = await fetchFlatNews({ q: keyword, sort: getSort() });
           const searchCat = ['all', 'logistics', 'stock', 'sports', 'briefing'].includes(currentCategory) ? 'society' : currentCategory;
+          countPress(data.items);   // [언론사 A] 검색 화면에서도 '이 화면의 언론사'에서 바로 제외할 수 있게 센다
           const list = sortItemsByCurrent(decorateItems(data.items, searchCat, false, true));
           currentResults = list;
 
@@ -7824,7 +7904,7 @@
           renderNews(list);
           setListView(data.items.length, {
             refetch: (n) => fetchFlatNews({ q: keyword, display: n, sort: getSort() }).then((d) => d.items),
-            decorate: (raw) => decorateItems(raw, searchCat, false, true),
+            decorate: (raw) => { countPress(raw); return decorateItems(raw, searchCat, false, true); },
             keepBlocked: true,
           });
 
@@ -8183,7 +8263,7 @@
     }
 
     function briefMetaText(item) {
-      return `${item.source}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}`;
+      return `${pressHtml(item.source)}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}`;
     }
 
     // ---- 기사 썸네일 (v3 Phase 5b) ----
@@ -9477,7 +9557,7 @@
       const firstCat = tagCatsOf(item)[0];
       const briefCat = firstCat && catLabelOf(item, firstCat);   // 시안 1a 머리말 : 분야 · 출처 · 시각
       document.getElementById('brief-meta').textContent =
-        `${briefCat ? briefCat + ' · ' : ''}${item.source || ''}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}`;
+        `${briefCat ? briefCat + ' · ' : ''}${pressLabel(item.source)}${item.datetime ? ' · ' + formatDate(item.datetime) : ''}`;
       document.getElementById('brief-note').textContent = '';
       setPopupSaveBtn('brief-save-btn', item);   // [추가] 아래 버튼 바의 저장 상태를 이 기사 기준으로 맞춘다
       document.getElementById('brief-body').innerHTML = briefLoadingHtml();
@@ -9845,7 +9925,7 @@
       const title = item ? plainText(item.title) : '';
       const link = item ? articleLink(item) : '';
       const meta = [
-        item && item.source ? item.source : '',
+        item && item.source ? pressLabel(item.source) : '',
         item && item.datetime ? printStamp(item.datetime) : '',
         `저장 ${printStamp(new Date())}`,
       ].filter(Boolean).join('  ·  ');
