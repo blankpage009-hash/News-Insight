@@ -2493,13 +2493,6 @@ const SPORTS_SECTIONS = [
     terms: ['농구', '배구', '골프 선수', '테니스', '스포츠'], domain: 'sports' },
 ];
 
-// [추가] 경제 하위 카테고리 (거시경제/시장)
-const ECONOMY_SECTIONS = [
-  { key: 'economy_macro', label: '거시경제/시장',
-    terms: ['환율', '유가', '원자재 가격', '금리', '물가', '기준금리', '국제유가'],
-    domain: 'economy' },
-];
-
 const ALL_SECTIONS = [
   { key: 'breaking', label: '속보', terms: ['속보'], breaking: true },
   { key: 'logistics', label: '물류', terms: ['물류', '롯데글로벌로지스'], domain: 'logistics' },
@@ -3933,7 +3926,6 @@ function registerSubSectionRoute(base, SECTIONS) {
 registerSubSectionRoute('logistics', LOGISTICS_SECTIONS);
 registerSubSectionRoute('stock', STOCK_SECTIONS);
 registerSubSectionRoute('sports', SPORTS_SECTIONS);   // [추가] 스포츠 하위 섹션
-registerSubSectionRoute('economy', ECONOMY_SECTIONS); // [추가] 경제 하위 섹션(거시경제/시장)
 
 // -----------------------------------------------------------------
 // [추가] /api/{base}/digest : 상위 섹션(물류 / 경제 / 증시) 화면용 '엄선' 목록
@@ -4077,7 +4069,6 @@ function registerDigestRoute(base, SECTIONS) {
 // 하위 섹션을 가진 상위 섹션 : 눌렀을 때 '전체보기' 대신 엄선 목록을 보여준다.
 const DIGEST_BASES = [
   ['logistics', LOGISTICS_SECTIONS],
-  ['economy', ECONOMY_SECTIONS],
   ['stock', STOCK_SECTIONS],
   ['sports', SPORTS_SECTIONS],
 ];
@@ -5891,7 +5882,6 @@ function sectionsNeedingKw() {
     ...LOGISTICS_SECTIONS,
     ...STOCK_SECTIONS,
     ...SPORTS_SECTIONS,
-    ...ECONOMY_SECTIONS,                   // [추가] 경제 엄선 목록이 이 섹션을 쓴다
     ...Object.values(DIGEST_EXTRA_PARENTS), // [추가] 스포츠 상위 (전체 화면엔 없는 섹션)
     ...BRIEFING_SOURCES.map((s) => ({ key: s.cat })),
   ];

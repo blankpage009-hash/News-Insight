@@ -2684,11 +2684,6 @@
       { key: 'sports_etc', label: '기타' },
     ];
 
-    // [추가] 경제 하위 섹션 (거시경제/시장)
-    const economySubcategories = [
-      { key: 'economy_macro', label: '거시경제/시장' },
-    ];
-
     const logisticsSubcategories = [
       { key: 'logistics_lotte', label: '롯데글로벌로지스' },
       { key: 'logistics_competitor', label: '경쟁사' },
@@ -2708,7 +2703,6 @@
       logistics_freight: '운임지수',
       economy: '경제', society: '정치/사회', global: '글로벌', ai: 'AI', stock: '증시',
       stock_domestic: '국내', stock_us: '해외', stock_issue: '이슈 섹터',
-      economy_macro: '거시경제/시장',
       sports: '스포츠',
       sports_pohang: '포항스틸러스', sports_kfootball: '국내축구', sports_wfootball: '해외축구',
       sports_baseball: '해외야구', sports_etc: '기타',
@@ -2723,7 +2717,6 @@
       logistics_freight: 'line-chart',
       economy: 'line-chart', society: 'users', global: 'globe', ai: 'cpu', stock: 'candlestick',
       stock_domestic: 'candlestick', stock_us: 'candlestick', stock_issue: 'candlestick',
-      economy_macro: 'line-chart',
       sports: 'trophy',
       sports_pohang: 'trophy', sports_kfootball: 'trophy', sports_wfootball: 'trophy',
       sports_baseball: 'trophy', sports_etc: 'trophy',
@@ -2744,7 +2737,6 @@
       if (!cat) return null;
       if (cat.startsWith('logistics_')) return 'logistics';
       if (cat.startsWith('stock_')) return 'stock';
-      if (cat.startsWith('economy_')) return 'economy';   // [추가]
       if (cat.startsWith('sports_')) return 'sports';      // [추가]
       return null;
     }
@@ -2755,7 +2747,7 @@
     //   하위 섹션이 있는 섹션을 누르면 하위 섹션 박스를 전부 늘어놓는 전체보기 대신,
     //   하위 섹션 기사들을 한 통에 모아 중요한 것만 골라낸 한 목록을 보여준다.
     //   (여러 섹션을 한 화면에 늘어놓는 전체보기는 이제 '전체' 화면에만 남아 있다)
-    const DIGEST_CATEGORIES = ['logistics', 'economy', 'stock', 'sports'];
+    const DIGEST_CATEGORIES = ['logistics', 'stock', 'sports'];
 
     let currentCategory = 'briefing';   // 기본 메인화면
     let expandedLogistics = false;
@@ -3950,7 +3942,7 @@
     const MOVE_TARGETS = [
       'logistics_lotte', 'logistics_competitor', 'logistics_coupang', 'logistics_naver',
       'logistics_domestic', 'logistics_global', 'logistics_freight',
-      'economy', 'economy_macro', 'society', 'global', 'ai',
+      'economy', 'society', 'global', 'ai',
       'stock_domestic', 'stock_us', 'stock_issue',
       'sports_pohang', 'sports_kfootball', 'sports_wfootball', 'sports_baseball', 'sports_etc',
     ];
@@ -4432,8 +4424,6 @@
       stock_domestic:       { include: ['코스피','코스닥','국내 증시'], exclude: [...STOCK_EXCLUDE] },
       stock_us:             { include: ['뉴욕증시','나스닥','미국 증시','다우지수'], exclude: [...STOCK_EXCLUDE] },
       stock_issue:          { include: ['테마주','급등주','수혜주','증시 이슈'], exclude: [...STOCK_EXCLUDE] },
-      // [추가] 경제 하위 섹션 (거시경제/시장)
-      economy_macro:        { include: ['환율','유가','원자재 가격','금리','물가','기준금리','국제유가'], exclude: [] },
       // [추가] 스포츠 상위 + 하위 섹션
       sports:               { include: ['스포츠','축구','야구'], exclude: [...SPORTS_EXCLUDE] },
       sports_pohang:        { include: ['포항스틸러스','포항 스틸러스'], exclude: [...SPORTS_EXCLUDE] },
@@ -4456,7 +4446,6 @@
       { key: 'logistics_naver', depth: 1 },
       { key: 'logistics_freight', depth: 1 },
       { key: 'economy', depth: 0 },
-      { key: 'economy_macro', depth: 1 },
       { key: 'society', depth: 0 },
       { key: 'global', depth: 0 },
       { key: 'ai', depth: 0 },
@@ -6358,7 +6347,6 @@
     // 하위 카테고리를 가진 상위 카테고리 정의
     const EXPANDABLE = {
       logistics: { subs: logisticsSubcategories, isOpen: () => expandedLogistics },
-      economy: { subs: economySubcategories, isOpen: () => expandedEconomy },   // [추가]
       stock: { subs: stockSubcategories, isOpen: () => expandedStock },
       sports: { subs: sportsSubcategories, isOpen: () => expandedSports },      // [추가]
     };
