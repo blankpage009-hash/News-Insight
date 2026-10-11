@@ -1129,6 +1129,12 @@
   .au-group > h4 { font-size: 12px; font-weight: 700; color: rgb(var(--c-muted)); margin-bottom: 4px; }
   .au-btns { display: flex; flex: none; gap: 4px; }
   .au-btns .pv-btn { padding: 4px 10px; font-size: 12px; }
+  /* 관리자 Setting '섹션 이동 · 제외 기록' 제목 : 누르면 목록이 열리고 닫힌다 (기본은 닫힘) */
+  .sb-toggle { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; }
+  .sb-toggle > b { font-size: 15px; font-weight: 700; line-height: 23px; }
+  .sb-toggle .cnt { font-size: 12px; color: rgb(var(--c-muted)); white-space: nowrap; }
+  .sb-toggle .chev { flex: none; margin-left: auto; width: 16px; height: 16px; transition: transform .15s; }
+  #sb-list[hidden] { display: none; }
   .au-empty { padding: 8px 0; font-size: 12px; color: rgb(var(--c-muted)); border-bottom: 1px solid rgb(var(--c-paper)); }
 
   /* 모바일 Safari 는 글자 크기 16px 미만인 입력칸에 포커스를 주면 화면을 확대하고, 입력 후에도 확대가 남는다.
@@ -2436,7 +2442,10 @@
           <!-- [오분류 B] 관리자가 기사 👎 → '이 섹션에 안 맞음'으로 뺀 기사. 해제는 누르는 즉시 서버에 반영된다 -->
           <div class="st-row">
             <div class="st-name">
-              <b>섹션에서 뺀 기사</b>
+              <button type="button" id="sb-toggle" class="sb-toggle" aria-expanded="false" aria-controls="sb-list" onclick="toggleSectionBlocksList()">
+                <b>섹션 이동 · 제외 기록</b><span id="sb-count" class="cnt"></span>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
               <span class="st-hint">기사의 👎 에서 <b>섹션 이동</b>을 고르면 모든 사용자의 그 섹션에서 빠지고, 옮길 섹션이 기록됩니다
                 (표시된 <b>A → B</b> 는 A 에서 B 로 옮긴 기사입니다. 모든 사용자의 B 섹션 목록에 게재 시각 순서대로 끼어 보입니다).
                 <b>해제</b>하면 다시 보입니다. 누르는 즉시 반영됩니다.</span>
@@ -2447,7 +2456,7 @@
                 <span class="st-hint">뺀 기사 · 옮긴 기사 전체를 엑셀로 열 수 있는 파일로 받습니다. 분류 규칙을 고칠 때 쓸 자료입니다.</span>
               </div>
               <p id="sb-msg" class="st-msg" role="status"></p>
-              <div id="sb-list"></div>
+              <div id="sb-list" hidden></div>
             </div>
           </div>
           <div class="st-row is-wide">
@@ -4079,11 +4088,22 @@
     }
 
     // 관리자 Setting 탭의 '섹션에서 뺀 기사' 목록
+    function toggleSectionBlocksList() {
+      const list = document.getElementById('sb-list');
+      const btn = document.getElementById('sb-toggle');
+      if (!list || !btn) return;
+      const open = list.hidden; // 지금 닫혀 있으면 연다
+      list.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+    }
+
     function renderSectionBlocksAdmin() {
       const wrap = document.getElementById('sb-list');
       if (!wrap || !isAdminUser()) return;
       const arg = (s) => esc(JSON.stringify(s));
-      wrap.innerHTML = `<div class="au-group"><h4>뺀 기사 (${sectionBlocks.length})</h4><div class="st-list">${
+      const cnt = document.getElementById('sb-count');
+      if (cnt) cnt.textContent = `${sectionBlocks.length}건`; // 닫혀 있어도 몇 건인지 보이게
+      wrap.innerHTML = `<div class="au-group"><h4>기록 (${sectionBlocks.length})</h4><div class="st-list">${
         sectionBlocks.length ? sectionBlocks.map((b) => `<div class="st-item">
           <div class="st-item-name"><span class="truncate">${esc(b.title || b.key)}</span><span>${esc([
             b.to ? `${categoryLabels[b.section] || b.section} → ${categoryLabels[b.to] || b.to}` : (categoryLabels[b.section] || b.section),
