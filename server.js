@@ -557,6 +557,33 @@ app.put('/api/section-blocks', requireAdminUser, async (req, res) => {
   }
 });
 
+// [오분류 B2] 관리자용 내려받기 : 섹션 이동 · 제외 기록 전체 (분류 알고리즘을 고도화할 때 쓸 자료).
+//   화면이 이 JSON 으로 CSV 를 만든다(섹션 한글 이름이 화면에 있다). 메모리에 두지 않고 매번 읽는다 : 가끔 누르는 관리자 기능이다.
+//   Supabase 는 한 번에 많이 못 주므로 1000건씩 끊어 읽는다.
+const MOVES_EXPORT_PAGE = 1000;
+const MOVES_EXPORT_MAX = 20000;
+app.get('/api/admin/section-moves', requireAdminUser, async (req, res) => {
+  try {
+    const rows = [];
+    for (let offset = 0; offset < MOVES_EXPORT_MAX; offset += MOVES_EXPORT_PAGE) {
+      const url = `${SUPABASE_URL}/rest/v1/${BLOCKS_TABLE}`
+        + '?select=url_key,section,title,blocked_by,created_at,moved_to,summary,source,published_at,kw,cats'
+        + `&order=created_at.desc&limit=${MOVES_EXPORT_PAGE}&offset=${offset}`;
+      const r = await fetchWithTimeout(url, { headers: supabaseHeaders() }, 8000);
+      if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`);
+      const page = await r.json();
+      if (!Array.isArray(page)) break;
+      rows.push(...page);
+      if (page.length < MOVES_EXPORT_PAGE) break;
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json({ rows });
+  } catch (e) {
+    console.error('[섹션 이동 기록 내려받기 실패]', e.message);
+    res.status(500).json({ error: '이동 기록을 읽지 못했습니다.' });
+  }
+});
+
 // 파일 캐시: Supabase가 죽었을 때만 읽는다. 쓰기는 Supabase 성공 후 따라 쓴다.
 function readKeywordsFile() {
   try {

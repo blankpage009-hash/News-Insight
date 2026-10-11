@@ -2442,6 +2442,10 @@
                 <b>해제</b>하면 다시 보입니다. 누르는 즉시 반영됩니다.</span>
             </div>
             <div class="min-w-0">
+              <div class="mb-2">
+                <button type="button" id="sb-export" class="pv-btn" onclick="downloadSectionMoves()">이동 기록 내려받기 (CSV)</button>
+                <span class="st-hint">뺀 기사 · 옮긴 기사 전체를 엑셀로 열 수 있는 파일로 받습니다. 분류 규칙을 고칠 때 쓸 자료입니다.</span>
+              </div>
               <p id="sb-msg" class="st-msg" role="status"></p>
               <div id="sb-list"></div>
             </div>
@@ -4088,6 +4092,59 @@
           <div class="au-btns"><button type="button" class="pv-btn" onclick="adminUnblock(${arg(b.key)}, ${arg(b.section)})">해제</button></div>
         </div>`).join('') : '<div class="au-empty">없음</div>'
       }</div></div>`;
+    }
+
+    // [오분류 B2] 이동 · 제외 기록 전체를 CSV 로 받는다 (관리자). 분류 알고리즘을 고도화할 때 쓸 자료.
+    //   엑셀에서 한글이 깨지지 않게 맨 앞에 BOM 을 붙이고, 셀 첫 글자가 = + - @ 이면 수식으로 실행되지 않게 앞에 ' 를 붙인다.
+    function csvCell(v) {
+      let t = String(v == null ? '' : v).replace(/\r?\n|\t/g, ' ').trim();
+      if (/^[=+\-@]/.test(t)) t = `'${t}`;
+      return /[",]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+    }
+    function sectionNameFor(key) {
+      if (!key) return '';
+      const t = moveTargetLabel(key);
+      return t.group ? `${t.group} › ${t.name}` : t.name;
+    }
+    function buildSectionMovesCsv(rows) {
+      const when = (iso) => fmtAuthTime(iso).replace(/\./g, '-');
+      const head = ['기록 시각', '구분', '원래 섹션', '원래 섹션(키)', '옮긴 섹션', '옮긴 섹션(키)', '제목', '요약', '언론사',
+        '게재 시각', '찾은 키워드', '서버가 붙인 섹션', '기사 주소', '관리자'];
+      const lines = [head.map(csvCell).join(',')];
+      rows.forEach((r) => lines.push([
+        when(r.created_at), r.moved_to ? '이동' : '제외', sectionNameFor(r.section), r.section, sectionNameFor(r.moved_to), r.moved_to || '',
+        r.title, r.summary, r.source, when(r.published_at), r.kw, r.cats, r.url_key, r.blocked_by,
+      ].map(csvCell).join(',')));
+      return `\uFEFF${lines.join('\r\n')}\r\n`;
+    }
+    async function downloadSectionMoves() {
+      const btn = document.getElementById('sb-export');
+      const msg = document.getElementById('sb-msg');
+      const say = (text, ok) => { if (msg) { msg.textContent = text; msg.className = `st-msg ${ok ? 'is-ok' : 'is-err'}`; } };
+      if (btn) btn.disabled = true;
+      try {
+        const res = await apiFetch('/api/admin/section-moves');
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const rows = data.rows || [];
+        if (!rows.length) { say('받을 기록이 아직 없습니다.', false); return; }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([buildSectionMovesCsv(rows)], { type: 'text/csv;charset=utf-8' }));
+        const d = new Date();
+        const p = (n) => String(n).padStart(2, '0');
+        a.download = `newsinsight-section-moves-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+        const moved = rows.filter((r) => r.moved_to).length;
+        say(`${rows.length}건을 받았습니다. (이동 ${moved}건 · 제외 ${rows.length - moved}건)`, true);
+      } catch (e) {
+        console.error('이동 기록을 내려받지 못했습니다.', e);
+        say('이동 기록을 받지 못했습니다. 잠시 뒤 다시 눌러 주세요.', false);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
     }
 
     function adminUnblock(key, section) {
