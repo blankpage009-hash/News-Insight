@@ -851,7 +851,8 @@ function cleanPrefsPatch(p) {
     });
     if (Object.keys(v).length) out.viewMode = v;
   }
-  ['railCollapsed', 'dimRead', 'reco', 'majorPress'].forEach((k) => { if (typeof p[k] === 'boolean') out[k] = p[k]; });
+  // pressMajor : 주요 언론사만 보기. 예전 칸 majorPress 는 더 받지 않는다(화면이 새 칸으로 다시 시작).
+  ['railCollapsed', 'dimRead', 'reco', 'pressMajor'].forEach((k) => { if (typeof p[k] === 'boolean') out[k] = p[k]; });
   if (Number.isFinite(p.recoReset) && p.recoReset >= 0) out.recoReset = Math.floor(p.recoReset);
   if (Array.isArray(p.pressBlock)) out.pressBlock = cleanPressDomains(p.pressBlock);   // [언론사 A] 배열은 통째로 바꾼다
   if (p.aiModel === 'auto' || (typeof p.aiModel === 'string' && AI_MODEL_RE.test(p.aiModel))) out.aiModel = p.aiModel;
@@ -2320,6 +2321,29 @@ async function naverSearchOnce(query, display = 30, sort = 'date', start = 1) {
     .filter((it) => !isRestrictedItem(it));
 }
 
+// [빈 결과 캐시] 네이버 검색이 전부 실패했다는 표시. 라우트는 503 + 안내 문구로 돌려준다.
+function naverUnavailable(cause) {
+  const e = new Error(`네이버 검색 응답 없음${cause && cause.message ? ` (${cause.message})` : ''}`);
+  e.code = 'NAVER_UNAVAILABLE';
+  return e;
+}
+function sendNewsError(res, err, fallback) {
+  console.error(err);
+  if (err && err.code === 'NAVER_UNAVAILABLE') {
+    return res.status(503).json({ error: '네이버 뉴스 검색이 잠시 응답하지 않습니다. 잠시 뒤 다시 시도해 주세요.', code: err.code });
+  }
+  res.status(500).json({ error: fallback });
+}
+// 여러 칸을 모으는 화면(전체 · 브리핑 · 엄선 목록)에서 실패한 칸 대신 쓰는 빈 칸. 캐시에 넣지 않는다.
+//   하나의 고정 객체라 memoPick 이 '실패 칸이 섞인 결과'를 기억해도, 칸이 정상으로 돌아오면 객체가 달라 저절로 다시 고른다.
+const EMPTY_PART = Object.freeze({ items: Object.freeze([]) });
+// 칸 여러 개를 받되 실패한 칸은 EMPTY_PART 로 바꾼다. 전부 실패면 첫 오류를 던진다.
+async function settleParts(promises) {
+  const results = await Promise.allSettled(promises);
+  if (results.length && results.every((r) => r.status === 'rejected')) throw results[0].reason;
+  return results.map((r) => (r.status === 'fulfilled' ? r.value : EMPTY_PART));
+}
+
 async function searchByTerms(terms, opts = {}) {
   const {
     display = 15,
@@ -2349,15 +2373,24 @@ async function searchByTerms(terms, opts = {}) {
     starts.push(st);
   }
 
+  // [빈 결과 캐시] 호출이 하나라도 성공하면 그 결과로 간다(일부 실패는 지금처럼 빈 목록으로 친다).
+  //   전부 실패하면 '기사 0건'이 아니라 '네이버가 응답하지 않음'이다 → 던진다.
+  //   빈 목록을 돌려주면 응답 캐시(respCache)가 그것을 정상 값으로 담아 한동안 빈 섹션을 보여 줬다.
+  let calls = 0;
+  let failed = 0;
+  let lastErr = null;
   const resultsPerTerm = await Promise.all(
     terms.map(async (term) => {
       const queries = expand ? expandTerm(term) : [term]; // [F]
       const lists = await Promise.all(
         queries.flatMap((q) =>
           starts.map(async (st) => {
+            calls++;
             try {
               return await naverSearchRaw(q, per, sort, st);
             } catch (e) {
+              failed++;
+              lastErr = e;
               console.error(`[검색 실패] "${q}" start=${st}:`, e.message);
               return [];
             }
@@ -2368,6 +2401,8 @@ async function searchByTerms(terms, opts = {}) {
       return lists.flat().filter((it) => matchBy(match, it, queries));
     })
   );
+
+  if (calls > 0 && failed === calls) throw naverUnavailable(lastErr);
 
   let merged = resultsPerTerm.flat();
 
@@ -2620,8 +2655,19 @@ async function cachedResponse(key, ttl, producer) {
     return hit.value;
   }
 
-  return runProducer(key, producer);
+  try {
+    return await runProducer(key, producer);
+  } catch (e) {
+    // [빈 결과 캐시] 새로 못 만들었으면(네이버 응답 없음 등) 오래됐어도 RESP_SERVE_OLD_MAX 안의 값은 준다.
+    //   빈 화면이나 오류보다 조금 지난 기사가 낫다. 캐시는 그대로 두므로 다음 요청이 다시 만들어 본다.
+    if (hit && age < RESP_SERVE_OLD_MAX) {
+      console.error('[캐시] 새로 만들지 못해 이전 값을 줌', key, e.message);
+      return hit.value;
+    }
+    throw e;
+  }
 }
+const RESP_SERVE_OLD_MAX = 6 * 60 * 60 * 1000;
 
 // [P6-2] 여러 칸을 읽어 '고르는' 화면(브리핑 · 엄선 목록)의 고른 결과를 기억해 둔다.
 //   칸을 나누면서 고르기를 요청마다 하게 됐는데, 로컬 실측 브리핑 6~16ms · 엄선 목록 최대 7ms 다.
@@ -2788,8 +2834,7 @@ app.get('/api/breaking', async (req, res) => {
       () => buildBreaking(limit, kwMap),
     ));
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '속보를 불러오지 못했습니다.' });
+    sendNewsError(res, err, '속보를 불러오지 못했습니다.');
   }
 });
 
@@ -2873,8 +2918,7 @@ app.get('/api/news', async (req, res) => {
       total: ordered.length,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+    sendNewsError(res, err, '서버 내부 오류가 발생했습니다.');
   }
 });
 
@@ -3300,7 +3344,10 @@ async function buildBriefing({ limit, dateFrom, dateTo, hours, pressOpts = PRESS
   const memoKey = `briefing|${limit}|${pressSig(pressOpts)}|${JSON.stringify(cfg)}`;
 
   // 1) 고른 섹션 + 섹션별 키워드를 한꺼번에 수집 (카테고리별로 따로 받아 속보 쏠림 방지)
-  const [mainData, kwData] = await Promise.all([Promise.all(main.map(get)), Promise.all(words.map(get))]);
+  // [빈 결과 캐시] 칸 하나가 실패해도 나머지로 고른다. 전부 실패면 던진다(→ 503).
+  const firstData = await settleParts([...main, ...words].map(get));
+  const mainData = firstData.slice(0, main.length);
+  const kwData = firstData.slice(main.length);
   // Brief 제외어와 키워드 태그(키워드 + 그 키워드를 둔 섹션)는 칸을 읽은 뒤에 건다.
   //   칸은 사람마다 다른 이 값들과 상관없이 같이 쓴다. 칸의 배열 · 기사는 고치지 않는다(selectBriefing 도 복사본만 고친다).
   const firstGroups = () => [
@@ -3318,7 +3365,8 @@ async function buildBriefing({ limit, dateFrom, dateTo, hours, pressOpts = PRESS
 
   // 2) 그래도 모자라면 고르지 않은 기본 섹션으로 채운다 (모자랄 때만 불러 네이버 호출을 아낀다)
   if (items.length < limit && fill.length) {
-    const fillData = await Promise.all(fill.map(get));
+    const fillData = await Promise.allSettled(fill.map(get))
+      .then((rs) => rs.map((r) => (r.status === 'fulfilled' ? r.value : EMPTY_PART)));   // 채움은 실패해도 있는 만큼
     items = memoPick(`${memoKey}|2`, [...firstValues, ...fillData], () => selectBriefing([
       ...firstGroups(),
       ...fill.map((p, i) => ({ id: p.src.cat, tier: 3, items: press(fillData[i].items) })),
@@ -3336,8 +3384,7 @@ app.get('/api/briefing', async (req, res) => {
   try {
     res.json(await buildBriefing(opts, kwMap));
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '브리핑을 구성하지 못했습니다.' });
+    sendNewsError(res, err, '브리핑을 구성하지 못했습니다.');
   }
 });
 
@@ -3375,13 +3422,15 @@ app.get('/api/all/sections', async (req, res) => {
   const kwMap = await kwMapFor(req);
   const opts = { limit: Math.min(Number(perSection) || 5, 30), dateFrom, dateTo, hours, sort };
   try {
-    const sections = await Promise.all(
-      allSectionParts(opts, kwMap).map((p) => cachedResponse(p.key, TTL_SECTION, p.run))
-    );
+    // [빈 결과 캐시] 섹션 하나가 실패해도 나머지는 보여 준다(실패한 섹션은 빈 목록 · 캐시하지 않음 · 다음 요청이 다시 시도).
+    const parts = allSectionParts(opts, kwMap);
+    const values = await settleParts(parts.map((p) => cachedResponse(p.key, TTL_SECTION, p.run)));
+    const sections = values.map((v, i) => (v === EMPTY_PART
+      ? { key: ALL_SECTIONS[i].key, label: ALL_SECTIONS[i].label, items: [], failed: true }
+      : v));
     res.json({ sections });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+    sendNewsError(res, err, '서버 내부 오류가 발생했습니다.');
   }
 });
 
@@ -4132,8 +4181,7 @@ function registerSubSectionRoute(base, SECTIONS) {
         );
       }));
     } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+      sendNewsError(res, err, '서버 내부 오류가 발생했습니다.');
     }
   });
 }
@@ -4200,7 +4248,7 @@ function digestParts(sources, { dateFrom, dateTo, hours }, kwMap) {
 }
 
 async function buildDigest(sources, opts, kwMap, pressOpts = PRESS_NONE) {
-  const lists = await Promise.all(
+  const lists = await settleParts(   // [빈 결과 캐시] 소스 섹션 하나가 실패해도 나머지로 순위를 매긴다
     digestParts(sources, opts, kwMap).map((p) => cachedResponse(p.key, TTL_SECTION, p.run))
   );
   // 순위는 소스 섹션 목록과 칸 내용만으로 정해진다 → 같은 칸이면 사용자가 달라도 같은 결과를 다시 쓴다
@@ -4278,8 +4326,7 @@ function registerDigestRoute(base, SECTIONS) {
       }
       res.json({ items, label });
     } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+      sendNewsError(res, err, '서버 내부 오류가 발생했습니다.');
     }
   });
 }
@@ -4322,8 +4369,7 @@ app.get('/api/topic/:key', async (req, res) => {
       );
     }));
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+    sendNewsError(res, err, '서버 내부 오류가 발생했습니다.');
   }
 });
 

@@ -2358,7 +2358,7 @@
                 <b>이 화면의 언론사</b><span id="press-count" class="cnt"></span>
                 <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
               </button>
-              <span class="st-hint">지금 화면에 나온 기사의 출처(주소) · 기사 많은 순. <b>제휴</b>는 네이버 뉴스 제휴 언론사로, '주요 언론사만'을 켜도 남습니다. <b>제외</b>를 누르면 그 언론사 기사를 빼고 봅니다</span>
+              <span class="st-hint">지금 화면에 나온 기사의 출처(주소) · 기사 많은 순. <b>제휴</b>는 네이버 뉴스 제휴 언론사로, '주요 언론사만 보기'를 켜도 남습니다. <b>제외</b>를 누르면 그 언론사 기사를 빼고 봅니다</span>
             </div>
             <div id="press-list" class="st-list" hidden></div>
           </div>
@@ -3390,7 +3390,7 @@
       },
       dimRead: screenPrefSync('dimRead'),
       reco: screenPrefSync('reco'),
-      majorPress: screenPrefSync('majorPress'),
+      pressMajor: screenPrefSync('pressMajor'),
       // [언론사 A] 제외한 언론사 : 배열 통째로 주고받는다. 바뀌면 기사를 다시 거른다.
       pressBlock: {
         local() { const v = syncLsJson(PRESS_BLOCK_KEY); return Array.isArray(v) ? cleanPressBlock(v) : undefined; },
@@ -3438,7 +3438,7 @@
           applyDimRead();
           renderPrefToggles();
           renderRecoSetting();
-          if (name === 'majorPress') return changed;   // [언론사 C] 다른 기기에서 바꿨으면 이 화면도 다시 거른다
+          if (name === 'pressMajor') return changed;   // [언론사 C] 다른 기기에서 바꿨으면 이 화면도 다시 거른다
           return changed && name === 'reco' && currentCategory === 'all' && !isKeywordMode();
         },
       };
@@ -5842,7 +5842,10 @@
     //   나머지 하나만 여기에 모아 둔다.
     // ---------------------------------------------------------------
     const SCREEN_PREFS_KEY = 'newsinsight:prefs:v1';
-    const SCREEN_PREFS_DEFAULT = { dimRead: true, reco: true, majorPress: false };   // reco : [P4] 전체 화면 추천 · majorPress : 주요 언론사만(시험)
+    // reco : [P4] 전체 화면 추천 · pressMajor : 주요 언론사만 보기 (기본 켬)
+    //   [언론사 C] 칸 이름을 majorPress → pressMajor 로 바꿨다. 예전 칸은 화면 옵션을 하나만 바꿔도 당시 기본값(꺼짐)이
+    //   같이 저장돼, 고른 적 없는 사람도 꺼짐으로 남아 있었다. 새 칸으로 모두 '켜짐'에서 다시 시작한다(themeV2 와 같은 방식).
+    const SCREEN_PREFS_DEFAULT = { dimRead: true, reco: true, pressMajor: true };
     let screenPrefs = { ...SCREEN_PREFS_DEFAULT };
 
     function loadScreenPrefs() {
@@ -5866,7 +5869,7 @@
       writeScreenPrefsLocal();
       queuePref('dimRead', screenPrefs.dimRead);
       queuePref('reco', screenPrefs.reco);
-      queuePref('majorPress', screenPrefs.majorPress);
+      queuePref('pressMajor', screenPrefs.pressMajor);
     }
 
     // 읽음 기록(is-read)은 건드리지 않고 '흐리게 보이기'만 끈다 → 다시 켜면 그대로 되살아난다.
@@ -5888,10 +5891,10 @@
         set: (on) => { setRailCollapsed(!on); },
       },
       {
-        // [언론사 C] 시험 기능. 켜고 끄면 설정 창을 닫을 때 기사를 다시 거른다(서버는 다시 부르지 않는다).
-        key: 'majorPress', label: '주요 언론사만 (시험)', hint: pressStatsText,
-        get: () => screenPrefs.majorPress,
-        set: (on) => { screenPrefs.majorPress = on; saveScreenPrefs(); prefRerunOnClose = true; },
+        // [언론사 C] 켜고 끄면 설정 창을 닫을 때 기사를 다시 불러온다.
+        key: 'pressMajor', label: '주요 언론사만 보기', hint: pressStatsText,
+        get: () => screenPrefs.pressMajor,
+        set: (on) => { screenPrefs.pressMajor = on; saveScreenPrefs(); prefRerunOnClose = true; },
       },
     ];
 
@@ -5924,7 +5927,7 @@
     //   저장하기 전까지는 사본만 고치므로, 저장하지 않고 닫으면 그대로 버려진다.
     let kwDrafts = null;
     let kwRerunOnClose = false;   // 창 안에서 바로 저장한 경우(기본값 · 모두 공용값으로) 닫을 때 다시 불러온다
-    let prefRerunOnClose = false; // [언론사 C] '주요 언론사만'을 켜고 끈 경우 닫을 때 다시 거른다
+    let prefRerunOnClose = false; // [언론사 C] '주요 언론사만 보기'를 켜고 끈 경우 닫을 때 다시 거른다
 
     //   withAdmin : 모바일 하단 '설정' 탭. 화면 설정으로 열되 관리자 탭도 보여 둔다(관리자 계정일 때만).
     function openPrefsModal(tab = 'prefs', withAdmin = false) {
@@ -6709,7 +6712,7 @@
     //   서버가 고르기 전에 걸러야 노출 건수를 채운다. 화면에서만 거르면 10건 중 몇 건이 빠진 채로 보인다.
     //   전체 화면은 섹션마다 30건을 받아 두므로 화면에서 걸러도 충분해 보내지 않는다(그래야 프리워밍 칸을 그대로 쓴다).
     function setPressParams(params) {
-      if (screenPrefs.majorPress) params.set('press', 'major');
+      if (screenPrefs.pressMajor) params.set('press', 'major');
       if (pressBlock.length) params.set('xp', pressBlock.join(','));
     }
 
@@ -6820,7 +6823,7 @@
     }
 
     // ---------------------------------------------------------------
-    // [언론사 C] '주요 언론사만' 시험 스위치
+    // [언론사 C] '주요 언론사만 보기' 스위치 (기본 켬)
     //   네이버 검색 API 는 언론사 이름을 주지 않는다. 대신 기사마다 주는 link(naverUrl)가
     //   네이버에 기사를 직접 넣는 제휴 언론사면 네이버 뉴스 주소, 아니면 원문 주소다(네이버 개발자 문서).
     //   그래서 'naverUrl 이 naver.com 인가'로 제휴 언론사를 가린다. 작은 인터넷·지역 언론사는 대부분 원문 주소로 온다.
@@ -6970,7 +6973,7 @@
       const minorOutlets = [...pressStats.press.values()].filter((v) => !v.major).length;
       const m = pressStats.minorKeys.size;
       return `이 화면 기사 ${n}건 · 언론사 ${outlets}곳 중 비제휴 ${minorOutlets}곳(기사 ${m}건, ${Math.round((m / n) * 100)}%)`
-        + (screenPrefs.majorPress ? ' 숨김' : ' · 켜면 숨김');
+        + (screenPrefs.pressMajor ? ' 숨김' : ' · 켜면 숨김');
     }
 
     // ---------------------------------------------------------------
@@ -7015,7 +7018,7 @@
       const shown = keepAll || category === 'saved' ? items : items.filter((item) =>
         !isDislikedKey(savedKeyOf(item)) && (keepBlocked || !isBlockedFor(item, category))
         && (!sectionList || item.movedFrom
-          || ((!screenPrefs.majorPress || isMajorPress(item)) && !isPressBlocked(item.source))));
+          || ((!screenPrefs.pressMajor || isMajorPress(item)) && !isPressBlocked(item.source))));
       return shown.map((item) => ({
         id: nextId++,
         title: item.title || '(제목 없음)',
