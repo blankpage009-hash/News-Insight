@@ -43,6 +43,13 @@ TOKEN=$(node docs/review/tools/token.js)          # 10시간짜리 가짜 토큰
 curl -s -H "Authorization: Bearer $TOKEN" localhost:3100/api/me   # 200 이면 준비 끝
 ```
 
+- **캐시 사본 저장·복원까지 시험할 때 (단계 3 방식)** : 가짜를 `fake-supabase-log.js` 로 바꾸고 `SUPABASE_CACHE_SYNC=on` 으로 띄운다. **`on` 을 꼭 적는다** — 빼면 로컬 `.env` 의 값이 읽힌다. 저장 요청마다 바이트 수 · JSON 정상 여부 · 짝 없는 서로게이트 수 · 깨진 글자(U+FFFD) 수가 기록 파일에 한 줄씩 남는다. `GET :54321/__dump` 는 저장된 열쇠별 크기.
+  ```bash
+  FAKE_LOG=/tmp/fake-supabase.log node docs/review/tools/fake-supabase-log.js &
+  PORT=3100 SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SERVICE_KEY=test SUPABASE_ANON_KEY=test \
+    ADMIN_EMAILS=tester@example.test SUPABASE_CACHE_SYNC=on KEY_ENCRYPTION_SECRET=test-secret-only-for-local \
+    node server.js &
+  ```
 - **진짜 Supabase 주소·키는 절대 쓰지 않는다.** 위처럼 가짜로 덮어쓴다.
 - `keywords.json` 이 없으면 프리워밍 경고가 나오는데 정상이다.
 - 기준선(단계 0) 값은 [review-findings.md](review-findings.md) 참고.
@@ -51,6 +58,8 @@ curl -s -H "Authorization: Bearer $TOKEN" localhost:3100/api/me   # 200 이면 �
 
 | 파일 | 하는 일 |
 |---|---|
+| `fake-supabase.js` | 가짜 Supabase (로그인 확인 + 빈 표) |
+| `fake-supabase-log.js` | 위와 같고, 저장 요청 내용을 기록 · 깨진 JSON 은 400 PGRST102 로 거부 (단계 3) |
 | `scan.js` | 한 번만 나오는 이름 · 몸통 밖에서 안 불리는 함수 · 쓰기만 하는 변수 |
 | `pairs.js` | 두 파일 제외어 쌍 비교 |
 | `handlers.js` | onclick 등이 부르는 함수가 정의돼 있는지 |
