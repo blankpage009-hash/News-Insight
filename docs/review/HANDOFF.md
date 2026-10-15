@@ -7,13 +7,15 @@
 - 사용자 요청 : 단계 1~8 을 **모델/노력을 표대로 바꿔 가며** 다시 점검한다. 처음에는 전부 Sonnet(낮음)으로만 돌렸다.
 - **한 단계씩 하고, 끝나면 멈춰서 사용자 승인을 받는다.**
 - 완료 : 단계 1 재점검 → [findings/stage1-recheck.md](findings/stage1-recheck.md) (사용자에게 보고함)
-- **다음 : 단계 2 (서버 보안) — Opus · high**
+- 완료 : 단계 2 재점검 → [findings/stage2-recheck.md](findings/stage2-recheck.md)
+- 완료 : 단계 3 재점검 → [findings/stage3-recheck.md](findings/stage3-recheck.md) (2026-10-15)
+- **다음 : 단계 4 (API 라우트·AI·시세) — Sonnet · medium.** 단계 3 의 N1(`/api/news?q=a&q=b` → 서버 종료)과 같은 모양 — 주소창 값에 `.trim()` 등 문자열 함수를 바로 거는 곳 — 을 다른 라우트에서도 훑을 것
 
 | # | 단계 | 범위 | 모델 | 노력 | 이전(Sonnet low) 결과 |
 |---|---|---|---|---|---|
 | 1 | 정적 조사 | 두 파일 | Sonnet | medium | ✅ 재점검 끝 (Opus) |
-| 2 | 서버 보안 | server.js 1–1415, 3744–4150 | **Opus** | **high** | findings/stage2.md |
-| 3 | 캐시·프리워밍·본문 추출 | server.js 1417–2843, 6102–6288 | **Opus** | **xhigh** | findings/stage3.md |
+| 2 | 서버 보안 | server.js 1–1415, 3744–4150 | **Opus** | **high** | ✅ 재점검 끝 (stage2-recheck.md) |
+| 3 | 캐시·프리워밍·본문 추출 | server.js 1417–2843, 6102–6288 | **Opus** | **xhigh** | ✅ 재점검 끝 (stage3-recheck.md) |
 | 4 | API 라우트·AI·시세 | server.js 2843–6101 (3744–4150 제외) | Sonnet | medium | findings/stage4.md |
 | 5 | 화면 저장·동기화·로그인·설정 | html 2691–6415 | **Opus** | **high** | findings/stage5.md |
 | 6a | 화면 출력 이스케이프(XSS) | html 전체 JS | **Opus** | **high** | findings/stage6a.md |
