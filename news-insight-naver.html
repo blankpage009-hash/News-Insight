@@ -7111,8 +7111,8 @@
         name: 'SCFI',
         priceStr: num2(d.current),
         change: d.change,
-        // 사용자 지정 모양 : "SCFI 3,678.58 ▲15.47p(▲0.42%)"
-        changeStr: `${m.arrow}${num2(Math.abs(d.change))}p(${m.arrow}${Math.abs(d.changePercent).toFixed(2)}%)`,
+        // 사용자 지정 모양 : "SCFI 3,678.58 ▲15.47p (▲0.42%)"
+        changeStr: `${m.arrow}${num2(Math.abs(d.change))}p (${m.arrow}${Math.abs(d.changePercent).toFixed(2)}%)`,
         shortChangeStr: `${m.arrow}${Math.abs(d.changePercent).toFixed(2)}%`,
         onOpen: 'openScfiChart()',
       };
