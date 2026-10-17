@@ -1482,25 +1482,6 @@
     .sec-box .sec-filter-btn { width: 44px; height: 44px; margin: -9px -10px -9px 0; }
   }
 
-  /* [추가] v3 Phase 6 : 운임지수 SCFI 패널 — 둥근 금색 상자 → 평평한 면 + 왼쪽 레드 막대 (모든 폭) */
-  .scfi-box {
-    display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px;
-    padding: 12px 16px; background: rgb(var(--c-ink2)); border-left: 4px solid rgb(var(--c-gold));
-    font-variant-numeric: tabular-nums;
-  }
-  .scfi-box.is-link { cursor: pointer; transition: background-color .15s; }
-  .scfi-box.is-link:hover { background: rgb(var(--c-ink3)); }
-  .scfi-box.is-link:focus-visible { outline: 2px solid rgb(var(--c-gold)); outline-offset: 2px; }
-  .scfi-name { font-size: .867rem; font-weight: 800; letter-spacing: .06em; white-space: nowrap; }
-  .scfi-val { font-size: 1.6rem; font-weight: 800; line-height: 1.1; letter-spacing: -.02em; color: rgb(var(--c-paper)); }
-  .scfi-chg { font-weight: 600; white-space: nowrap; }
-  .scfi-sub { font-size: .8rem; color: rgb(var(--c-muted)); white-space: nowrap; }
-  .scfi-chart { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: .75rem; font-weight: 600; white-space: nowrap; border: 1px solid rgb(var(--c-paper)); transition: background-color .15s, color .15s; }
-  .scfi-box.is-link:hover .scfi-chart { background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); }
-  .scfi-src { margin-left: auto; }
-  .scfi-src a { text-decoration: underline dotted; }
-  .scfi-src a:hover { color: rgb(var(--c-gold)); }
-
   select { background-image: none; }
 
   /* ---------------------------------------------------------------
@@ -2250,9 +2231,6 @@
       </div>
 
       </div><!-- /#top-stick -->
-
-      <!-- [추가] 운임지수 섹션 전용 SCFI 지수 패널 (제목 바 바로 아래) -->
-      <div id="scfi-panel" class="hidden !mt-0"></div>
 
       <!-- 결과 -->
       <div id="news-list" class="space-y-5"></div>
@@ -7115,85 +7093,42 @@
 
       syncHeaderFilters();
       el.classList.remove('hidden');
-      updateScfiPanel(keyword);
     }
 
     // ---------------------------------------------------------------
-    // [추가] 운임지수 섹션 SCFI 패널
-    //  - '물류 > 운임지수'를 보고 있을 때만 제목 바 바로 아래에 표시한다.
+    // [수정] SCFI 는 운임지수 섹션 패널에서 상단 지수 티커로 옮겼다 (사용자 결정 2026-10-17).
     //  - SCFI는 매주 금요일 1회 발표라 증감은 '전주대비'다.
+    //  - 티커 칸은 renderIndexTicker 가 scfiTickerItem() 으로 만든다. 누르면 차트 팝업이 열린다.
     // ---------------------------------------------------------------
-    let scfiData = null;        // 마지막으로 받아온 SCFI 값 (카테고리를 오갈 때 재사용)
-    let scfiFetching = false;
+    let scfiData = null;        // 마지막으로 받아온 SCFI 값 (실패하면 { error: true })
 
-    function scfiDateText(iso) {
-      if (!iso) return '';
-      const d = new Date(`${iso}T00:00:00+08:00`);
-      if (isNaN(d.getTime())) return iso;
-      return d.toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' });
-    }
-
-    function scfiPanelHtml() {
-      if (!scfiData) {
-        return `<div class="scfi-box scfi-sub">
-          ${icon('loader-2', 'w-4 h-4 animate-spin')}<span>SCFI 지수를 불러오는 중입니다...</span></div>`;
-      }
-      if (scfiData.error) {
-        return `<div class="scfi-box scfi-sub">SCFI 지수를 불러오지 못했습니다.</div>`;
-      }
+    // 티커 칸용 항목. 값을 못 받았으면 null (티커에서 그냥 빠진다)
+    function scfiTickerItem() {
       const d = scfiData;
-      const isUp = d.change > 0, isDown = d.change < 0;
-      const arrow = isUp ? '▲' : isDown ? '▼' : '－';
-      const colorClass = isUp ? 'text-up' : isDown ? 'text-down' : 'text-muted';
-      const fmt = n => Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const changeText = d.change === 0
-        ? '보합'
-        : `${arrow}${fmt(d.change)}p (${arrow}${Math.abs(d.changePercent).toFixed(2)}%)`;
-      // [추가] 패널 자체가 차트 팝업을 여는 버튼이다. 안쪽 출처 링크만 예외로 둔다.
-      return `<div onclick="openScfiChart()" role="button" tabindex="0"
-        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openScfiChart();}"
-        title="눌러서 지수 차트 보기" class="scfi-box is-link">
-        <span class="scfi-name">SCFI 종합지수</span>
-        <span class="scfi-val">${d.current.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-        <span class="scfi-chg ${colorClass}">${changeText}</span>
-        <span class="scfi-sub">전주(${scfiDateText(d.lastDate)}) ${d.previous.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 대비</span>
-        <span class="scfi-chart">차트</span>
-        <span class="scfi-sub scfi-src">
-          ${scfiDateText(d.currentDate)} 발표${d.stale ? ' (캐시)' : ''} ·
-          <a href="${d.sourceUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">상하이해운거래소</a>
-        </span>
-      </div>`;
-    }
-
-    function updateScfiPanel(keyword) {
-      const el = document.getElementById('scfi-panel');
-      if (!el) return;
-      if (keyword || currentCategory !== 'logistics_freight') {
-        el.classList.add('hidden');
-        el.innerHTML = '';
-        return;
-      }
-      el.classList.remove('hidden');
-      el.innerHTML = scfiPanelHtml();
-      if (!scfiData) refreshScfi();
+      if (!d || d.error || !Number.isFinite(d.current)) return null;
+      const m = moveOf(d.change);
+      return {
+        name: 'SCFI',
+        priceStr: num2(d.current),
+        change: d.change,
+        // 사용자 지정 모양 : "SCFI 3,678.58 ▲15.47p(▲0.42%)"
+        changeStr: `${m.arrow}${num2(Math.abs(d.change))}p(${m.arrow}${Math.abs(d.changePercent).toFixed(2)}%)`,
+        shortChangeStr: `${m.arrow}${Math.abs(d.changePercent).toFixed(2)}%`,
+        onOpen: 'openScfiChart()',
+      };
     }
 
     async function refreshScfi() {
-      if (scfiFetching) return;
-      scfiFetching = true;
       try {
         const res = await apiFetch(`/api/scfi`);
         if (!res.ok) throw new Error('SCFI API 오류: ' + res.status);
         scfiData = await res.json();
       } catch (err) {
         console.error(err);
-        scfiData = { error: true };
-      } finally {
-        scfiFetching = false;
-        // 응답이 오는 사이 다른 카테고리로 옮겼을 수 있으니 현재 화면 기준으로만 다시 그린다.
-        const keyword = document.getElementById('search-input').value.trim();
-        updateScfiPanel(keyword);
+        // 이미 받아 둔 값이 있으면 그대로 두고, 처음부터 실패했을 때만 오류로 표시한다
+        if (!scfiData) scfiData = { error: true };
       }
+      renderIndexTicker(lastIndexItems);
     }
 
     // ---------------------------------------------------------------
@@ -7870,7 +7805,6 @@
       isLoading = true;
       hideFallbackBanner();
       document.getElementById('cat-header').classList.add('hidden');
-      document.getElementById('scfi-panel').classList.add('hidden');
       setSearchButtonLoading(true);
       renderLoadingSkeleton();
       // 검색 중에는 위 상태줄을 감춘다(가운데 로딩 고리와 같은 말이 두 번 나오지 않게).
@@ -8742,14 +8676,16 @@
     function indexRowItemHtml(item) {
       const m = moveOf(item.change);
       const value = item.priceStr !== undefined ? item.priceStr : num2(item.price);
-      const change = item.change === 0 ? '동결'
+      const change = item.changeStr ? item.changeStr
+        : item.change === 0 ? '동결'
         : item.changePercent !== undefined
           ? `${m.arrow}${num2(Math.abs(item.change))} (${Math.abs(item.changePercent).toFixed(2)}%)`
           : `${m.arrow}${Math.abs(item.change).toFixed(2)}`;
       const key = item.key || EXTRA_CHART_KEYS[item.name];
-      const chart = hasIndexChart(key);
+      const chart = !!item.onOpen || hasIndexChart(key);
       const tag = chart ? 'button' : 'span';
-      const attr = chart ? ` onclick="openIndexChart('${key}')" title="${item.name} · 눌러서 기간별 차트 보기"` : '';
+      const open = item.onOpen || `openIndexChart('${key}')`;
+      const attr = chart ? ` onclick="${open}" title="${item.name} · 눌러서 기간별 차트 보기"` : '';
       return `<${tag} class="idx-item"${attr}>
         <span class="idx-name text-muted">${item.name}</span>
         <span class="font-semibold text-paper tabular-nums">${value}</span>
@@ -8760,15 +8696,16 @@
     // --- 모바일 : 지수 한 줄의 한 칸 (v3 Phase 9 · 시안 1a : 이름 · 값 · ▲등락률) ---
     function stripItemHtml(item) {
       const m = moveOf(item.change);
-      const change = item.change === 0 ? '동결'
+      const change = item.shortChangeStr ? item.shortChangeStr
+        : item.change === 0 ? '동결'
         : item.changePercent !== undefined
           ? `${m.arrow}${Math.abs(item.changePercent).toFixed(2)}%`
           : `${m.arrow}${Math.abs(item.change).toFixed(2)}`;
       const value = item.priceStr !== undefined ? item.priceStr : num2(item.price);
       const key = item.key || EXTRA_CHART_KEYS[item.name];
-      const chart = hasIndexChart(key);
+      const chart = !!item.onOpen || hasIndexChart(key);
       const tag = chart ? 'button' : 'span';
-      const attr = chart ? ` onclick="openIndexChart('${key}')"` : '';
+      const attr = chart ? ` onclick="${item.onOpen || `openIndexChart('${key}')`}"` : '';
       return `<${tag} class="strip-item"${attr}>
         <span class="text-muted">${item.name}</span>
         <b class="text-paper">${value}</b>
@@ -8793,7 +8730,8 @@
       const sorted = (items || []).filter((it) => !TICKER_HIDDEN.includes(it.name)).sort(
         (a, b) => INDEX_ORDER.indexOf(a.name) - INDEX_ORDER.indexOf(b.name)
       );
-      const all = [...sorted, ...lastExtraItems];
+      const scfi = scfiTickerItem();
+      const all = [...sorted, ...lastExtraItems, ...(scfi ? [scfi] : [])];
       const waitText = indexItemsError ? '지수 정보를 불러올 수 없습니다.' : '지수 정보를 불러오는 중입니다…';
 
       const row = document.getElementById('index-row');
@@ -8817,6 +8755,7 @@
       // 지수 API와 시장지표(기준금리·환율) API는 서로의 응답 지연에 영향받지 않도록 완전히 분리해서 처리한다.
       // (하나가 느리거나 실패해도 다른 하나는 정상적으로 티커에 표시되어야 함)
       refreshExtraTicker().then(() => renderIndexTicker(lastIndexItems));
+      refreshScfi();   // 서버가 캐시하는 주간 지수라 30초마다 물어도 부담이 없다
       try {
         const res = await apiFetch(`/api/indices`);
         if (!res.ok) throw new Error('지수 API 오류: ' + res.status);
