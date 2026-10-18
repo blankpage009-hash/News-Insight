@@ -17,7 +17,7 @@
 - 완료 : 단계 8 재점검 → [findings/stage8-recheck.md](findings/stage8-recheck.md) (2026-10-18)
 - 완료 : 단계 9 → findings/stage9-verdict.md · 단계 10 (묶음 A·B) · 단계 11 (검증 + diff 리뷰) → review-findings.md 끝
 - 완료 : R1 · R2 수정 (2026-10-18)
-- **다음 : 배포(push) 사용자 승인. `origin/main` push = Render 자동 배포.**
+- 완료 : 배포 a143171 (2026-10-18 10:48). 남은 일 : 운영에서 로그인 뒤 화면 확인 · `docs/review/` 정리(지워도 됨)
 
 | # | 단계 | 범위 | 모델 | 노력 | 이전(Sonnet low) 결과 |
 |---|---|---|---|---|---|
