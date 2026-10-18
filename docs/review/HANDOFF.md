@@ -14,7 +14,8 @@
 - 완료 : 단계 6a 재점검 → [findings/stage6a-recheck.md](findings/stage6a-recheck.md) (2026-10-18)
 - 완료 : 단계 6b 재점검 → [findings/stage6b-recheck.md](findings/stage6b-recheck.md) (2026-10-18)
 - 완료 : 단계 7 재점검 → [findings/stage7-recheck.md](findings/stage7-recheck.md) (2026-10-18)
-- **다음 : 단계 8 (저장소 정리: package.json · sql/ · 디자인 폴더) — Haiku · low.**
+- 완료 : 단계 8 재점검 → [findings/stage8-recheck.md](findings/stage8-recheck.md) (2026-10-18)
+- **다음 : 단계 9 (critic · Opus · medium) — 사용자가 단계 9 시작을 승인하면 진행.**
 
 | # | 단계 | 범위 | 모델 | 노력 | 이전(Sonnet low) 결과 |
 |---|---|---|---|---|---|
@@ -26,7 +27,7 @@
 | 6a | 화면 출력 이스케이프(XSS) | html 전체 JS | **Opus** | **high** | ✅ 재점검 끝 (stage6a-recheck.md) |
 | 6b | 화면 검색·렌더링·차트·모바일 | html 6415–10143 | Sonnet | medium | ✅ 재점검 끝 (stage6b-recheck.md) |
 | 7 | CSS·마크업·테마 | html 1–2691, privacy.html | Sonnet | low | ✅ 재점검 끝 (stage7-recheck.md) |
-| 8 | 저장소 정리 | package.json · sql/ · 디자인 폴더 | Haiku | low | findings/stage8.md |
+| 8 | 저장소 정리 | package.json · sql/ · 디자인 폴더 | Haiku | low | ✅ 재점검 끝 (stage8-recheck.md) |
 
 각 단계 방법 :
 1. 단계별 세부 항목은 [code-review-cleanup.md](code-review-cleanup.md) 3장, 공통 규칙은 [findings/COMMON-RULES.md](findings/COMMON-RULES.md) (에이전트 지시문에 그대로 넣는다).
