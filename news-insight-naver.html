@@ -2738,6 +2738,8 @@
     let relatedItems = [];   // [추가] 관련 기사 팝업에 뜬 기사들 (요약/주요내용 버튼이 id로 찾도록 보관)
     let currentBriefId = null;   // [추가] 지금 '주요 내용' 팝업에 떠 있는 기사 id
     let currentInsightId = null; // [추가] 지금 'Insight' 팝업에 떠 있는 기사 id (PDF 저장에 사용)
+    let currentRelatedId = null; // 지금 '관련 기사' 팝업의 기준 기사 id (늦게 온 낡은 응답을 가려내는 용도)
+    let currentFollowupId = null; // 지금 '이어보기' 팝업의 기준 기사 id (위와 같은 용도)
     let sectionState = [];   // 카테고리 박스 상태(펼침/개수) 저장
     let isLoading = false;
     let nextId = 0;
@@ -6755,7 +6757,7 @@
 
     function articleLink(item) {
       const naver = /^https?:\/\/(n|m)\.news\.naver\.com\//i.test(item.naverUrl || '') ? item.naverUrl : '';
-      const orig = item.url && item.url !== '#' ? item.url : '';
+      const orig = /^https?:\/\//i.test(item.url || '') ? item.url : '';   // javascript: 같은 주소는 링크로 쓰지 않는다
       if (!orig) return naver || '#';
       if (!naver) return orig;
       return looksLikeArticleUrl(orig) ? orig : naver;
@@ -7130,9 +7132,10 @@
       if (!modal) return;
       modal.classList.remove('hidden');
       bringModalToFront(modal);
+      if (scfiHistoryError) { scfiHistoryError = false; scfiHistory = null; }   // 실패했던 건 다시 열 때 한 번 더 시도한다
       renderScfiRangeTabs();
       renderScfiChart();
-      if (!scfiHistory && !scfiHistoryError) loadScfiHistory();
+      if (!scfiHistory) loadScfiHistory();
     }
 
     function closeScfiChart() {
@@ -7293,7 +7296,7 @@
           <span class="pv-big">${numText(last.value)}</span>
           <span class="pv-diff ${sumClass}">${diff === 0 ? '보합' : `${arrow}${numText(Math.abs(diff))}p (${arrow}${Math.abs(diffPct).toFixed(2)}%)`}</span>
           <span class="pv-sub">${range.label} 전 ${numText(first.value)} 대비</span>
-          <span class="pv-sub ml-auto">${first.date} ~ ${last.date} · ${pts.length}주</span>
+          <span class="pv-sub ml-auto">${esc(first.date)} ~ ${esc(last.date)} · ${pts.length}주</span>
         </div>
         <div id="scfi-plot" class="pv-plot relative select-none">
           <svg id="scfi-svg" viewBox="0 0 ${W} ${H}" class="w-full h-auto block" style="color:rgb(var(--c-${lineTone}))">
@@ -7355,7 +7358,7 @@
 
         const prev = best > 0 ? pts[best - 1].value : null;
         const wow = prev === null ? '' : `<br><span class="${p.value > prev ? 'text-up' : p.value < prev ? 'text-down' : 'text-muted'}">전주대비 ${p.value === prev ? '보합' : `${p.value > prev ? '▲' : '▼'}${numText(Math.abs(p.value - prev))}p`}</span>`;
-        tip.innerHTML = `<span class="text-muted">${p.date}</span><br>${numText(p.value)}${wow}`;
+        tip.innerHTML = `<span class="text-muted">${esc(p.date)}</span><br>${numText(p.value)}${wow}`;
         tip.classList.remove('hidden');
 
         // 말풍선이 오른쪽 밖으로 나가지 않게 접었다 편다.
@@ -7462,15 +7465,17 @@
       const cacheKey = indexChartCacheKey();
       // 이미 받아 둔 구간이면 그대로 그린다. 실패했던 구간은 다시 눌렀을 때 한 번 더 시도한다.
       const slot = indexChartStore[cacheKey];
-      if (slot && !slot.error) { renderIndexChart(); return; }
-      indexChartStore[cacheKey] = { loading: true };
+      //   장중('1일') 그림은 시간이 지나면 낡으므로 5분이 넘으면 다시 받는다(그 밖의 구간은 하루 단위라 그대로 둔다).
       const [key, range] = cacheKey.split(':');
+      const stale = slot && slot.data && range === '1d' && Date.now() - slot.ts > 5 * 60 * 1000;
+      if (slot && !slot.error && !stale) { renderIndexChart(); return; }
+      indexChartStore[cacheKey] = { loading: true };
       try {
         const res = await apiFetch(`/api/index-chart?key=${key}&range=${range}`);
         if (!res.ok) throw new Error('지수 차트 API 오류: ' + res.status);
         const data = await res.json();
         const points = (data.points || []).filter((p) => p && Number.isFinite(p.t) && Number.isFinite(p.value));
-        indexChartStore[cacheKey] = points.length >= 2 ? { data: { ...data, points } } : { error: true };
+        indexChartStore[cacheKey] = points.length >= 2 ? { data: { ...data, points }, ts: Date.now() } : { error: true };
       } catch (err) {
         console.error(err);
         indexChartStore[cacheKey] = { error: true };
@@ -7767,8 +7772,10 @@
       return parts.join(' · ') || (data.mode === 'or' ? 'OR(하나라도 포함)' : 'AND(모두 포함)');
     }
 
+    // 검색 중에 다른 메뉴를 누르면 그 요청을 잃지 않게 하나만 기억해 뒀다가 끝난 뒤 다시 돌린다.
+    let searchQueued = false;
     function runSearch() {
-      if (isLoading) return searchDone;   // 이미 돌고 있으면 그게 끝나는 걸 알려준다
+      if (isLoading) { searchQueued = true; return searchDone; }   // 이미 돌고 있으면 끝난 뒤 한 번 더
       searchDone = runSearchInner();
       return searchDone;
     }
@@ -7949,6 +7956,7 @@
         // [추가] 모바일 : 필터를 바꿔 검색이 끝나면 펼쳐 뒀던 필터를 다시 접는다.
         //   (화면이 좁아서 필터가 펼쳐진 채로 있으면 기사 목록을 가린다)
         if (isMobileLayout()) closeAllFilterDropdowns();
+        if (searchQueued) { searchQueued = false; runSearch(); }
       }
     }
 
@@ -8256,8 +8264,8 @@
             </div>
           </div>
           <div class="bc-body">
-            <h3 class="bc-title bc-dim brief-open" ${briefOpenAttrs(item)}>${item.title}</h3>
-            <div class="bc-sum bc-dim">${lead ? `<p class="brief-open" onclick="openBrief(${item.id})">${lead}</p>` : ''}${thumbSlotHtml(item, 'd')}</div>
+            <h3 class="bc-title bc-dim brief-open" ${briefOpenAttrs(item)}>${esc(item.title)}</h3>
+            <div class="bc-sum bc-dim">${lead ? `<p class="brief-open" onclick="openBrief(${item.id})">${esc(lead)}</p>` : ''}${thumbSlotHtml(item, 'd')}</div>
           </div>
           ${briefActionsHtml(item, 'bc-actions', false, false, true)}
         </article>`;
@@ -8291,9 +8299,9 @@
             <span class="bc-rno bc-dim">${String(i + 1).padStart(2, '0')}</span>
             <div class="bc-rmeta bc-dim">${briefTagsHtml(item)}<span>${briefMetaText(item)}</span></div>
             ${briefSaveBtnHtml(item, 'row')}
-            <h4 class="bc-rtitle bc-dim brief-open" ${briefOpenAttrs(item)}>${item.title}</h4>
+            <h4 class="bc-rtitle bc-dim brief-open" ${briefOpenAttrs(item)}>${esc(item.title)}</h4>
             <div class="bc-rbody">
-              <div class="bc-rmid">${lead ? `<p class="bc-rsum bc-dim brief-open" onclick="openBrief(${item.id})">${lead}</p>` : ''}</div>
+              <div class="bc-rmid">${lead ? `<p class="bc-rsum bc-dim brief-open" onclick="openBrief(${item.id})">${esc(lead)}</p>` : ''}</div>
               ${briefActionsHtml(item, 'bc-racts', opts.saved)}
             </div>
             ${thumbSlotHtml(item)}
@@ -8456,11 +8464,15 @@
       if (!s) return;
       s._loading = true;
       s.collapsed = false;
+      // 응답이 늦게 와도 (1) 그 사이 다른 화면으로 옮겼거나 (2) 같은 섹션에 더 새 요청이 있으면 이 응답은 버린다
+      const gen = listGen;
+      const reqId = (s._req = (s._req || 0) + 1);
+      const isCurrent = () => gen === listGen && s._req === reqId;
       renderSectionsFromState();
       try {
         // [수정] 처음 불러올 때처럼 30건(넘으면 고른 건수)을 받아 둔다. 노출 건수만 받으면 싫어요로 숨긴 자리를 채울 후보가 없었다.
         const fresh = await fetchOneSection(key, Math.max(s.count, 30), s.hours, s.sort);
-        if (fresh) {
+        if (fresh && isCurrent()) {
           // 이 섹션만의 정렬값 적용 + [P4] 추천. 추천이 건수를 늘려도 받아 둔 만큼만 된다(shownCountOf).
           s.items = rerankForTaste(sortItemsBy(decorateItems(fresh, key, false, false, s.hours), s.sort), key, currentCategory === 'all' ? tasteProfile() : null);
           mergeCatsAcrossSections(sectionState);                 // 섹션 겹침 태그 다시 계산
@@ -8469,6 +8481,7 @@
       } catch (err) {
         console.error(err);
       } finally {
+        if (!isCurrent()) return;   // 새 요청이나 다른 화면이 이어받는다(여기서 그리면 낡은 화면을 덮는다)
         s._loading = false;
         renderSectionsFromState();
         // [추가] 모바일 : 이 섹션 박스의 필터도 검색이 끝나면 다시 접는다.
@@ -9471,7 +9484,7 @@
       currentBriefId = id;              // [추가] 팝업 안 '관련 기사' 버튼이 쓸 기준 기사
       document.getElementById('brief-link').href = link;
       // [추가] 시안 05번 : 머리말에 기사 제목과 출처·시각을 먼저 띄운다 (기다리는 동안에도 무엇을 보는지 알 수 있다)
-      document.getElementById('brief-title').innerHTML = item.title;
+      document.getElementById('brief-title').textContent = plainText(item.title);
       const firstCat = tagCatsOf(item)[0];
       const briefCat = firstCat && catLabelOf(item, firstCat);   // 시안 1a 머리말 : 분야 · 출처 · 시각
       document.getElementById('brief-meta').textContent =
@@ -9493,6 +9506,7 @@
         if (aiModelPick()) params.set('model', aiModelPick());   // [P9] 내가 고른 모델 (자동이면 안 보낸다)
         const res = await apiFetch(`/api/deep-brief?${params.toString()}`);
         const data = await res.json();
+        if (currentBriefId !== id) return;   // 그 사이 다른 기사를 열었으면 낡은 응답은 버린다
 
         if (data.error) {
           if (showAiKeyError(data, briefBody, (h) => h)) return;   // [P8] 키 없음 · 거절된 키
@@ -9505,6 +9519,7 @@
           { done: '원문을 읽고 정리했습니다', tail: '사실 확인은 원문을 참고하세요', partial: '정리했습니다' });
       } catch (e) {
         console.error(e);
+        if (currentBriefId !== id) return;
         document.getElementById('brief-body').innerHTML = popupErrHtml('정리를 불러오지 못했습니다.');
       }
     }
@@ -9676,6 +9691,7 @@
         if (aiModelPick()) params.set('model', aiModelPick());   // [P9]
         const res = await apiFetch(`/api/insight?${params.toString()}`);
         const data = await res.json();
+        if (currentInsightId !== id) return;   // 낡은 응답은 버린다
 
         if (data.error) {
           if (showAiKeyError(data, insightBody, padWrap)) return;   // [P8] 키 없음 · 거절된 키
@@ -9717,9 +9733,9 @@
             <span class="bc-rno bc-dim">${String(i + 1).padStart(2, '0')}</span>
             <div class="bc-rmeta bc-dim"><span>${briefMetaText(item)}</span></div>
             ${briefSaveBtnHtml(item, 'row')}
-            <h4 class="bc-rtitle bc-dim brief-open" ${briefOpenAttrs(item)}>${item.title}</h4>
+            <h4 class="bc-rtitle bc-dim brief-open" ${briefOpenAttrs(item)}>${esc(item.title)}</h4>
             <div class="bc-rbody">
-              ${lead ? `<p class="bc-rsum bc-dim brief-open" onclick="openBrief(${item.id})">${lead}</p>` : ''}
+              ${lead ? `<p class="bc-rsum bc-dim brief-open" onclick="openBrief(${item.id})">${esc(lead)}</p>` : ''}
               ${briefActionsHtml(item, 'bc-racts', false, true)}
             </div>
           </article>`;
@@ -9730,6 +9746,7 @@
       const item = findItem(id);
       if (!item) return;
 
+      currentRelatedId = id;
       document.getElementById('related-source-title').textContent = plainText(item.title);
       document.getElementById('related-count').textContent = '';
       document.getElementById('related-body').innerHTML = relatedLoadingHtml();
@@ -9741,6 +9758,7 @@
         const p = new URLSearchParams({ title: item.title, url: articleLink(item), display: '5' });
         const res = await apiFetch(`/api/related?${p.toString()}`);
         const data = await res.json();
+        if (currentRelatedId !== id) return;   // 낡은 응답은 버린다
 
         if (data.error) {
           document.getElementById('related-body').innerHTML = `<div class="py-5">${popupErrHtml(data.error)}</div>`;
@@ -9764,6 +9782,7 @@
         document.getElementById('related-body').innerHTML = popupRowsHtml(list);
       } catch (e) {
         console.error(e);
+        if (currentRelatedId !== id) return;
         document.getElementById('related-body').innerHTML = `<div class="py-5">${popupErrHtml('관련 기사를 불러오지 못했습니다.')}</div>`;
         document.getElementById('related-count').textContent = '';
       }
@@ -9781,6 +9800,7 @@
       if (!item) return;
       const key = savedKeyOf(item);
 
+      currentFollowupId = id;
       document.getElementById('followup-source-title').textContent = plainText(item.title);
       document.getElementById('followup-count').textContent = '';
       document.getElementById('followup-body').innerHTML = relatedLoadingHtml();
@@ -9791,6 +9811,7 @@
       try {
         const raw = followupCache.has(key) ? followupCache.get(key) : await fetchFollowupForItem(item);
         updateFollowupBadge(key, raw.length);   // 배지가 아직 0이었으면 여기서 맞춰준다
+        if (currentFollowupId !== id) return;   // 낡은 응답은 버린다(배지는 위에서 이미 맞췄다)
 
         const baseCat = (Array.isArray(item.cats) && item.cats.length) ? item.cats[0] : (item.category || 'society');
         const list = decorateItems(raw, baseCat, false, true);
@@ -9804,6 +9825,7 @@
         document.getElementById('followup-body').innerHTML = popupRowsHtml(list);
       } catch (e) {
         console.error(e);
+        if (currentFollowupId !== id) return;
         document.getElementById('followup-body').innerHTML = `<div class="py-5">${popupErrHtml('이어보기 기사를 불러오지 못했습니다.')}</div>`;
       }
     }
@@ -9829,9 +9851,9 @@
 
     // 제목에 섞여 오는 <b> 같은 태그를 지우고 순수 글자만 남긴다
     function plainText(html) {
-      const d = document.createElement('div');
-      d.innerHTML = String(html ?? '');
-      return (d.textContent || '').trim();
+      // DOMParser 로 읽은 문서는 스크립트·이미지 요청이 실행되지 않는다(div.innerHTML 은 <img onerror> 가 실행됐다)
+      const doc = new DOMParser().parseFromString(String(html ?? ''), 'text/html');
+      return (doc.body.textContent || '').trim();
     }
 
     // 팝업 내용을 '제목/출처 + 본문 + 꼬리말' 인쇄용 HTML 로 만든다. (인쇄·아이폰 PDF 공통)
