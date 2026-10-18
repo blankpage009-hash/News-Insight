@@ -3970,7 +3970,10 @@ async function fetchOgImage(pageUrl) {
 // 기사 1건의 사진 주소. undefined = 지금 붐벼서 못 봤다(캐시하지 않음, 다음에 다시)
 //   원문을 먼저 본다. 원문이 막혔거나 og 태그가 없으면 네이버 뉴스 주소로 한 번 더.
 async function imageForArticle(url, naverUrl) {
-  if (!imageUrlAllowed(url)) return '';   // 막힌 주소는 캐시 칸을 차지하지 않게 바로 돌려보낸다
+  // 막힌 원문 주소는 캐시 칸을 차지하지 않게 하되, 네이버 주소가 있으면 그쪽으로 찾는다(예전에 되던 대체 길)
+  if (!imageUrlAllowed(url)) {
+    return naverUrl && /^https?:\/\/n\.news\.naver\.com\//i.test(naverUrl) ? imageForArticle(naverUrl, '') : '';
+  }
   const hit = imageCache.get(url);
   if (hit && Date.now() - hit.ts < (hit.img ? IMAGE_TTL_OK : IMAGE_TTL_FAIL)) return hit.img;
 

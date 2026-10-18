@@ -16,7 +16,8 @@
 - 완료 : 단계 7 재점검 → [findings/stage7-recheck.md](findings/stage7-recheck.md) (2026-10-18)
 - 완료 : 단계 8 재점검 → [findings/stage8-recheck.md](findings/stage8-recheck.md) (2026-10-18)
 - 완료 : 단계 9 → findings/stage9-verdict.md · 단계 10 (묶음 A·B) · 단계 11 (검증 + diff 리뷰) → review-findings.md 끝
-- **다음 : 단계 11 에서 새로 찾은 R1(사진 네이버 대체 빠짐) · R2(Insight 오류 덮어쓰기) 고칠지 사용자 결정 → 배포(push) 승인.**
+- 완료 : R1 · R2 수정 (2026-10-18)
+- **다음 : 배포(push) 사용자 승인. `origin/main` push = Render 자동 배포.**
 
 | # | 단계 | 범위 | 모델 | 노력 | 이전(Sonnet low) 결과 |
 |---|---|---|---|---|---|
