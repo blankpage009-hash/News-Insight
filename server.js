@@ -58,6 +58,12 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
 
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
+// 깨진 JSON · 너무 큰 본문은 기본 처리기가 스택(서버 파일 경로)까지 내보낸다 → 짧은 문구만 돌려준다
+app.use((err, req, res, next) => {
+  if (err && err.type === 'entity.parse.failed') return res.status(400).json({ error: '요청 본문이 올바른 JSON 이 아닙니다.' });
+  if (err && err.type === 'entity.too.large') return res.status(413).json({ error: '요청 본문이 너무 큽니다.' });
+  return next(err);
+});
 
 // [P2] 공개 파일은 이 목록만. 예전엔 폴더 전체(express.static)를 내보내서
 //   로그인 없이도 server.js · keywords.json · .md · node_modules 까지 열렸다.
@@ -1474,7 +1480,7 @@ function textContainsTerm(text, term) {
 function parseQuery(q) {
   const excludes = [];
   const terms = String(q || '')
-    .split(',')
+    .split(/(?<!\d),|,(?!\d)/)  // '코스피 3,000' 의 천 단위 쉼표는 자르지 않는다
     .map((group) => {
       const keep = [];
       let minusPending = false;   // '반도체 - 중국' 처럼 빼기를 띄어 쓴 경우
@@ -1987,21 +1993,42 @@ function extractBodyFromHtml(html) {
 }
 
 // [C] 한 URL을 UA를 바꿔가며 최대 2번 시도
+// 글자 모양(charset) : 응답 머리말 → <meta> 순서로 읽는다. 한국 지역 언론사에 EUC-KR 이 남아 있어
+//   UTF-8 로만 읽으면 본문이 깨져 검증에서 탈락했다.
+function decodeHtmlBuffer(buf, contentType) {
+  let cs = /charset=["']?([\w-]+)/i.exec(contentType || '')?.[1];
+  if (!cs) cs = /<meta[^>]+charset=["']?([\w-]+)/i.exec(buf.subarray(0, 2048).toString('latin1'))?.[1];
+  cs = (cs || 'utf-8').toLowerCase();
+  if (/^(ks_c_5601|euc[-_]?kr|ksc5601)/.test(cs)) cs = 'euc-kr';
+  if (cs === 'utf-8' || cs === 'utf8') return buf.toString('utf8');
+  try {
+    return new TextDecoder(cs).decode(buf);
+  } catch {
+    return buf.toString('utf8');
+  }
+}
+
 async function fetchHtml(url) {
   const uas = [BROWSER_HEADERS['User-Agent'], MOBILE_UA];
   for (const ua of uas) {
     try {
       const controller = new AbortController();
+      // 본문을 다 읽을 때까지 타이머를 둔다. 헤더만 오고 본문이 멈추는 서버에 영원히 묶이지 않게 하려는 것
       const timer = setTimeout(() => controller.abort(), 9000);
-      const r = await fetch(url, {
-        signal: controller.signal,
-        redirect: 'follow',
-        headers: { ...BROWSER_HEADERS, 'User-Agent': ua },
-      });
-      clearTimeout(timer);
-      if (r.ok) {
-        const html = await r.text();
-        if (html && html.length > 500) return html;
+      try {
+        const r = await fetch(url, {
+          signal: controller.signal,
+          redirect: 'follow',
+          headers: { ...BROWSER_HEADERS, 'User-Agent': ua },
+        });
+        // 끊긴 본문 스트림이 'error' 를 쏠 때 듣는 쪽이 없으면 서버가 죽는다(3891 주석과 같은 이유)
+        if (r.body) r.body.on('error', () => {});
+        if (r.ok) {
+          const html = decodeHtmlBuffer(Buffer.from(await r.arrayBuffer()), r.headers.get('content-type'));
+          if (html && html.length > 500) return html;
+        }
+      } finally {
+        clearTimeout(timer);
       }
     } catch { /* 다음 UA로 재시도 */ }
   }
@@ -2819,8 +2846,13 @@ async function buildBreaking(limit, kwMap) {
   return { items: await fetchBreaking(limit, terms, exclude) };
 }
 
+// 건수 파라미터 : 음수·소수·글자는 기본값 쪽으로, 상한은 max (소수마다 캐시 칸이 생기는 것도 막는다)
+function clampLimit(v, def, max) {
+  return Math.min(Math.max(Math.floor(Number(v)) || def, 1), max);
+}
+
 app.get('/api/breaking', async (req, res) => {
-  const limit = Math.min(Number(req.query.display) || 20, 50);
+  const limit = clampLimit(req.query.display, 20, 50);
   const kwMap = await kwMapFor(req);
   try {
     res.json(await cachedResponse(
@@ -2844,15 +2876,17 @@ function hoursText(h) {
 }
 
 app.get('/api/news', async (req, res) => {
-  const { q, display = '20', sort = 'date', hours = '24' } = req.query;
-  if (!q || !q.trim()) return res.status(400).json({ error: '검색어(q)가 필요합니다.' });
+  const { display = '20', sort = 'date', hours = '24' } = req.query;
+  // ?q=a&q=b 처럼 두 번 보내면 배열이 와서 q.trim 이 서버를 죽였다 → 글자일 때만 받는다
+  const q = typeof req.query.q === 'string' ? req.query.q : '';
+  if (!q.trim()) return res.status(400).json({ error: '검색어(q)가 필요합니다.' });
 
   const { terms, excludes } = parseQuery(q);          // 콤마 = OR, 공백 = AND, -단어 = 제외
   if (!terms.length) {
     return res.status(400).json({ error: '뺄 낱말(-단어)만 있습니다. 찾을 낱말도 함께 넣어 주세요.' });
   }
   const mode = terms.length > 1 ? 'or' : 'and';
-  const limit = Math.min(Number(display) || 20, 50);
+  const limit = clampLimit(display, 20, 50);
 
   // [C] 결과가 0건이면 조건을 한 단계씩 완화하는 사다리
   const reqH = Number(hours) > 0 ? Number(hours) : 0; // 0 = 모두(전체 기간)
@@ -3373,7 +3407,7 @@ async function buildBriefing({ limit, dateFrom, dateTo, hours, pressOpts = PRESS
 
 app.get('/api/briefing', async (req, res) => {
   const { dateFrom, dateTo, hours } = req.query;
-  const opts = { limit: Math.min(Number(req.query.limit) || 5, 30), dateFrom, dateTo, hours, pressOpts: pressOptsOf(req) };
+  const opts = { limit: clampLimit(req.query.limit, 5, 30), dateFrom, dateTo, hours, pressOpts: pressOptsOf(req) };
   const kwMap = await kwMapFor(req);
 
   try {
@@ -3415,7 +3449,7 @@ function allSectionParts(opts, kwMap) {
 app.get('/api/all/sections', async (req, res) => {
   const { dateFrom, dateTo, perSection = '5', hours, sort } = req.query;
   const kwMap = await kwMapFor(req);
-  const opts = { limit: Math.min(Number(perSection) || 5, 30), dateFrom, dateTo, hours, sort };
+  const opts = { limit: clampLimit(perSection, 5, 30), dateFrom, dateTo, hours, sort };
   try {
     // [빈 결과 캐시] 섹션 하나가 실패해도 나머지는 보여 준다(실패한 섹션은 빈 목록 · 캐시하지 않음 · 다음 요청이 다시 시도).
     const parts = allSectionParts(opts, kwMap);
@@ -3538,7 +3572,7 @@ function countTitleWords(sections, kwMap) {
 
 app.get('/api/keyword-rank', async (req, res) => {
   const kwMap = await kwMapFor(req);
-  const limit = Math.min(Number(req.query.limit) || 5, 20);
+  const limit = clampLimit(req.query.limit, 5, 20);
 
   // 기간·정렬·건수는 프리워밍과 똑같이 고정한다. 화면의 설정을 따라가면
   //   캐시 키가 갈라져 적중하지 않고, 그러면 랭킹이 영영 비어 보인다.
@@ -3936,6 +3970,7 @@ async function fetchOgImage(pageUrl) {
 // 기사 1건의 사진 주소. undefined = 지금 붐벼서 못 봤다(캐시하지 않음, 다음에 다시)
 //   원문을 먼저 본다. 원문이 막혔거나 og 태그가 없으면 네이버 뉴스 주소로 한 번 더.
 async function imageForArticle(url, naverUrl) {
+  if (!imageUrlAllowed(url)) return '';   // 막힌 주소는 캐시 칸을 차지하지 않게 바로 돌려보낸다
   const hit = imageCache.get(url);
   if (hit && Date.now() - hit.ts < (hit.img ? IMAGE_TTL_OK : IMAGE_TTL_FAIL)) return hit.img;
 
@@ -4165,7 +4200,7 @@ function registerSubSectionRoute(base, SECTIONS) {
 
     const { dateFrom, dateTo, display = '20', hours, sort } = req.query;
     const kwMap = await kwMapFor(req);
-    const want = Math.min(Number(display) || 20, 50);
+    const want = clampLimit(display, 20, 50);
     try {
       res.json(await sectionItemsForPress(req, want, (limit) => {
         const opts = { limit, dateFrom, dateTo, hours, sort };
@@ -4353,7 +4388,7 @@ app.get('/api/topic/:key', async (req, res) => {
 
   const { dateFrom, dateTo, display = '20', hours, sort } = req.query;
   const kwMap = await kwMapFor(req);
-  const want = Math.min(Number(display) || 20, 50);
+  const want = clampLimit(display, 20, 50);
   try {
     res.json(await sectionItemsForPress(req, want, (limit) => {
       const opts = { limit, dateFrom, dateTo, hours, sort };
@@ -4377,7 +4412,7 @@ app.get('/api/topic/:key', async (req, res) => {
 app.get('/api/related', async (req, res) => {
   const title = String(req.query.title || '').trim();
   const excludeUrl = String(req.query.url || '');
-  const limit = Math.min(Number(req.query.display) || 5, 10);
+  const limit = clampLimit(req.query.display, 5, 10);
 
   if (!title) return res.status(400).json({ error: '기사 제목이 필요합니다.' });
 
@@ -5231,14 +5266,14 @@ async function fetchOneIndex(target) {
 
   for (const url of indexUrls(target)) {
     try {
-      const res = await fetch(url, {
+      const res = await fetchWithTimeout(url, {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
           Accept: 'application/json',
           Referer: 'https://m.stock.naver.com/',
         },
-      });
+      }, 8000);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const data = await res.json();
@@ -5564,7 +5599,7 @@ async function buildIndexChart(key, rangeKey) {
 app.get('/api/index-chart', async (req, res) => {
   const key = String(req.query.key || '');
   const rangeKey = String(req.query.range || '1m');
-  if (!INDEX_CHART_TARGETS[key] || !INDEX_CHART_RANGES[rangeKey]) {
+  if (!Object.prototype.hasOwnProperty.call(INDEX_CHART_TARGETS, key) || !Object.prototype.hasOwnProperty.call(INDEX_CHART_RANGES, rangeKey)) {
     return res.status(400).json({ error: '알 수 없는 지수 또는 기간입니다.' });
   }
 
@@ -6220,7 +6255,9 @@ async function warmCache() {
   warming = true;
   const t0 = Date.now();
   const before = articleTextCache.size;
-  const kwMap = await readWarmKeywords();
+  // 읽기가 한 번 실패해 빈 값 {} 이 오면 직전 키워드를 지우지 않고 그대로 쓴다(최대 30분 동안 기본 검색어로 돌던 문제)
+  const readKw = await readWarmKeywords();
+  const kwMap = Object.keys(readKw || {}).length ? readKw : (commonKw || readKw);
   setCommonKw(kwMap);               // 다른 서버(운영 P0 등)가 공용 키워드를 바꿨어도 회차마다 따라간다
   // 지표 티커(market-extra)는 네이버 API를 쓰지 않아 429 걱정이 없다.
   //   기사 프리워밍을 기다리게 하지 말고 옆에서 같이 데운다.
