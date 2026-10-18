@@ -2,8 +2,9 @@
 
 네이버 검색 API를 프록시해 뉴스를 카테고리별로 보여주는 단일 페이지 앱.
 
-- `server.js` — Express 프록시. 단일 파일, **줄바꿈 CRLF**
+- `server.js` — Express 프록시. 단일 파일, **줄바꿈 LF**
 - `news-insight-naver.html` — 화면 전체. 단일 파일, **줄바꿈 LF**
+- 줄바꿈 확인은 `git ls-files --eol` 로 한다 (Git Bash 의 `grep -c $'\r$'` 는 CR 을 지우고 세서 틀린 값을 낸다)
 - 배포 : Render. `origin/main` 에 push하면 자동 배포됨 (push 전에 확인받을 것)
 - 로컬 실행 : `.claude/launch.json` 의 `newsinsight` 설정 사용
 - **v3 다크 테마(Phase 11) 진행 중 — 개인화 P11 보다 먼저** (2026-10-10 사용자 결정). 작업 브랜치 `v3-dark`, 계획·진행 기록은 [REDESIGN-v3.md](docs/REDESIGN-v3.md) "Phase 11 계획" 절 (한 단계씩, 끝나면 멈추고 확인)
