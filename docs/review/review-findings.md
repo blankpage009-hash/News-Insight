@@ -73,5 +73,14 @@
 | R2 | html:9704 openInsight catch | 다른 세 팝업과 달리 실패(catch) 쪽에 낡은 응답 검사가 없다. A 의 Insight 를 연 뒤 B 를 열고, A 요청이 네트워크 오류로 늦게 실패하면 B 화면에 A 의 오류 문구가 덮인다 | 버그 | 하 | 미수정 — 한 줄 추가로 고칠 수 있음 |
 | R3 | server.js:2849 주석 | `clampLimit` 주석은 "음수 → 기본값" 이지만 실제로는 1 이 된다. 동작은 문제없음 | 참고 | — | — |
 | R4 | server.js:1483 | `2024,2025` 처럼 숫자끼리 붙은 쉼표는 이제 OR 로 안 나뉜다 (천 단위 쉼표 처리의 부작용) | 참고 | — | — |
+| R5 | html:7778 runSearch | 대기열에 넣을 때 '지금 도는 검색'의 약속(promise)을 돌려준다. `await runSearch()` 하는 곳은 당겨서 새로고침(5017) 하나뿐이고 고리 표시 시간에만 쓴다 → 고리가 대기열 검색보다 먼저 사라질 수 있음(눈에 보이는 영향만, 결과는 정상) | 참고 | — | — |
+
+### 추가 확인 (지운 코드 · 남은 재현)
+
+- 지운 이름 글자 검색 (`grep -c -w 이름 server.js news-insight-naver.html privacy.html`, HEAD) : `itemMatchesAnyTerm` · `categoryQueryMap` · `expandedEconomy` · `panel-more` · `loading-ring` · `is-card` 모두 0. `pv-verdict` 4건은 전부 `pv-verdict-list`(다른 클래스, html:910~). `bc-save is-${kind}` 의 kind 는 호출 2곳 모두 `'row'` 라 `is-card` 는 안 생긴다
+- `economy_` : 서버에 `registerSubSectionRoute('economy', …)` 없음(logistics · stock · sports 만) → 지운 분기는 원래 못 가는 길. 화면에서 경제 · 물류 · 증시 · 스포츠와 하위(롯데글로벌로지스 · 국내 · 포항스틸러스) 눌러 봄 → 모두 정상, 콘솔 오류 0 (롯데 24시간 0건은 실제로 기사 없음, 7일 5건)
+- 디자인 시안 폴더 2개 : PC 에 그대로 있음(`Beyond News Redesign` · `Beyond News UI 개선-handoff`)
+- `lead`(요약) 는 서버가 `stripHtml` 한 순수 글자(server.js:2336) → `esc` 가 맞다. 굵게 표시 같은 의도된 태그 없음
+- 실행해 보지 않고 코드만 읽은 수정 : warmCache 키워드 대체 · SCFI 실패 뒤 다시 열기 · SCFI 날짜 `esc` · 1일 지수 차트 5분 뒤 다시 받기 · 주요 내용/Insight/이어보기 팝업의 낡은 응답 버리기(관련 기사만 실행해 봄)
 
 정리 : 테스트 서버 · 임시 파일(`server-main.tmp.js`) 정리함. `.cache/article-text.json` 정상(386건). push 안 함.
