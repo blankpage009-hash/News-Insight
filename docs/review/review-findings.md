@@ -26,3 +26,18 @@
   - `/api/briefing?limit=10&hours=24` : 200, 키 `items`, 1264ms → 9ms
   - `/api/me` : 200, 키 `email,name,state,isAdmin,pendingCount`
 - 단계 11 비교는 이 기준선으로 한다 (기사는 시간 따라 바뀌므로 건수·키 이름·상태 코드 위주).
+
+## 단계 10 — 수정 결과 (2026-10-18, 브랜치 `review/cleanup`)
+
+범위 : 사용자 결정(2026-10-14) "죽은 코드 + 명백한 버그만" → 묶음 A·B 만. 묶음 C · '보고만' · 의심 항목은 손대지 않음. push 안 함.
+
+| 커밋 | 항목 |
+|---|---|
+| 1425edc 묶음 A | A1~A6 (죽은 함수·상수·변수·CSS 삭제, 디자인 시안 폴더 20개 추적 제외 + .gitignore) |
+| deb499f 묶음 B 서버 | F1 · F4 · F5 · F6 · F18 · F20 · F21 · F25 · F26(차단 주소 캐시 안 함) · F32 |
+| 0394bcf 묶음 B 화면 | F2(화면 쪽) · F3 · F12 · F13 · F14 · F15 · F22 · F23 · F24 · F50 |
+
+고치지 않은 B 항목 : F33(선택, 미룸) · F2 의 서버 stripHtml 순서(보고만) · F26 의 열쇠 변경(C).
+확인 : `node --check server.js` 통과 · 시험 서버(가짜 Supabase)에서 `?q=a&q=b` 400(서버 생존) · `key=constructor` 400 · 깨진 JSON 400 짧은 문구 · `display=-5/2.5` 200 · `/api/indices` 200 · 화면 로드 콘솔 오류 0 · `plainText('<img onerror>')` 실행 안 됨 · `javascript:` 주소 → 네이버 링크로 대체 · 검색 중 두 번째 `runSearch` 가 대기열(true)에 들어가 끝난 뒤 실행됨.
+줄바꿈 : server.js · html 모두 현재 값(LF) 유지. package.json 변화 없음. 보호 목록 줄 diff 0.
+못 한 것 : fetchHtml 본문 정지 9초 차단과 EUC-KR 실제 기사 해석은 로컬에서 실제 요청으로 시험하지 않음(디코더 단위 확인만) · 단계 11(전체 검증 + diff 리뷰) 남음.
