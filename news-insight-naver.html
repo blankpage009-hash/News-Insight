@@ -1239,6 +1239,8 @@
   .bc-act:hover { background: rgb(var(--c-ink3)); }
   .bc-act.is-primary { background: rgb(var(--c-gold)); color: rgb(var(--c-ink)); }
   .bc-act.is-primary:hover { background: rgb(var(--c-gold2)); }
+  /* 다크 : 주요 내용 · Insight 의 빨간 상자/버튼은 흰 글자 (2026-10-18 사용자 요청 — 어두운 글자가 묻혀 보였다) */
+  :root[data-theme="dark"] :is(.bc-act.is-primary.ai-act, .pv-btn.is-primary.ai-act, #brief-modal .pv-label, #insight-modal .pv-label) { color: #fff; }
   .bc-act svg { width: 15px; height: 15px; flex: none; }
   .bc-save { display: inline-flex; align-items: center; justify-content: center; flex: none; color: rgb(var(--c-paper)); transition: background-color .15s, color .15s; }
   .bc-save.is-row { width: 32px; height: 32px; }
@@ -3241,8 +3243,24 @@
     }
 
     // 탭을 숨기거나 닫을 때 남은 것을 서둘러 보낸다. 못 보내도 대기열이 이 기기에 남아 있다.
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSync(true); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushSync(true);
+      else pullAccountAgain();
+    });
     window.addEventListener('pagehide', () => { flushSync(true); });
+    window.addEventListener('focus', () => pullAccountAgain());
+
+    // 계정 값은 처음 열 때 한 번만 받아서, 켜 둔 PC 탭은 휴대폰에서 저장한 기사를 새로고침 전까지 몰랐다.
+    //   화면으로 돌아올 때 다시 받는다. 탭 전환마다 부르지 않게 간격을 두고, 첫 동기화(syncUid)가 끝난 뒤에만 한다.
+    const SYNC_PULL_GAP_MS = 20000;
+    let syncPullAt = 0;
+    let syncPulling = false;
+    async function pullAccountAgain() {
+      if (authBlocked || !syncUid || syncPulling || Date.now() - syncPullAt < SYNC_PULL_GAP_MS) return;
+      syncPulling = true;
+      syncPullAt = Date.now();
+      try { await syncAccountInBackground(); } finally { syncPulling = false; }
+    }
 
     // 로그아웃 · 로그인 만료 때. 공용 기기에서 다음 사람에게 내 기록이 보이거나, 그 사람 계정으로 옮겨 가지 않게 한다.
     //   P7 이전 목록(v1)은 아직 계정에 못 올렸을 수 있어 지우지 않는다.
@@ -3258,7 +3276,8 @@
       aiModelList = null;
       applyAiKeyUi();
       if (!(fromGate && neverSynced)) {
-        keys.push(THEME_STORAGE_KEY, FONT_SIZE_KEY, COUNT_STORAGE_KEY, VIEW_MODE_KEY, RAIL_STORAGE_KEY, SCREEN_PREFS_KEY, AI_MODEL_KEY, PRESS_BLOCK_KEY);
+        // 테마는 계정이 아닌 이 기기의 설정이라 로그아웃해도 남긴다
+        keys.push(FONT_SIZE_KEY, COUNT_STORAGE_KEY, VIEW_MODE_KEY, RAIL_STORAGE_KEY, SCREEN_PREFS_KEY, AI_MODEL_KEY, PRESS_BLOCK_KEY);
       }
       keys.forEach((k) => syncLsDel(k));
       syncPending = emptySyncPending();
@@ -3270,18 +3289,7 @@
     // 화면 설정 한 칸마다 : local() = 이 기기에 '사람이 정해 둔 값'(없으면 undefined), apply(v) = 서버 값을 사본 · 화면에 반영.
     //   apply 는 값을 서버로 되돌려 보내지 않는다(되울림 방지). true 를 돌려주면 기사를 다시 불러와야 하는 변화다.
     const PREF_SYNC = {
-      // [수정] Phase 11c : 칸 이름을 theme → themeV2 로 바꿨다. 계정에 남은 v2 때 theme 값(다크·시스템)을
-      //   읽지 않게 해서 모두 화이트에서 다시 시작한다(옛 칸은 서버에 남아도 아무도 안 읽는다).
-      themeV2: {
-        local: () => syncLsGet(THEME_STORAGE_KEY) || undefined,
-        apply(v) {
-          if (!['light', 'dark', 'system'].includes(v)) return false;
-          syncLsSet(THEME_STORAGE_KEY, v);
-          applyTheme(v);
-          renderThemeButtons();
-          return false;
-        },
-      },
+      // [삭제] themeV2 : 테마는 기기별 설정이 됐다(2026-10-18). 계정에 남은 themeV2 값은 아무도 읽지 않는다.
       fontSize: {
         local() {
           const n = Number(syncLsGet(FONT_SIZE_KEY));
@@ -5679,8 +5687,8 @@
     }
 
     function setTheme(pref) {
+      // 테마는 기기마다 따로 둔다(2026-10-18 사용자 결정) : 휴대폰 다크가 PC 까지 바꾸지 않게 계정으로 보내지 않는다
       try { localStorage.setItem(THEME_STORAGE_KEY, pref); } catch {}
-      queuePref('themeV2', pref);
       applyTheme(pref);
       renderThemeButtons();
     }
