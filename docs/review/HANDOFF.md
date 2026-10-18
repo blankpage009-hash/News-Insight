@@ -12,7 +12,8 @@
 - 완료 : 단계 4 재점검 → [findings/stage4-recheck.md](findings/stage4-recheck.md) (2026-10-17)
 - 완료 : 단계 5 재점검 → [findings/stage5-recheck.md](findings/stage5-recheck.md) (2026-10-18)
 - 완료 : 단계 6a 재점검 → [findings/stage6a-recheck.md](findings/stage6a-recheck.md) (2026-10-18)
-- **다음 : 단계 6b (화면 검색·렌더링·차트·모바일) — Sonnet · medium.** 범위 6415 이후는 SCFI 커밋으로 바뀐 곳(사본 7118–7196, 7873, 8745–8819)이 있으니 그 부분은 현재 파일로도 본다.
+- 완료 : 단계 6b 재점검 → [findings/stage6b-recheck.md](findings/stage6b-recheck.md) (2026-10-18)
+- **다음 : 단계 7 (CSS·마크업·테마, privacy.html) — Sonnet · low.**
 
 | # | 단계 | 범위 | 모델 | 노력 | 이전(Sonnet low) 결과 |
 |---|---|---|---|---|---|
@@ -22,7 +23,7 @@
 | 4 | API 라우트·AI·시세 | server.js 2843–6101 (3744–4150 제외) | Sonnet | medium | ✅ 재점검 끝 (stage4-recheck.md) |
 | 5 | 화면 저장·동기화·로그인·설정 | html 2691–6415 | **Opus** | **high** | ✅ 재점검 끝 (stage5-recheck.md) |
 | 6a | 화면 출력 이스케이프(XSS) | html 전체 JS | **Opus** | **high** | ✅ 재점검 끝 (stage6a-recheck.md) |
-| 6b | 화면 검색·렌더링·차트·모바일 | html 6415–10143 | Sonnet | medium | findings/stage6b.md |
+| 6b | 화면 검색·렌더링·차트·모바일 | html 6415–10143 | Sonnet | medium | ✅ 재점검 끝 (stage6b-recheck.md) |
 | 7 | CSS·마크업·테마 | html 1–2691, privacy.html | Sonnet | low | findings/stage7.md |
 | 8 | 저장소 정리 | package.json · sql/ · 디자인 폴더 | Haiku | low | findings/stage8.md |
 
