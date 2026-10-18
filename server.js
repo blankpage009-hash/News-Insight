@@ -1461,11 +1461,6 @@ function textContainsTerm(text, term) {
   return tokens.every((t) => lower.includes(t));
 }
 
-function itemMatchesAnyTerm(item, terms) {
-  const combined = `${item.title} ${item.summary.join(' ')}`;
-  return terms.some((term) => textContainsTerm(combined, term));
-}
-
 // -----------------------------------------------------------------
 // [추가] 검색어 파싱 : 공백 = AND, 콤마 = OR, 앞의 - = 제외 (D2)
 //   '롯데 한진'   -> terms ['롯데 한진']        (한 덩어리 → 두 단어 모두 포함해야 통과)

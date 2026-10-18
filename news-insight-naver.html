@@ -593,14 +593,6 @@
   }
   .panel-head h2 { font-size: .867rem; font-weight: 800; letter-spacing: .12em; }
   .panel-sec { flex-shrink: 0; }
-  .panel-more {
-    display: flex; align-items: center; justify-content: space-between; gap: .5rem;
-    width: 100%; padding: .6rem 1.333rem;
-    font-size: .867rem; color: rgb(var(--c-paper));
-    border-bottom: 1px solid rgb(var(--c-line));
-    transition: background-color .15s;
-  }
-  .panel-more:hover, .panel-more.is-on { background: rgb(var(--c-ink2)); }
   /* 칸 머리 오른쪽의 '전체보기' 버튼 (저장 기사 화면으로 이동) */
   .panel-all-btn {
     display: inline-flex; align-items: center; gap: .3rem;
@@ -691,7 +683,7 @@
        (이음매가 눈금 사이 빈틈에 오도록 from 15deg 에서 시작한다)
      - 그 위에 끝이 둥근 막대 12개 모양의 SVG 마스크를 씌워 막대만 남긴다 */
   @keyframes spin-ring { to { transform: rotate(360deg); } }
-  .loading-ring, .pr-ring {
+  .pr-ring {
     --ring-head: var(--c-gold2);
     --ring-tail: var(--c-gold);
     --ring-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='%23000'%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(30 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(60 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(90 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(120 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(150 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(180 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(210 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(240 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(270 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(300 50 50)'/%3E%3Crect x='45.5' y='4' width='9' height='27' rx='4.5' transform='rotate(330 50 50)'/%3E%3C/g%3E%3C/svg%3E");
@@ -704,12 +696,6 @@
       rgb(var(--ring-tail) / .14) 360deg);
     -webkit-mask: var(--ring-mask) center / 100% 100% no-repeat;
     mask: var(--ring-mask) center / 100% 100% no-repeat;
-  }
-  /* 눈금이 12개뿐이라 steps(12) 로 한 칸씩 딸깍딸깍 돌린다(이 모양의 원래 움직임) */
-  .loading-ring {
-    width: 36px;
-    height: 36px;
-    animation: spin-ring 1.2s steps(12, end) infinite;
   }
 
   /* [추가] 기사 로딩 표시를 기사 목록 영역(#content-col) 한가운데에 띄운다.
@@ -920,7 +906,6 @@
   }
   .pv-kind { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
   .pv-kind svg { width: 15px; height: 15px; }
-  .pv-verdict { font-size: 18px; font-weight: 800; letter-spacing: -.01em; line-height: 1.4; word-break: keep-all; text-wrap: pretty; }
   /* 핵심 판단 3항목 : 번호(01·02·03) | 소제목 + 한 문장. 항목 사이는 가는 선으로 끊는다 */
   .pv-verdict-list { display: flex; flex-direction: column; }
   .pv-verdict-list li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding: 12px 0; border-top: 1px solid rgb(var(--c-paper) / .4); word-break: keep-all; }
@@ -1256,8 +1241,6 @@
   .bc-act.is-primary:hover { background: rgb(var(--c-gold2)); }
   .bc-act svg { width: 15px; height: 15px; flex: none; }
   .bc-save { display: inline-flex; align-items: center; justify-content: center; flex: none; color: rgb(var(--c-paper)); transition: background-color .15s, color .15s; }
-  .bc-save.is-card { width: 34px; height: 34px; border: 1px solid rgb(var(--c-paper) / .4); }
-  .bc-save.is-card:hover { background: rgb(var(--c-paper) / .07); }
   .bc-save.is-row { width: 32px; height: 32px; }
   .bc-save.is-row:hover { background: rgb(var(--c-gold) / .1); }
   .bc-save svg { width: 16px; height: 16px; }
@@ -1667,7 +1650,6 @@
   @media (prefers-reduced-motion: reduce) {
     .skeleton, .modal-pop { animation: none; }
     /* 로딩 고리는 '아직 도는 중'을 알려야 해서 끄지 않고 아주 느리게만 돌린다 */
-    .loading-ring,
     #pull-refresh.is-refreshing .pr-ring { animation-duration: 3.2s; }
     #load-overlay .ld-bar, #load-overlay .ld-slide { animation-duration: 4s; }
     /* 티커 자동 흐름은 JS에서 멈춘다(드래그는 그대로 동작) */
@@ -2728,13 +2710,6 @@
       keywords: 'trending-up'
     };
 
-    const categoryQueryMap = {
-      breaking: '속보',
-      economy: '경제 금리',
-      society: '정치 사회',
-      global: '국제 글로벌'
-    };
-
     // [추가] 하위 섹션 → 상위(대표) 섹션 매핑
     //  예) logistics_competitor → logistics(물류),  stock_us → stock(증시)
     function parentCategoryOf(cat) {
@@ -2757,7 +2732,6 @@
     let expandedLogistics = false;
     let expandedStock = false;
     let expandedSports = false;         // [추가] 스포츠 펼침 상태
-    let expandedEconomy = false;        // [추가] 경제 펼침 상태
     let expandedSearch = false;         // 키워드 검색 토글 상태
     let searchCollapsed = false;        // [추가] 검색 패널 본문(입력·필터) 접힘 상태 · 검색 실행 시 자동으로 접힌다
     let currentResults = [];
@@ -6553,7 +6527,6 @@
     function setExpanded(cat, open) {
       if (cat === 'logistics') expandedLogistics = open;
       if (cat === 'stock') expandedStock = open;
-      if (cat === 'economy') expandedEconomy = open;   // [추가]
       if (cat === 'sports') expandedSports = open;      // [추가]
     }
 
@@ -6654,7 +6627,6 @@
       expandedLogistics = false;
       expandedStock = false;
       expandedSports = false;    // [추가]
-      expandedEconomy = false;   // [추가]
       expandedSearch = false;
       closeHsearchFilters();   // [추가] D1 : 열려 있었다면 낡은 값을 보여주지 않도록 닫는다
       renderSearchToggle();
@@ -7921,7 +7893,7 @@
           renderKeywordRankView();
 
         } else if (currentCategory.startsWith('logistics_') || currentCategory.startsWith('stock_')
-                   || currentCategory.startsWith('economy_') || currentCategory.startsWith('sports_')) {
+                   || currentCategory.startsWith('sports_')) {
           const base = currentCategory.split('_')[0];
           const key = currentCategory;
           const items = await fetchSubSectionData(base, key, { dateFrom, dateTo });

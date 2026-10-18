@@ -5,3 +5,7 @@ keywords.json
 
 .claude/
 .omc/
+
+# 디자인 시안 폴더 (앱이 쓰지 않음, PC 에만 둔다)
+Beyond News Redesign/
+Beyond News UI 개선-handoff/
