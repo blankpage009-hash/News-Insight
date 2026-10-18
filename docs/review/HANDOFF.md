@@ -10,7 +10,8 @@
 - 완료 : 단계 2 재점검 → [findings/stage2-recheck.md](findings/stage2-recheck.md)
 - 완료 : 단계 3 재점검 → [findings/stage3-recheck.md](findings/stage3-recheck.md) (2026-10-15)
 - 완료 : 단계 4 재점검 → [findings/stage4-recheck.md](findings/stage4-recheck.md) (2026-10-17)
-- **다음 : 단계 5 (화면 저장·동기화·로그인·설정) — Opus · high.**
+- 완료 : 단계 5 재점검 → [findings/stage5-recheck.md](findings/stage5-recheck.md) (2026-10-18)
+- **다음 : 단계 6a (화면 출력 이스케이프 XSS) — Opus · high.**
 
 | # | 단계 | 범위 | 모델 | 노력 | 이전(Sonnet low) 결과 |
 |---|---|---|---|---|---|
@@ -18,7 +19,7 @@
 | 2 | 서버 보안 | server.js 1–1415, 3744–4150 | **Opus** | **high** | ✅ 재점검 끝 (stage2-recheck.md) |
 | 3 | 캐시·프리워밍·본문 추출 | server.js 1417–2843, 6102–6288 | **Opus** | **xhigh** | ✅ 재점검 끝 (stage3-recheck.md) |
 | 4 | API 라우트·AI·시세 | server.js 2843–6101 (3744–4150 제외) | Sonnet | medium | ✅ 재점검 끝 (stage4-recheck.md) |
-| 5 | 화면 저장·동기화·로그인·설정 | html 2691–6415 | **Opus** | **high** | findings/stage5.md |
+| 5 | 화면 저장·동기화·로그인·설정 | html 2691–6415 | **Opus** | **high** | ✅ 재점검 끝 (stage5-recheck.md) |
 | 6a | 화면 출력 이스케이프(XSS) | html 전체 JS | **Opus** | **high** | findings/stage6a.md |
 | 6b | 화면 검색·렌더링·차트·모바일 | html 6415–10143 | Sonnet | medium | findings/stage6b.md |
 | 7 | CSS·마크업·테마 | html 1–2691, privacy.html | Sonnet | low | findings/stage7.md |
@@ -28,7 +29,7 @@
 1. 단계별 세부 항목은 [code-review-cleanup.md](code-review-cleanup.md) 3장, 공통 규칙은 [findings/COMMON-RULES.md](findings/COMMON-RULES.md) (에이전트 지시문에 그대로 넣는다).
 2. 지시문에 **이전 결과(findings/stageN.md)** 를 같이 주고 "이 결과가 맞는지 확인 + 놓친 것 찾기"를 시킨다. 이전 결과의 "못 본 것" 줄이 우선 점검 대상.
 3. 결과는 `findings/stageN-recheck.md` 로 쓰고 사용자에게 쉬운 말로 보고 → 멈춤.
-4. 줄 번호는 main 699f154 기준이다. 코드를 안 고쳤으니 그대로 맞다.
+4. 줄 번호는 main 699f154 기준이다. **단, 그 뒤 SCFI 커밋(c175529 · 5728476)으로 html 이 바뀌어 작업 파일과는 안 맞는다** (CSS 1485 · 마크업 2254 에서 22줄 줄어 2254 이후는 −22, 7118 · 8745 근처에서 또 바뀜). 리뷰는 `git show 699f154:news-insight-naver.html > <스크래치패드>/html-699f154.html` 사본으로 하고 그 줄 번호로 적는다. server.js 는 그대로라 맞다.
 
 ## 2. 시험 서버 띄우기 (로그인 우회 · 가짜 Supabase)
 
