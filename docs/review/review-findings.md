@@ -41,3 +41,37 @@
 확인 : `node --check server.js` 통과 · 시험 서버(가짜 Supabase)에서 `?q=a&q=b` 400(서버 생존) · `key=constructor` 400 · 깨진 JSON 400 짧은 문구 · `display=-5/2.5` 200 · `/api/indices` 200 · 화면 로드 콘솔 오류 0 · `plainText('<img onerror>')` 실행 안 됨 · `javascript:` 주소 → 네이버 링크로 대체 · 검색 중 두 번째 `runSearch` 가 대기열(true)에 들어가 끝난 뒤 실행됨.
 줄바꿈 : server.js · html 모두 현재 값(LF) 유지. package.json 변화 없음. 보호 목록 줄 diff 0.
 못 한 것 : fetchHtml 본문 정지 9초 차단과 EUC-KR 실제 기사 해석은 로컬에서 실제 요청으로 시험하지 않음(디코더 단위 확인만) · 단계 11(전체 검증 + diff 리뷰) 남음.
+
+## 단계 11 — 검증 + 최종 diff 리뷰 (2026-10-18, 브랜치 `review/cleanup` 0575fce)
+
+메인 세션이 직접 했다(에이전트 안 씀). 시험 서버 = 가짜 Supabase + 포트 3100, 비교용으로 main 의 server.js 를 포트 3101 에 같이 띄움.
+
+### 완료 조건 점검 (계획서 4장)
+
+| # | 조건 | 결과 |
+|---|---|---|
+| 3 | `node --check server.js` | 통과 |
+| 4 | 줄바꿈 | **두 파일 모두 LF — main · 699f154 · HEAD · 작업 파일 전부 같음** (`git ls-files --eol` = `i/lf w/lf`, node 로 CRLF 0건 확인). 바뀐 것 없음. ※ 단계 0 의 "CRLF 6,288" 은 Git Bash grep 이 CR 을 지우고 세서 생긴 잘못된 측정이었다. CLAUDE.md 의 "server.js CRLF" 도 실제와 다르다 |
+| 5 | 요청 3개 상태·모양 | `/healthz` 200 · `/api/all/sections` 200 키 `sections` 7섹션 · `/api/briefing` 200 키 `items` 10건 · `/api/me` 200. 두 번째 요청 3ms 안팎(캐시 적중) |
+| 5+ | main 과 같은 시각 비교 | `hours=23` 으로 두 서버에 동시에 요청 → **섹션별 건수 7개 모두 같음, 기사 주소 차이 0건, 응답 키 같음** |
+| 6 | 콘솔 오류 | 밝은 테마 0 · 다크 테마 0 (기준선 0) |
+| 7 | 보호 목록 줄 | `git diff main -- server.js` 에 걸린 2줄은 hunk 머리말·문맥 줄(`allSectionParts`)뿐, 바뀐 줄 0 |
+| 8 | package.json | 변화 없음 |
+
+### 고친 버그 재현 (다시 해 본 결과)
+
+- 서버 : `?q=a&q=b` 400 + 서버 생존 · `index-chart key=constructor`/`range=__proto__` 400 · 깨진 JSON → 400 짧은 문구 (main 은 스택 HTML) · `display=-5/2.5/abc` → 1/2/기본 · `/api/indices` 200
+- 쉼표 검색 : `코스피 3,000` → 수정 후 AND 1덩어리(14건) / main 은 `코스피 3` OR `000` 으로 잘림. `롯데,한진` · `삼성전자,1등` 은 둘 다 OR 그대로
+- fetchHtml (server.js 원문을 잘라 로컬 가짜 언론사로 시험, `scratchpad/fetchhtml-test.js`) : UTF-8 · EUC-KR(머리말) · EUC-KR(`<meta>`) 모두 한글 정상 · 본문 중간 끊김 → 서버 안 죽고 빈 값 · **본문 멈춤 → 18.0초(9초 × UA 2번) 뒤 포기** (예전엔 무한 대기)
+- 화면 : `plainText('<img onerror>')` 실행 0회 · `javascript:` 주소 → 네이버 주소 / 없으면 `#` · 브리핑 제목 10개에 `&quot;`·`<b>` 날것 0개 · 검색 중 두 번째 검색 → 대기열 → 끝난 뒤 1번 더(총 2회) · 관련 기사 A→B 빠르게 열기 → B 만 표시 · 같은 섹션 새로고침 2번 동시 → 로딩 표시 남지 않음 · 지수 차트 정상
+
+### diff 리뷰에서 새로 찾은 것
+
+| # | 위치 | 내용 | 분류 | 위험도 | 상태 |
+|---|---|---|---|---|---|
+| R1 | server.js:3973 (F26) | 원문 주소가 막히면(8080 같은 포트 등) 바로 `''` 를 돌려줘서, **예전에 되던 '네이버 주소로 사진 다시 찾기'가 빠졌다.** 시험 : 원문 `:8080` + 네이버 주소 3건 → main 3/3 사진 · 수정 후 0/3. 오늘 기사 104건 중 해당 0건이라 드묾. '고장 → 정상만' 규칙 위반 | 버그(회귀) | 하 | 미수정 — 사용자 결정 대기. 고치는 법 : 막힌 경우 네이버 주소가 맞으면 `imageForArticle(naverUrl, '')` 로 넘김(캐시·대기열 그대로 씀) |
+| R2 | html:9704 openInsight catch | 다른 세 팝업과 달리 실패(catch) 쪽에 낡은 응답 검사가 없다. A 의 Insight 를 연 뒤 B 를 열고, A 요청이 네트워크 오류로 늦게 실패하면 B 화면에 A 의 오류 문구가 덮인다 | 버그 | 하 | 미수정 — 한 줄 추가로 고칠 수 있음 |
+| R3 | server.js:2849 주석 | `clampLimit` 주석은 "음수 → 기본값" 이지만 실제로는 1 이 된다. 동작은 문제없음 | 참고 | — | — |
+| R4 | server.js:1483 | `2024,2025` 처럼 숫자끼리 붙은 쉼표는 이제 OR 로 안 나뉜다 (천 단위 쉼표 처리의 부작용) | 참고 | — | — |
+
+정리 : 테스트 서버 · 임시 파일(`server-main.tmp.js`) 정리함. `.cache/article-text.json` 정상(386건). push 안 함.
